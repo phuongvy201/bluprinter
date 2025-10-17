@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'Laravel') }} - Admin</title>
+    <title>{{ config('app.name', 'Bluprinter') }} - Admin</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}">
+    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+    <link rel="shortcut icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ asset('favicon.png') }}">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -73,7 +79,7 @@
                             </div>
                         </div>
                         <div class="ml-3">
-                            <h1 class="text-lg font-bold text-gray-900">{{ config('app.name', 'Laravel') }}</h1>
+                            <h1 class="text-lg font-bold text-gray-900">{{ config('app.name', 'Bluprinter') }}</h1>
                             <p class="text-xs text-gray-500">Admin Panel</p>
                         </div>
                     </div>
@@ -292,7 +298,7 @@
                         </div>
                     </div>
                     <div class="ml-3">
-                        <h1 class="text-lg font-bold text-white">{{ config('app.name', 'Laravel') }}</h1>
+                        <h1 class="text-lg font-bold text-white">{{ config('app.name', 'Bluprinter') }}</h1>
                     </div>
                 </div>
                 <button @click="sidebarOpen = false" class="text-gray-400 hover:text-white">
