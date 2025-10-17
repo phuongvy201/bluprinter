@@ -13,11 +13,61 @@
 
     <!-- Scripts -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    
+    <!-- Global CSS for select styling -->
+    <style>
+    /* Hide default select arrows globally */
+    select {
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        background-image: none !important;
+    }
+    
+    select::-ms-expand {
+        display: none !important;
+    }
+    
+    select::-webkit-appearance {
+        -webkit-appearance: none !important;
+    }
+    </style>
 </head>
 <body class="font-sans antialiased bg-gray-50">
     <div class="min-h-screen">
         <!-- Header Component -->
         <x-header />
+
+        <!-- Email Verification Notice -->
+        @auth
+            @if(!auth()->user()->hasVerifiedEmail())
+                <div class="bg-gradient-to-r from-orange-500 to-red-500 text-white">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+                        <div class="flex items-center justify-between flex-wrap">
+                            <div class="flex items-center space-x-3">
+                                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                                <p class="text-sm md:text-base font-medium">
+                                    Please verify your email address to access all features.
+                                </p>
+                            </div>
+                            <div class="flex items-center space-x-3 mt-2 sm:mt-0">
+                                <a href="{{ route('verification.notice') }}" class="text-sm font-semibold underline hover:text-orange-100 transition">
+                                    Click here to verify
+                                </a>
+                                <form method="POST" action="{{ route('verification.send') }}" class="inline">
+                                    @csrf
+                                    <button type="submit" class="text-sm font-semibold bg-white text-orange-600 px-4 py-1.5 rounded-lg hover:bg-orange-50 transition">
+                                        Resend Email
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
+        @endauth
 
         <!-- Page Content -->
         <main>
@@ -87,10 +137,17 @@
                     <!-- Company Info -->
                     <div class="lg:col-span-2">
                         <div class="flex items-center space-x-3 mb-6">
-                            <div class="w-12 h-12 bg-gradient-to-br from-[#005366] to-[#003d4d] rounded-xl flex items-center justify-center shadow-lg">
-                                <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z"></path>
-                                </svg>
+                            <div class="w-12 h-12 overflow-hidden">
+                                <img src="{{ asset('images/logo nhỏ.png') }}" 
+                                     alt="Bluprinter Logo" 
+                                     class="w-full h-full object-contain"
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <!-- Fallback SVG if image fails to load -->
+                                <div class="w-full h-full bg-gradient-to-br from-[#005366] to-[#003d4d] rounded-xl flex items-center justify-center shadow-lg" style="display: none;">
+                                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z"></path>
+                                    </svg>
+                                </div>
                             </div>
                             <div>
                                 <h2 class="text-2xl font-bold">
@@ -316,5 +373,8 @@
             }, 2000);
         });
     </script>
+    
+    <!-- Wishlist JavaScript -->
+    <script src="{{ asset('js/wishlist.js') }}"></script>
 </body>
 </html>

@@ -41,7 +41,9 @@ class CategoryController extends Controller
             'slug' => 'required|string|max:255|unique:categories,slug',
             'parent_id' => 'nullable|exists:categories,id',
             'description' => 'nullable|string',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'featured' => 'boolean',
+            'sort_order' => 'integer|min:0'
         ]);
 
         $data = $request->all();
@@ -121,5 +123,47 @@ class CategoryController extends Controller
 
         return redirect()->route('admin.categories.index')
             ->with('success', 'Category deleted successfully.');
+    }
+
+    /**
+     * Show featured categories management page
+     */
+    public function featured()
+    {
+        $categories = Category::whereNull('parent_id')
+            ->withCount('templates')
+            ->orderBy('name')
+            ->get();
+
+        return view('admin.categories.featured', compact('categories'));
+    }
+
+    /**
+     * Update featured categories
+     */
+    public function updateFeatured(Request $request)
+    {
+        $request->validate([
+            'featured_categories' => 'array|max:6',
+            'featured_categories.*' => 'exists:categories,id',
+            'sort_order' => 'array',
+            'sort_order.*' => 'integer|min:0'
+        ]);
+
+        // Reset all categories to not featured
+        Category::whereNull('parent_id')->update(['featured' => false, 'sort_order' => 0]);
+
+        // Update selected categories
+        if ($request->has('featured_categories')) {
+            foreach ($request->featured_categories as $index => $categoryId) {
+                Category::where('id', $categoryId)->update([
+                    'featured' => true,
+                    'sort_order' => $request->sort_order[$categoryId] ?? $index + 1
+                ]);
+            }
+        }
+
+        return redirect()->route('admin.categories.featured')
+            ->with('success', 'Featured categories updated successfully.');
     }
 }

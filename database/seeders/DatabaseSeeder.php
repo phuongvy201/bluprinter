@@ -20,6 +20,12 @@ class DatabaseSeeder extends Seeder
             CategorySeeder::class,
             ProductTemplateSeeder::class,
             ProductVariantSeeder::class,
+
+            // CMS Seeders
+            PostCategorySeeder::class,
+            PostTagSeeder::class,
+            PageSeeder::class,
+            PostSeeder::class,
         ]);
     }
 }

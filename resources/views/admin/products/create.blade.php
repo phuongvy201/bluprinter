@@ -19,8 +19,50 @@
         </a>
     </div>
 
+    <!-- Error Messages -->
+    @if(session('error'))
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="font-medium">{{ session('error') }}</span>
+            </div>
+        </div>
+    @endif
+
+    @if($errors->any())
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            <div class="flex items-start">
+                <svg class="w-5 h-5 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                </svg>
+                <div>
+                    <p class="font-medium mb-2">Please fix the following errors:</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        @foreach($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- Success Message -->
+    @if(session('success'))
+        <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="font-medium">{{ session('success') }}</span>
+            </div>
+        </div>
+    @endif
+
     <!-- Form -->
-    <form method="POST" action="{{ route('admin.products.store') }}" enctype="multipart/form-data" class="space-y-6">
+    <form method="POST" action="{{ route('admin.products.store') }}" enctype="multipart/form-data" class="space-y-6" onsubmit="return validateForm()">
         @csrf
         
         <!-- Template Selection -->
@@ -190,20 +232,67 @@
                     </div>
                 </div>
 
-                <!-- Status -->
-                <div>
-                    <label for="status" class="block text-sm font-medium text-gray-700 mb-2">Status *</label>
-                    <select id="status" 
-                            name="status" 
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('status') border-red-500 @enderror"
-                            required>
-                        <option value="active" {{ old('status', 'active') == 'active' ? 'selected' : '' }}>Active</option>
-                        <option value="inactive" {{ old('status') == 'inactive' ? 'selected' : '' }}>Inactive</option>
-                        <option value="draft" {{ old('status') == 'draft' ? 'selected' : '' }}>Draft</option>
-                    </select>
-                    @error('status')
-                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                    @enderror
+                <!-- Status & Shop Assignment Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Status -->
+                    <div>
+                        <label for="status" class="block text-sm font-medium text-gray-700 mb-2">Status *</label>
+                        <select id="status" 
+                                name="status" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('status') border-red-500 @enderror"
+                                required>
+                            <option value="active" {{ old('status', 'active') == 'active' ? 'selected' : '' }}>Active</option>
+                            <option value="inactive" {{ old('status') == 'inactive' ? 'selected' : '' }}>Inactive</option>
+                            <option value="draft" {{ old('status') == 'draft' ? 'selected' : '' }}>Draft</option>
+                        </select>
+                        @error('status')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <!-- Shop Assignment (Admin Only) -->
+                    @if(auth()->user()->hasRole('admin') && $shops)
+                    <div>
+                        <label for="shop_id" class="block text-sm font-medium text-gray-700 mb-2">
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                                </svg>
+                                <span>Assign to Shop</span>
+                            </div>
+                        </label>
+                        <select id="shop_id" 
+                                name="shop_id" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent @error('shop_id') border-red-500 @enderror">
+                            <option value="">-- No Shop (Unassigned) --</option>
+                            @foreach($shops as $shop)
+                                <option value="{{ $shop->id }}" 
+                                        {{ old('shop_id') == $shop->id ? 'selected' : '' }}
+                                        data-owner="{{ $shop->user ? $shop->user->name : 'Unknown' }}"
+                                        data-status="{{ $shop->shop_status }}">
+                                    {{ $shop->shop_name }} 
+                                    @if($shop->shop_status === 'active')
+                                        ✓
+                                    @elseif($shop->shop_status === 'suspended')
+                                        ⚠️
+                                    @endif
+                                    (Owner: {{ $shop->user ? $shop->user->name : 'Unknown' }})
+                                </option>
+                            @endforeach
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">
+                            <span class="inline-flex items-center">
+                                <svg class="w-3 h-3 mr-1 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                                Admin can assign product to any shop
+                            </span>
+                        </p>
+                        @error('shop_id')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    @endif
                 </div>
 
                 <!-- Description -->
@@ -616,6 +705,39 @@ function loadTemplateData(templateId) {
     }
 }
 
+// Form validation
+function validateForm() {
+    console.log('Form validation started...');
+    
+    const templateId = document.getElementById('template_id').value;
+    const name = document.getElementById('name').value;
+    const quantity = document.getElementById('quantity').value;
+    const status = document.getElementById('status').value;
+    
+    console.log('Template ID:', templateId);
+    console.log('Name:', name);
+    console.log('Quantity:', quantity);
+    console.log('Status:', status);
+    
+    if (!templateId) {
+        alert('Please select a template');
+        return false;
+    }
+    
+    if (!name.trim()) {
+        alert('Please enter a product name');
+        return false;
+    }
+    
+    if (!quantity || quantity < 0) {
+        alert('Please enter a valid quantity');
+        return false;
+    }
+    
+    console.log('Form validation passed');
+    return true;
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     // Load template if there's old value
@@ -623,6 +745,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (templateId) {
         loadTemplateData(templateId);
     }
+    
+    // Add form submit listener
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        console.log('Form submitted');
+        console.log('Form data:', new FormData(form));
+    });
 });
 </script>
 @endsection

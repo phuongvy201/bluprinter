@@ -67,26 +67,87 @@
                 }
             @endphp
             
-            <!-- Main Image with Enhanced Effects -->
+            <!-- Main Image/Video with Enhanced Effects -->
             <div class="aspect-square bg-white rounded-xl shadow-lg overflow-hidden relative group" id="image-container">
                 @if($media && count($media) > 0)
-                    <img src="{{ is_array($media[0]) ? $media[0]['url'] : $media[0] }}" 
-                         alt="{{ $product->name }}" 
-                         id="main-image"
-                         class="w-full h-full object-cover">
+                    @php
+                        $firstMediaUrl = is_array($media[0]) ? $media[0]['url'] : $media[0];
+                        $isVideo = str_contains($firstMediaUrl, '.mp4') || str_contains($firstMediaUrl, '.mov') || str_contains($firstMediaUrl, '.avi') || str_contains($firstMediaUrl, '.webm');
+                    @endphp
                     
-                    <!-- Zoom Overlay -->
-                    <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
-                        <div class="opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-75 group-hover:scale-100">
-                            <div class="bg-white bg-opacity-90 rounded-full p-3 shadow-lg zoom-icon">
-                                <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
+                    @if($isVideo)
+                        <!-- Video Player -->
+                        @php
+                            // Get poster image: first image from media array
+                            $posterImage = null;
+                            foreach($allImages as $mediaItem) {
+                                if (!str_contains($mediaItem, '.mp4') && !str_contains($mediaItem, '.mov') && !str_contains($mediaItem, '.avi') && !str_contains($mediaItem, '.webm')) {
+                                    $posterImage = $mediaItem;
+                                    break;
+                                }
+                            }
+                            // If no image, use template media or generate placeholder
+                            if (!$posterImage && $product->template && $product->template->media) {
+                                $templateMedia = is_array($product->template->media) ? $product->template->media : json_decode($product->template->media, true);
+                                if ($templateMedia && count($templateMedia) > 0) {
+                                    foreach($templateMedia as $tmItem) {
+                                        $tmUrl = is_array($tmItem) ? ($tmItem['url'] ?? $tmItem) : $tmItem;
+                                        if (!str_contains($tmUrl, '.mp4') && !str_contains($tmUrl, '.mov') && !str_contains($tmUrl, '.avi') && !str_contains($tmUrl, '.webm')) {
+                                            $posterImage = $tmUrl;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        @endphp
+                        <video id="main-video" 
+                               class="w-full h-full object-cover cursor-pointer" 
+                               controls 
+                               playsinline
+                               @if($posterImage)
+                               poster="{{ $posterImage }}"
+                               @endif>
+                            <source src="{{ $firstMediaUrl }}" type="video/mp4">
+                            <source src="{{ $firstMediaUrl }}" type="video/webm">
+                            Your browser does not support the video tag.
+                        </video>
+                        
+                        <!-- Video Badge -->
+                        <div class="absolute top-3 left-3 bg-purple-600 text-white text-xs px-3 py-1 rounded-full font-medium flex items-center space-x-1 pointer-events-none z-10">
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path>
+                            </svg>
+                            <span>VIDEO</span>
+                        </div>
+                        
+                        <!-- Custom Play Button Overlay (before playing) -->
+                        <div id="video-play-overlay" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 transition-opacity cursor-pointer z-20" onclick="playVideoOnClick(event)">
+                            <div class="w-20 h-20 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-2xl hover:bg-opacity-100 hover:scale-110 transition-all duration-300">
+                                <svg class="w-10 h-10 text-purple-600 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path>
                                 </svg>
                             </div>
                         </div>
-                    </div>
+                    @else
+                        <!-- Image -->
+                        <img src="{{ $firstMediaUrl }}" 
+                             alt="{{ $product->name }}" 
+                             id="main-image"
+                             class="w-full h-full object-cover">
+                        
+                        <!-- Zoom Overlay (Only for images) -->
+                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
+                            <div class="opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-75 group-hover:scale-100">
+                                <div class="bg-white bg-opacity-90 rounded-full p-3 shadow-lg zoom-icon">
+                                    <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
                     
-                    <!-- Image Counter Badge -->
+                    <!-- Media Counter Badge -->
                     @if(!empty($allImages) && count($allImages) > 1)
                         <div class="absolute top-3 right-3 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded-full">
                             <span id="image-counter">1</span> / {{ count($allImages) }}
@@ -118,11 +179,28 @@
                     <div class="relative">
                         <div class="flex overflow-x-auto scrollbar-hide space-x-2 pb-2" id="thumbnail-container">
                     @foreach($allImages as $index => $imageUrl)
+                                @php
+                                    $isThumbVideo = str_contains($imageUrl, '.mp4') || str_contains($imageUrl, '.mov') || str_contains($imageUrl, '.avi') || str_contains($imageUrl, '.webm');
+                                @endphp
                                 <button onclick="changeMainImage('{{ $imageUrl }}', {{ $index }})" 
-                                        class="flex-shrink-0 w-16 h-16 bg-white rounded-lg shadow-sm overflow-hidden border-2 {{ $index === 0 ? 'border-[#005366]' : 'border-gray-200' }} hover:border-[#005366] transition-colors group">
-                            <img src="{{ $imageUrl }}" 
-                                 alt="{{ $product->name }} - Image {{ $index + 1 }}" 
-                                         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
+                                        class="flex-shrink-0 w-16 h-16 bg-white rounded-lg shadow-sm overflow-hidden border-2 {{ $index === 0 ? 'border-[#005366]' : 'border-gray-200' }} hover:border-[#005366] transition-colors group relative">
+                                    @if($isThumbVideo)
+                                        <!-- Video Thumbnail -->
+                                        <div class="w-full h-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
+                                            <svg class="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path>
+                                            </svg>
+                                        </div>
+                                        <!-- Video Badge -->
+                                        <div class="absolute bottom-0 left-0 right-0 bg-purple-600 bg-opacity-90 text-white text-[8px] text-center py-0.5 font-bold">
+                                            VIDEO
+                                        </div>
+                                    @else
+                                        <!-- Image Thumbnail -->
+                                        <img src="{{ $imageUrl }}" 
+                                             alt="{{ $product->name }} - Media {{ $index + 1 }}" 
+                                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
+                                    @endif
                         </button>
                     @endforeach
                         </div>
@@ -487,12 +565,12 @@
                                 <div>
                                     <div class="flex items-center justify-between mb-3">
                                         <h3 class="text-lg font-semibold text-gray-900">Size</h3>
-                                        <a href="#" class="text-sm text-[#005366] hover:underline flex items-center">
+                                        <button onclick="openSizeGuide()" class="text-sm text-[#005366] hover:underline flex items-center">
                                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
                                             </svg>
                                             View Size Guide
-                                        </a>
+                                        </button>
                                     </div>
                                     <div class="relative">
                                         <select id="{{ strtolower($attributeName) }}-selector" onchange="selectAttribute('{{ $attributeName }}', this.value)" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#005366] focus:border-transparent appearance-none bg-white">
@@ -690,12 +768,9 @@
                 </div>
 
                 <!-- Wishlist Button -->
-                <button class="w-full mt-4 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-3 px-6 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                    </svg>
-                    <span>Add to Wishlist</span>
-                </button>
+                <div class="w-full mt-4">
+                    <x-wishlist-button :product="$product" size="lg" :showText="true" />
+                </div>
 
                 <!-- Guarantee & Delivery Info Section -->
                 <div class="bg-amber-50 border border-amber-200 rounded-xl p-6 mt-6">
@@ -922,56 +997,55 @@
 @endif
 
 <!-- Recently Viewed Products -->
-<div class="bg-white py-16 border-t border-gray-200 relative z-40">
+<div class="bg-gray-50 py-8 border-t border-gray-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between mb-12">
-            <h2 class="text-3xl font-bold text-gray-900">Recently Viewed</h2>
-            <div class="flex items-center space-x-2 text-gray-500">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <span class="text-sm">Recently viewed products</span>
+        <div class="space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xl font-bold text-gray-900">Recently Viewed</h3>
+                <a href="{{ route('products.index') }}" class="text-sm text-[#005366] hover:underline">
+                    See All Items
+                </a>
             </div>
-        </div>
-        
-        <!-- Recently Viewed Container with Navigation -->
-        <div class="relative z-50" id="recently-viewed-wrapper">
-            <!-- Navigation Buttons -->
-            <button id="recentlyViewedPrevBtn" 
-                    onclick="scrollRecentlyViewed('prev')"
-                    class="hidden absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-60 bg-white rounded-full p-3 shadow-xl hover:bg-gray-50 transition-all border border-gray-200 hover:border-[#005366] opacity-0 disabled:opacity-30 disabled:cursor-not-allowed">
-                <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path>
-                </svg>
-            </button>
             
-            <button id="recentlyViewedNextBtn" 
-                    onclick="scrollRecentlyViewed('next')"
-                    class="hidden absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-60 bg-white rounded-full p-3 shadow-xl hover:bg-gray-50 transition-all border border-gray-200 hover:border-[#005366] disabled:opacity-30 disabled:cursor-not-allowed">
-                <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
-                </svg>
-            </button>
-            
-            <!-- Products Container -->
-            <div id="recentlyViewedContainer" class="overflow-hidden group relative z-50">
-                <div id="recently-viewed-container" class="flex gap-3 lg:gap-6 transition-transform duration-300 overflow-hidden relative z-50">
-            <!-- Products will be loaded here by JavaScript -->
-                </div>
-            </div>
-                        </div>
-        
-        <!-- Empty State -->
-        <div id="recently-viewed-empty" class="text-center py-12 hidden">
-            <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-            </svg>
-            <p class="text-gray-500 text-lg mb-2">No products viewed yet</p>
-            <p class="text-gray-400 text-sm">Products you view will appear here</p>
+            <!-- Recently Viewed Container -->
+            <div class="relative" id="recently-viewed-wrapper">
+                <!-- Navigation Buttons (Desktop only) -->
+                <button id="recentlyViewedPrevBtn" 
+                        onclick="scrollRecentlyViewed('prev')"
+                        class="hidden lg:block absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                </button>
+                
+                <button id="recentlyViewedNextBtn" 
+                        onclick="scrollRecentlyViewed('next')"
+                        class="hidden lg:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-all">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+                
+                <!-- Products Container -->
+                <div id="recentlyViewedContainer" class="overflow-x-auto lg:overflow-hidden mobile-scroll-hide group pb-2" style="scroll-behavior: smooth;">
+                    <div id="recently-viewed-container" class="flex gap-3 lg:transition-transform lg:duration-300">
+                        <!-- Products will be loaded here by JavaScript -->
                     </div>
                 </div>
+            </div>
+            
+            <!-- Empty State -->
+            <div id="recently-viewed-empty" class="text-center py-12 hidden">
+                <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                </svg>
+                <p class="text-gray-500 text-lg mb-2">No products viewed yet</p>
+                <p class="text-gray-400 text-sm">Products you view will appear here</p>
+            </div>
         </div>
+    </div>
+</div>
 
 <!-- Gallery Modal -->
 <div id="gallery-modal" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 hidden">
@@ -984,9 +1058,28 @@
             </svg>
         </button>
         
-        <!-- Main Image -->
+        <!-- Main Media (Image or Video) -->
         <div class="flex items-center justify-center h-full">
+            <!-- Image -->
             <img id="modal-main-image" src="" alt="" class="max-w-full max-h-full object-contain">
+            
+            <!-- Video Player -->
+            <video id="modal-main-video" 
+                   class="max-w-full max-h-full object-contain hidden" 
+                   controls 
+                   playsinline
+                   controlsList="nodownload">
+                <source id="modal-video-source" src="" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+        
+        <!-- Media Type Badge -->
+        <div id="modal-media-badge" class="absolute top-4 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white text-xs px-3 py-1 rounded-full font-medium items-center space-x-1 hidden">
+            <svg class="w-3 h-3 inline" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path>
+            </svg>
+            <span class="inline">VIDEO</span>
         </div>
         
         <!-- Navigation -->
@@ -1007,15 +1100,26 @@
         <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2">
             <div class="flex space-x-2 bg-black bg-opacity-50 rounded-lg p-2">
                 @foreach($allImages as $index => $imageUrl)
+                    @php
+                        $isModalThumbVideo = str_contains($imageUrl, '.mp4') || str_contains($imageUrl, '.mov') || str_contains($imageUrl, '.avi') || str_contains($imageUrl, '.webm');
+                    @endphp
                     <button onclick="selectModalImage('{{ $imageUrl }}', {{ $index }})" 
-                            class="w-12 h-12 rounded overflow-hidden border-2 border-transparent hover:border-white transition-colors">
-                        <img src="{{ $imageUrl }}" alt="" class="w-full h-full object-cover">
+                            class="w-12 h-12 rounded overflow-hidden border-2 border-transparent hover:border-white transition-colors relative">
+                        @if($isModalThumbVideo)
+                            <div class="w-full h-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path>
+                                </svg>
+                            </div>
+                        @else
+                            <img src="{{ $imageUrl }}" alt="" class="w-full h-full object-cover">
+                        @endif
                     </button>
                 @endforeach
         </div>
     </div>
         
-        <!-- Image Counter -->
+        <!-- Media Counter -->
         <div class="absolute top-4 left-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-full text-sm">
             <span id="modal-image-counter">1</span> / {{ !empty($allImages) ? count($allImages) : 0 }}
 </div>
@@ -1044,80 +1148,6 @@
     .mobile-scroll-hide::-webkit-scrollbar {
         display: none;
     }
-}
-
-/* Hide scrollbar for Recently Viewed on all devices */
-#recently-viewed-container {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-#recently-viewed-container::-webkit-scrollbar {
-    display: none;
-}
-
-/* Recently Viewed Navigation Buttons */
-#recentlyViewedPrevBtn,
-#recentlyViewedNextBtn {
-    transition: all 0.3s ease;
-}
-
-#recentlyViewedPrevBtn:not(.opacity-0),
-#recentlyViewedNextBtn:not(.opacity-0) {
-    opacity: 1 !important;
-}
-
-/* Ensure Recently Viewed section has proper layering */
-#recently-viewed-wrapper {
-    position: relative;
-    z-index: 50;
-}
-
-#recentlyViewedContainer {
-    position: relative;
-    z-index: 50;
-}
-
-#recently-viewed-container {
-    position: relative;
-    z-index: 50;
-}
-
-#recently-viewed-container a {
-    position: relative;
-    z-index: 50;
-}
-
-#recentlyViewedPrevBtn:hover:not(:disabled),
-#recentlyViewedNextBtn:not(:disabled) {
-    transform: translateY(-50%) scale(1.1);
-}
-
-/* Force Recently Viewed section to be above everything */
-.bg-white.py-16.border-t.border-gray-200 {
-    position: relative;
-    z-index: 40;
-    isolation: isolate;
-}
-
-/* Ensure no other elements can overlap */
-* {
-    position: relative;
-    z-index: auto;
-}
-
-#recently-viewed-wrapper *,
-#recentlyViewedContainer *,
-#recently-viewed-container * {
-    position: relative;
-    z-index: inherit;
-}
-
-#recentlyViewedPrevBtn:hover:not(:disabled) {
-    transform: translate(-1rem, -50%) scale(1.1);
-}
-
-#recentlyViewedNextBtn:hover:not(:disabled) {
-    transform: translate(1rem, -50%) scale(1.1);
 }
 
 /* Cart Popup Animations */
@@ -1290,6 +1320,109 @@
     bottom: 0;
     z-index: 40;
 }
+
+/* Hide default select arrows - Force override */
+select {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    background-image: none !important;
+}
+
+select::-ms-expand {
+    display: none !important;
+}
+
+select::-webkit-appearance {
+    -webkit-appearance: none !important;
+}
+
+/* Specific targeting for shipping selects */
+#popupShippingCountry,
+#productShippingCountry {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    background-image: none !important;
+}
+
+/* Video Player Styles */
+video#main-video,
+video#modal-main-video {
+    background-color: #000;
+}
+
+video#main-video::-webkit-media-controls-panel {
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+video#modal-main-video::-webkit-media-controls-panel {
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+/* Video Badge Animation */
+.absolute.top-3.left-3 {
+    animation: fadeInSlide 0.5s ease-out;
+}
+
+@keyframes fadeInSlide {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Video player responsive */
+@media (max-width: 768px) {
+    video#main-video,
+    video#modal-main-video {
+        max-height: 100%;
+        object-fit: contain;
+    }
+}
+
+/* Video Play Overlay */
+#video-play-overlay {
+    transition: opacity 0.3s ease-in-out;
+}
+
+#video-play-overlay:hover .w-20 {
+    transform: scale(1.1);
+}
+
+/* Video Poster */
+video[poster] {
+    object-fit: cover;
+}
+
+/* Play button pulse animation */
+@keyframes playPulse {
+    0%, 100% { 
+        transform: scale(1); 
+        box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.4);
+    }
+    50% { 
+        transform: scale(1.05); 
+        box-shadow: 0 0 0 15px rgba(147, 51, 234, 0);
+    }
+}
+
+#video-play-overlay .w-20 {
+    animation: playPulse 2s infinite;
+}
+
+/* Video container hover */
+#image-container:has(video) {
+    cursor: pointer;
+}
+
+#image-container:has(video):hover #video-play-overlay .w-20 {
+    transform: scale(1.15);
+}
 </style>
 
 <script>
@@ -1306,6 +1439,172 @@ let allImages = [
         @endforeach
     @endif
 ];
+
+// Video control function
+function playVideoOnClick(event) {
+    console.log('playVideoOnClick called', event);
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const video = document.getElementById('main-video');
+    const overlay = document.getElementById('video-play-overlay');
+    
+    console.log('Video element:', video);
+    console.log('Overlay element:', overlay);
+    
+    if (video && overlay) {
+        // Hide overlay immediately
+        overlay.style.display = 'none';
+        overlay.style.opacity = '0';
+        overlay.style.visibility = 'hidden';
+        overlay.style.pointerEvents = 'none';
+        console.log('Overlay hidden immediately');
+        
+        // Play video
+        video.play().then(() => {
+            console.log('Video playing successfully');
+        }).catch((error) => {
+            console.log('Video play failed:', error);
+            // Show overlay again if play failed
+            overlay.style.display = 'flex';
+            overlay.style.opacity = '1';
+            overlay.style.visibility = 'visible';
+            overlay.style.pointerEvents = 'auto';
+        });
+    }
+}
+
+// Generate video thumbnail from first frame
+function generateVideoThumbnail(videoUrl, callback) {
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.preload = 'metadata';
+    
+    video.addEventListener('loadedmetadata', function() {
+        // Seek to 1 second or 10% of duration, whichever is smaller
+        const seekTime = Math.min(1, video.duration * 0.1);
+        video.currentTime = seekTime;
+    });
+    
+    video.addEventListener('seeked', function() {
+        // Create canvas to capture frame
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas size to video size
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        // Draw video frame to canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Convert canvas to data URL
+        const thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        
+        // Call callback with thumbnail
+        if (callback) {
+            callback(thumbnailDataUrl);
+        }
+    });
+    
+    video.addEventListener('error', function() {
+        console.warn('Could not generate thumbnail for video:', videoUrl);
+        if (callback) {
+            callback(null);
+        }
+    });
+    
+    // Start loading video
+    video.src = videoUrl;
+}
+
+// Set video thumbnail as poster
+function setVideoThumbnail(videoElement, videoUrl) {
+    if (!videoElement || !videoUrl) return;
+    
+    // Check if video already has a poster
+    if (videoElement.poster && videoElement.poster.trim() !== '') {
+        return; // Already has poster, don't override
+    }
+    
+    generateVideoThumbnail(videoUrl, function(thumbnailDataUrl) {
+        if (thumbnailDataUrl && videoElement) {
+            videoElement.poster = thumbnailDataUrl;
+            console.log('Video thumbnail generated and set as poster');
+        }
+    });
+}
+
+// Generate thumbnails for all videos on page load
+function generateVideoThumbnailsOnLoad() {
+    // Check if current media is video and needs thumbnail
+    const mainVideo = document.getElementById('main-video');
+    if (mainVideo && mainVideo.src && !mainVideo.poster) {
+        setTimeout(() => {
+            setVideoThumbnail(mainVideo, mainVideo.src);
+        }, 1000);
+    }
+    
+    // Generate thumbnails for video thumbnails in gallery
+    document.querySelectorAll('#thumbnail-container button').forEach((btn, index) => {
+        const mediaUrl = allImages[index];
+        if (mediaUrl && (mediaUrl.includes('.mp4') || mediaUrl.includes('.mov') || mediaUrl.includes('.avi') || mediaUrl.includes('.webm'))) {
+            // Check if thumbnail already shows video content
+            const thumbnailImg = btn.querySelector('img');
+            if (thumbnailImg) {
+                // This is an image thumbnail, generate video thumbnail
+                setTimeout(() => {
+                    generateVideoThumbnail(mediaUrl, function(thumbnailDataUrl) {
+                        if (thumbnailDataUrl) {
+                            thumbnailImg.src = thumbnailDataUrl;
+                            thumbnailImg.alt = 'Video thumbnail';
+                        }
+                    });
+                }, 500 * (index + 1)); // Stagger the generation
+            }
+        }
+    });
+}
+
+// Show overlay when video pauses/ends
+function setupVideoControls() {
+    const video = document.getElementById('main-video');
+    const overlay = document.getElementById('video-play-overlay');
+    
+    if (video && overlay) {
+        // Add click event to video element
+        video.addEventListener('click', function(e) {
+            e.stopPropagation();
+            playVideoOnClick(e);
+        });
+        
+        // Show overlay when paused/ended
+        video.addEventListener('pause', () => {
+            console.log('Video pause - showing overlay');
+            overlay.style.display = 'flex';
+            overlay.style.visibility = 'visible';
+            overlay.style.pointerEvents = 'auto';
+            overlay.style.opacity = '1';
+        });
+        
+        video.addEventListener('ended', () => {
+            console.log('Video ended - showing overlay');
+            overlay.style.display = 'flex';
+            overlay.style.visibility = 'visible';
+            overlay.style.pointerEvents = 'auto';
+            overlay.style.opacity = '1';
+        });
+        
+        // Hide overlay when playing
+        video.addEventListener('play', () => {
+            console.log('Video play - hiding overlay');
+            overlay.style.display = 'none';
+            overlay.style.visibility = 'hidden';
+            overlay.style.pointerEvents = 'none';
+            overlay.style.opacity = '0';
+        });
+    }
+}
 
 // Initialize variants data when page loads
 document.addEventListener('DOMContentLoaded', function() {
@@ -1327,6 +1626,21 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize image effects
     initializeImageEffects();
+    
+    // Setup video controls and overlay
+    setupVideoControls();
+    
+    // Add direct click handler for video
+    const mainVideo = document.getElementById('main-video');
+    if (mainVideo) {
+        mainVideo.addEventListener('click', function(e) {
+            console.log('Video clicked directly');
+            playVideoOnClick(e);
+        });
+    }
+    
+    // Generate video thumbnails if needed
+    generateVideoThumbnailsOnLoad();
     
     // Save current product to recently viewed
     saveToRecentlyViewed();
@@ -1351,6 +1665,7 @@ function preloadImages() {
 // Initialize image effects
 function initializeImageEffects() {
     const mainImage = document.getElementById('main-image');
+    const mainVideo = document.getElementById('main-video');
     const imageContainer = document.getElementById('image-container');
     
     if (mainImage && imageContainer) {
@@ -1359,8 +1674,13 @@ function initializeImageEffects() {
             this.classList.add('image-fade-in');
         });
         
-        // Add zoom effect on mouse move
+        // Add zoom effect on mouse move (only for images, not videos)
         imageContainer.addEventListener('mousemove', function(e) {
+            // Don't apply zoom if video is visible
+            if (mainVideo && !mainVideo.classList.contains('hidden')) {
+                return;
+            }
+            
             const rect = imageContainer.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
@@ -1382,28 +1702,41 @@ function initializeImageEffects() {
             mainImage.style.cursor = 'zoom-in';
         });
         
-        // Click to open gallery modal
-        imageContainer.addEventListener('click', function() {
+        // Click to open gallery modal (only for images, videos have their own controls)
+        imageContainer.addEventListener('click', function(e) {
+            // Don't open modal if clicking on video or video controls
+            if (mainVideo && !mainVideo.classList.contains('hidden')) {
+                // Check if click is on video element itself or video overlay
+                if (e.target === mainVideo || 
+                    mainVideo.contains(e.target) || 
+                    e.target.closest('#video-play-overlay') ||
+                    e.target.closest('video')) {
+                    // Play video on click
+                    playVideoOnClick(e);
+                    return; // Don't open modal
+                }
+            }
             openGalleryModal();
         });
     }
 }
 
-function changeMainImage(imageUrl, index = null) {
+function changeMainImage(mediaUrl, index = null) {
     const mainImage = document.getElementById('main-image');
+    const mainVideo = document.getElementById('main-video');
+    const imageContainer = document.getElementById('image-container');
     const imageLoading = document.getElementById('image-loading');
     const imageCounter = document.getElementById('image-counter');
+    const videoOverlay = document.getElementById('video-play-overlay');
     
-    // Show loading spinner
-    if (imageLoading) {
-        imageLoading.classList.remove('hidden');
-    }
+    // Check if media is video
+    const isVideo = mediaUrl.includes('.mp4') || mediaUrl.includes('.mov') || mediaUrl.includes('.avi') || mediaUrl.includes('.webm');
     
     // Update current image index
     if (index !== null) {
         currentImageIndex = index;
     } else {
-        currentImageIndex = allImages.indexOf(imageUrl);
+        currentImageIndex = allImages.indexOf(mediaUrl);
     }
     
     // Update image counter
@@ -1411,32 +1744,128 @@ function changeMainImage(imageUrl, index = null) {
         imageCounter.textContent = currentImageIndex + 1;
     }
     
-    // Create new image element for smooth transition
-    const newImage = new Image();
-    newImage.onload = function() {
-        // Hide loading spinner
-        if (imageLoading) {
-            imageLoading.classList.add('hidden');
-        }
+    if (isVideo) {
+        // Get poster from first available image
+        const posterImage = allImages.find(url => 
+            !url.includes('.mp4') && !url.includes('.mov') && !url.includes('.avi') && !url.includes('.webm')
+        );
         
-        // Update main image with fade effect
-        mainImage.style.opacity = '0';
-        setTimeout(() => {
-            mainImage.src = imageUrl;
-            mainImage.style.opacity = '1';
-        }, 150);
-    };
-    
-    newImage.onerror = function() {
-        // Hide loading spinner on error
-        if (imageLoading) {
-            imageLoading.classList.add('hidden');
+        // Hide image, show video
+        if (mainImage) {
+            mainImage.classList.add('hidden');
         }
-        console.error('Failed to load image:', imageUrl);
-    };
-    
-    // Start loading the new image
-    newImage.src = imageUrl;
+        if (mainVideo) {
+            mainVideo.classList.remove('hidden');
+            mainVideo.src = mediaUrl;
+            if (posterImage) {
+                mainVideo.poster = posterImage;
+            } else {
+                // Generate thumbnail from video if no poster image
+                setTimeout(() => {
+                    setVideoThumbnail(mainVideo, mediaUrl);
+                }, 500);
+            }
+            mainVideo.load();
+            
+            // Show play overlay
+            if (videoOverlay) {
+                videoOverlay.style.display = 'flex';
+                videoOverlay.style.opacity = '1';
+            }
+        } else {
+            // Create video element if doesn't exist
+            const videoEl = document.createElement('video');
+            videoEl.id = 'main-video';
+            videoEl.className = 'w-full h-full object-cover cursor-pointer';
+            videoEl.controls = true;
+            videoEl.playsinline = true;
+            videoEl.addEventListener('click', function(e) {
+                e.stopPropagation();
+                playVideoOnClick(e);
+            });
+            if (posterImage) {
+                videoEl.poster = posterImage;
+            }
+            videoEl.innerHTML = `<source src="${mediaUrl}" type="video/mp4">`;
+            
+            const container = mainImage.parentElement;
+            container.insertBefore(videoEl, mainImage);
+            mainImage.classList.add('hidden');
+            
+            // Create overlay if doesn't exist
+            if (!videoOverlay) {
+                const overlayEl = document.createElement('div');
+                overlayEl.id = 'video-play-overlay';
+                overlayEl.className = 'absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 transition-opacity cursor-pointer z-20';
+                overlayEl.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    playVideoOnClick(e);
+                });
+                overlayEl.innerHTML = `
+                    <div class="w-20 h-20 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-2xl hover:bg-opacity-100 hover:scale-110 transition-all duration-300">
+                        <svg class="w-10 h-10 text-purple-600 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path>
+                        </svg>
+                    </div>
+                `;
+                imageContainer.appendChild(overlayEl);
+            }
+            
+            // Generate thumbnail from video if no poster image
+            if (!posterImage) {
+                setTimeout(() => {
+                    setVideoThumbnail(videoEl, mediaUrl);
+                }, 500);
+            }
+            
+            // Setup video event listeners
+            setupVideoControls();
+        }
+    } else {
+        // Hide video, show image
+        if (mainVideo) {
+            mainVideo.classList.add('hidden');
+            mainVideo.pause();
+        }
+        if (videoOverlay) {
+            videoOverlay.style.display = 'none';
+        }
+        if (mainImage) {
+            mainImage.classList.remove('hidden');
+            
+            // Show loading spinner
+            if (imageLoading) {
+                imageLoading.classList.remove('hidden');
+            }
+            
+            // Create new image element for smooth transition
+            const newImage = new Image();
+            newImage.onload = function() {
+                // Hide loading spinner
+                if (imageLoading) {
+                    imageLoading.classList.add('hidden');
+                }
+                
+                // Update main image with fade effect
+                mainImage.style.opacity = '0';
+                setTimeout(() => {
+                    mainImage.src = mediaUrl;
+                    mainImage.style.opacity = '1';
+                }, 150);
+            };
+            
+            newImage.onerror = function() {
+                // Hide loading spinner on error
+                if (imageLoading) {
+                    imageLoading.classList.add('hidden');
+                }
+                console.error('Failed to load image:', mediaUrl);
+            };
+            
+            // Start loading the new image
+            newImage.src = mediaUrl;
+        }
+    }
     
     // Update active thumbnail
     document.querySelectorAll('#thumbnail-container button').forEach((btn, btnIndex) => {
@@ -1444,7 +1873,7 @@ function changeMainImage(imageUrl, index = null) {
             btn.classList.remove('border-gray-200');
             btn.classList.add('border-[#005366]');
         } else {
-        btn.classList.remove('border-[#005366]');
+            btn.classList.remove('border-[#005366]');
             btn.classList.add('border-gray-200');
         }
     });
@@ -1453,12 +1882,13 @@ function changeMainImage(imageUrl, index = null) {
 // Gallery Modal Functions
 function openGalleryModal() {
     const modal = document.getElementById('gallery-modal');
-    const modalImage = document.getElementById('modal-main-image');
     const imageCounter = document.getElementById('modal-image-counter');
     
     modal.classList.remove('hidden');
-    modalImage.src = allImages[currentImageIndex];
     imageCounter.textContent = currentImageIndex + 1;
+    
+    // Display current media (image or video)
+    updateModalMedia(allImages[currentImageIndex]);
     
     // Update modal thumbnails
     updateModalThumbnails();
@@ -1469,6 +1899,13 @@ function openGalleryModal() {
 
 function closeGalleryModal() {
     const modal = document.getElementById('gallery-modal');
+    const modalVideo = document.getElementById('modal-main-video');
+    
+    // Pause video if playing
+    if (modalVideo && !modalVideo.paused) {
+        modalVideo.pause();
+    }
+    
     modal.classList.add('hidden');
     
     // Restore body scroll
@@ -1491,10 +1928,11 @@ function selectModalImage(imageUrl, index) {
 }
 
 function updateModalImage() {
-    const modalImage = document.getElementById('modal-main-image');
     const imageCounter = document.getElementById('modal-image-counter');
     
-    modalImage.src = allImages[currentImageIndex];
+    // Update media (image or video)
+    updateModalMedia(allImages[currentImageIndex]);
+    
     imageCounter.textContent = currentImageIndex + 1;
     
     // Update modal thumbnails
@@ -1502,6 +1940,56 @@ function updateModalImage() {
     
     // Update main image and thumbnails
     changeMainImage(allImages[currentImageIndex], currentImageIndex);
+}
+
+// New function to handle both image and video in modal
+function updateModalMedia(mediaUrl) {
+    const modalImage = document.getElementById('modal-main-image');
+    const modalVideo = document.getElementById('modal-main-video');
+    const modalVideoSource = document.getElementById('modal-video-source');
+    const modalMediaBadge = document.getElementById('modal-media-badge');
+    
+    const isVideo = mediaUrl.includes('.mp4') || mediaUrl.includes('.mov') || mediaUrl.includes('.avi') || mediaUrl.includes('.webm');
+    
+    if (isVideo) {
+        // Get poster from first available image
+        const posterImage = allImages.find(url => 
+            !url.includes('.mp4') && !url.includes('.mov') && !url.includes('.avi') && !url.includes('.webm')
+        );
+        
+        // Show video, hide image
+        if (modalImage) {
+            modalImage.classList.add('hidden');
+        }
+        if (modalVideo) {
+            modalVideo.classList.remove('hidden');
+            if (modalVideoSource) {
+                modalVideoSource.src = mediaUrl;
+            }
+            if (posterImage) {
+                modalVideo.poster = posterImage;
+            }
+            modalVideo.load();
+        }
+        if (modalMediaBadge) {
+            modalMediaBadge.classList.remove('hidden');
+            modalMediaBadge.classList.add('flex');
+        }
+    } else {
+        // Show image, hide video
+        if (modalVideo) {
+            modalVideo.classList.add('hidden');
+            modalVideo.pause();
+        }
+        if (modalImage) {
+            modalImage.classList.remove('hidden');
+            modalImage.src = mediaUrl;
+        }
+        if (modalMediaBadge) {
+            modalMediaBadge.classList.add('hidden');
+            modalMediaBadge.classList.remove('flex');
+        }
+    }
 }
 
 function updateModalThumbnails() {
@@ -1542,29 +2030,6 @@ document.addEventListener('keydown', function(e) {
             case 'ArrowRight':
                 nextImage();
                 break;
-        }
-    }
-});
-
-// Keyboard navigation for Recently Viewed carousel
-document.addEventListener('keydown', function(e) {
-    const modal = document.getElementById('gallery-modal');
-    const recentlyViewedWrapper = document.getElementById('recently-viewed-wrapper');
-    
-    // Only if gallery is not open and recently viewed section is visible
-    if (modal.classList.contains('hidden') && recentlyViewedWrapper && !recentlyViewedWrapper.classList.contains('hidden')) {
-        // Check if user is in viewport of recently viewed section
-        const rect = recentlyViewedWrapper.getBoundingClientRect();
-        const isInViewport = rect.top < window.innerHeight && rect.bottom > 0;
-        
-        if (isInViewport) {
-            if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                scrollRecentlyViewed('prev');
-            } else if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                scrollRecentlyViewed('next');
-            }
         }
     }
 });
@@ -1797,7 +2262,7 @@ function saveToRecentlyViewed() {
     // Add current product to the beginning
     recentlyViewed.unshift(currentProduct);
     
-    // Keep only last 10 products
+    // Keep only last 10 products in history (but only show 5)
     recentlyViewed = recentlyViewed.slice(0, 10);
     
     // Save back to localStorage
@@ -1812,10 +2277,10 @@ function loadRecentlyViewed() {
     
     if (!container) return;
     
-    // Filter out current product and limit to 20 products
+    // Filter out current product and limit to 12 products
     const productsToShow = recentlyViewed
         .filter(p => p.id !== {{ $product->id }})
-        .slice(0, 20);
+        .slice(0, 12);
     
     if (productsToShow.length === 0) {
         if (wrapper) wrapper.classList.add('hidden');
@@ -1826,58 +2291,39 @@ function loadRecentlyViewed() {
     if (wrapper) wrapper.classList.remove('hidden');
     emptyState.classList.add('hidden');
     
-    // Check if mobile
-    const isMobile = window.innerWidth < 1024; // lg breakpoint
-    
-    // Calculate item width for consistent sizing
-    const containerEl = document.getElementById('recentlyViewedContainer');
-    const containerWidth = containerEl ? containerEl.offsetWidth : 1200;
-    const gap = isMobile ? 12 : 24; // gap-3 = 12px, gap-6 = 24px
-    const itemsPerView = 5;
-    const totalGaps = (itemsPerView - 1) * gap;
-    const itemWidth = Math.floor((containerWidth - totalGaps) / itemsPerView);
-    
-    console.log('Recently Viewed - Container width:', containerWidth, 'Item width:', itemWidth, 'Gap:', gap);
-    
-    // Generate HTML for each product
+    // Generate HTML for each product (same style as Related Products)
     container.innerHTML = productsToShow.map(product => `
-        <a href="/products/${product.slug}" class="bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 group overflow-hidden block flex-shrink-0" style="width: ${itemWidth}px;">
+        <a href="/products/${product.slug}" 
+           class="flex-shrink-0 w-40 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group/item overflow-hidden border border-gray-200">
             <!-- Product Image -->
-            <div class="relative aspect-square overflow-hidden bg-gray-100">
+            <div class="relative aspect-square overflow-hidden">
                 ${product.image ? `
                     <img src="${product.image}" 
                          alt="${product.name}" 
-                         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                         onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full bg-gray-200 flex items-center justify-center\\'><svg class=\\'w-12 h-12 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'></path></svg></div>'">
+                         class="w-full h-full object-cover group-hover/item:scale-105 transition-transform duration-300"
+                         onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full bg-gray-200 flex items-center justify-center\\'><svg class=\\'w-6 h-6 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'></path></svg></div>'">
                 ` : `
                     <div class="w-full h-full bg-gray-200 flex items-center justify-center">
-                        <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                         </svg>
                     </div>
                 `}
-                
-                <!-- Recently Viewed Badge -->
-                <div class="absolute top-2 right-2 bg-[#005366] text-white text-xs px-2 py-1 rounded-full flex items-center space-x-1">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                    </svg>
-                    <span>Viewed</span>
-                </div>
             </div>
 
-            <!-- Product Info -->
-            <div class="${isMobile ? 'p-2.5' : 'p-4'}">
-                <h3 class="font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-[#005366] transition-colors ${isMobile ? 'text-xs h-8 overflow-hidden' : 'text-sm'}" title="${product.name}">
-                    ${isMobile ? (product.name.length > 30 ? product.name.substring(0, 30) + '...' : product.name) : (product.name.length > 45 ? product.name.substring(0, 45) + '...' : product.name)}
-                </h3>
-                
-                ${!isMobile ? `<p class="text-xs text-gray-600 mb-2">By <a href="/shops/${product.shop_slug}" class="hover:text-[#005366] transition-colors">${product.shop}</a></p>` : ''}
-                
+            <!-- Product Info (Compact) -->
+            <div class="p-2.5">
+                <h4 class="font-medium text-gray-900 text-xs line-clamp-2 group-hover/item:text-[#005366] transition-colors mb-1.5 h-8 overflow-hidden" title="${product.name}">
+                    ${product.name.length > 30 ? product.name.substring(0, 30) + '...' : product.name}
+                </h4>
                 <div class="flex items-center justify-between">
-                    <span class="${isMobile ? 'text-xs' : 'text-lg'} font-bold text-[#E2150C]">$${parseFloat(product.price).toFixed(2)}</span>
-                    <span class="text-xs text-gray-500">${formatTimeAgo(product.timestamp)}</span>
+                    <span class="text-xs font-bold text-[#E2150C]">$${parseFloat(product.price).toFixed(2)}</span>
+                    <div class="flex items-center text-xs text-gray-500">
+                        <svg class="w-3 h-3 text-yellow-400 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                        </svg>
+                        <span class="text-xs">4.5</span>
+                    </div>
                 </div>
             </div>
         </a>
@@ -1961,63 +2407,37 @@ function scrollRecentlyViewed(direction) {
     const prevBtn = document.getElementById('recentlyViewedPrevBtn');
     const nextBtn = document.getElementById('recentlyViewedNextBtn');
     
-    if (!track || !container) return;
+    if (!track) return;
     
+    const itemWidth = 160 + 12; // w-40 (160px) + gap-3 (12px)
+    const containerWidth = container.offsetWidth;
+    const itemsVisible = Math.floor(containerWidth / itemWidth);
     const totalItems = track.children.length;
-    if (totalItems === 0) return;
-    
-    const itemsVisible = 5;
-    // Calculate how many "pages" we can scroll through
-    // If we have 6 items, we can scroll 1 time (0->1)
-    // If we have 10 items, we can scroll 5 times (0->1->2->3->4->5)
     const maxIndex = Math.max(0, totalItems - itemsVisible);
     
-    // Get first item to calculate exact width
-    const firstItem = track.children[0];
-    if (!firstItem) return;
-    
-    const itemWidth = firstItem.offsetWidth;
-    const computedStyle = window.getComputedStyle(track);
-    const gap = parseFloat(computedStyle.gap) || 24;
-    
-    console.log('Scroll - Total items:', totalItems, 'Items visible:', itemsVisible, 'Max index:', maxIndex);
-    console.log('Scroll - Item width:', itemWidth, 'Gap:', gap, 'Current index:', recentlyViewedCurrentIndex);
-    
-    // Update index based on direction
     if (direction === 'next') {
-        recentlyViewedCurrentIndex = Math.min(recentlyViewedCurrentIndex + 1, maxIndex);
+        recentlyViewedCurrentIndex = Math.min(recentlyViewedCurrentIndex + itemsVisible, maxIndex);
     } else {
-        recentlyViewedCurrentIndex = Math.max(0, recentlyViewedCurrentIndex - 1);
+        recentlyViewedCurrentIndex = Math.max(0, recentlyViewedCurrentIndex - itemsVisible);
     }
     
-    // Apply transform (item width + gap for each item)
-    const translateX = -recentlyViewedCurrentIndex * (itemWidth + gap);
+    const translateX = -recentlyViewedCurrentIndex * itemWidth;
     track.style.transform = `translateX(${translateX}px)`;
-    
-    console.log('New index:', recentlyViewedCurrentIndex, 'TranslateX:', translateX, 'Max allowed:', maxIndex);
     
     // Update button states
     if (prevBtn) {
         if (recentlyViewedCurrentIndex === 0) {
             prevBtn.classList.add('opacity-0');
-            prevBtn.classList.remove('opacity-100');
-            prevBtn.disabled = true;
         } else {
             prevBtn.classList.remove('opacity-0');
-            prevBtn.classList.add('opacity-100');
-            prevBtn.disabled = false;
         }
     }
     
     if (nextBtn) {
         if (recentlyViewedCurrentIndex >= maxIndex) {
             nextBtn.classList.add('opacity-0');
-            nextBtn.classList.remove('opacity-100');
-            nextBtn.disabled = true;
         } else {
             nextBtn.classList.remove('opacity-0');
-            nextBtn.classList.add('opacity-100');
-            nextBtn.disabled = false;
         }
     }
 }
@@ -2025,49 +2445,40 @@ function scrollRecentlyViewed(direction) {
 function updateRecentlyViewedNavigation(totalProducts) {
     const prevBtn = document.getElementById('recentlyViewedPrevBtn');
     const nextBtn = document.getElementById('recentlyViewedNextBtn');
-    const container = document.getElementById('recentlyViewedContainer');
     
-    if (!prevBtn || !nextBtn || !container) return;
+    if (!prevBtn || !nextBtn) return;
     
-    console.log('Update navigation - Total products:', totalProducts);
+    // Only show navigation buttons on desktop (lg: 1024px+) if more than what can fit on screen
+    const isDesktop = window.innerWidth >= 1024;
     
-    // Show navigation buttons if more than 5 products
-    if (totalProducts > 5) {
+    if (isDesktop && totalProducts > 5) {
         prevBtn.classList.remove('hidden');
+        prevBtn.classList.add('lg:block');
         nextBtn.classList.remove('hidden');
+        nextBtn.classList.add('lg:block');
         
         // Set initial state
         prevBtn.classList.add('opacity-0');
-        prevBtn.classList.remove('opacity-100');
-        prevBtn.disabled = true;
-        
         nextBtn.classList.remove('opacity-0');
-        nextBtn.classList.add('opacity-100');
-        nextBtn.disabled = false;
         
         // Reset index
         recentlyViewedCurrentIndex = 0;
         
-        // Reset transform
+        // Reset transform (only for desktop)
         const track = document.getElementById('recently-viewed-container');
         if (track) {
             track.style.transform = 'translateX(0px)';
         }
-        
-        console.log('Navigation buttons shown - Products > 5');
     } else {
-        // Hide navigation buttons if 5 or fewer products
+        // Hide navigation buttons on mobile or if 5 or fewer products
         prevBtn.classList.add('hidden');
         nextBtn.classList.add('hidden');
         
-        // Reset index and transform
-        recentlyViewedCurrentIndex = 0;
+        // Remove transform on mobile
         const track = document.getElementById('recently-viewed-container');
-        if (track) {
-            track.style.transform = 'translateX(0px)';
+        if (track && !isDesktop) {
+            track.style.transform = '';
         }
-        
-        console.log('Navigation buttons hidden - Products <= 5');
     }
 }
 
@@ -2199,16 +2610,20 @@ function addToCart() {
     cartLoading.classList.remove('hidden');
     cartText.textContent = 'Adding...';
     
+    // Get selected variant to determine correct price
+    const selectedVariant = getSelectedVariant();
+    const variantPrice = selectedVariant && selectedVariant.price ? selectedVariant.price : {{ $product->base_price }};
+    
     // Get current product data
     const productData = {
         id: {{ $product->id }},
         name: '{{ addslashes($product->name) }}',
         slug: '{{ $product->slug }}',
-        price: {{ $product->base_price }},
+        price: variantPrice,
         image: '{{ $media && count($media) > 0 ? (is_array($media[0]) ? $media[0]["url"] : $media[0]) : "" }}',
         shop: '{{ $product->shop->name ?? "Unknown Shop" }}',
         quantity: 1,
-        selectedVariant: getSelectedVariant(),
+        selectedVariant: selectedVariant,
         customizations: getSelectedCustomizations(),
         addedAt: Date.now()
     };
@@ -2326,11 +2741,15 @@ function getSelectedVariant() {
         return true;
     });
     
-    // Return only the attributes, not the full variant object
+    // Return full variant info including price
     const variant = matchingVariant || variants[0] || null;
     return variant ? { 
         id: variant.id,
-        attributes: variant.attributes 
+        attributes: variant.attributes,
+        price: variant.price,
+        quantity: variant.quantity,
+        variant_name: variant.variant_name,
+        media: variant.media
     } : null;
 }
 
@@ -2426,7 +2845,7 @@ function showCartPopup(addedProduct) {
     
     // Create popup content
     const popup = document.createElement('div');
-    popup.className = 'bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden cart-popup-content';
+    popup.className = 'bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto cart-popup-content';
     
     // Show loading state
     popup.innerHTML = `
@@ -2465,20 +2884,20 @@ function showCartPopup(addedProduct) {
                 console.log('First item product:', cartItems[0].product);
                 console.log('First item media:', cartItems[0].product?.media);
             }
-            renderCartPopup(popup, cartItems, data.summary || {});
+            renderCartPopup(popup, cartItems, data.summary || {}, data.shipping_details || null);
         } else {
             console.warn('Backend returned failed status');
-            renderCartPopup(popup, [], {});
+            renderCartPopup(popup, [], {}, null);
         }
     })
     .catch(error => {
         console.error('Failed to fetch cart:', error);
         popup.innerHTML = `
             <div class="p-6 text-center">
-                <p class="text-red-600 mb-4">Không thể tải giỏ hàng. Vui lòng thử lại.</p>
-                <p class="text-sm text-gray-600 mb-4">Lỗi: ${error.message}</p>
+                <p class="text-red-600 mb-4">Unable to load cart. Please try again.</p>
+                <p class="text-sm text-gray-600 mb-4">Error: ${error.message}</p>
                 <button onclick="closeCartPopup()" class="bg-[#005366] text-white px-6 py-2 rounded-lg hover:bg-[#003d4d]">
-                    Đóng
+                    Close
                 </button>
             </div>
         `;
@@ -2501,7 +2920,7 @@ function showCartPopup(addedProduct) {
     document.addEventListener('keydown', handleEscape);
 }
 
-function renderCartPopup(popup, cartItems, summary) {
+function renderCartPopup(popup, cartItems, summary, shippingDetails) {
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
     const totalPrice = parseFloat(summary.total || cartItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0));
     
@@ -2517,7 +2936,7 @@ function renderCartPopup(popup, cartItems, summary) {
         </div>
         
         <!-- Cart Items -->
-        <div class="p-6 max-h-96 overflow-y-auto">
+        <div class="p-6">
             <div class="space-y-4" id="cart-popup-items">
                 ${generateCartPopupItems(cartItems)}
             </div>
@@ -2530,15 +2949,38 @@ function renderCartPopup(popup, cartItems, summary) {
                     <span>Subtotal (${totalItems} items)</span>
                     <span class="font-semibold">$${parseFloat(summary.subtotal || 0).toFixed(2)}</span>
                 </div>
-                ${summary.shipping !== undefined ? `
-                    <div class="flex justify-between text-gray-600">
-                        <span>Shipping</span>
-                        ${summary.shipping == 0 ? 
-                            '<span class="text-green-600 font-semibold">FREE</span>' : 
-                            '<span class="font-semibold">$' + parseFloat(summary.shipping).toFixed(2) + '</span>'
-                        }
+                <div class="flex justify-between items-center text-gray-600">
+                    <span>Shipping</span>
+                    <div class="flex items-center space-x-3">
+                        <div class="relative">
+                            <select id="popupShippingCountry" class="text-sm border-2 border-gray-200 rounded-lg px-3 py-2 appearance-none bg-white pr-8 cursor-pointer hover:border-gray-300 focus:border-[#005366] focus:outline-none transition-colors min-w-[80px] [&::-ms-expand]:hidden [&::-webkit-appearance]:none">
+                                <option value="US">🇺🇸 US</option>
+                                <option value="CA">🇨🇦 CA</option>
+                                <option value="GB">🇬🇧 GB</option>
+                                <option value="DE">🇩🇪 DE</option>
+                                <option value="AU">🇦🇺 AU</option>
+                                <option value="VN">🇻🇳 VN</option>
+                            </select>
+                            <div class="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <span id="popupShippingCost" class="font-semibold text-right min-w-[5rem] text-lg">
+                            ${summary.shipping !== undefined ? 
+                                (summary.shipping == 0 ? 
+                                    '<span class="text-green-600">FREE</span>' : 
+                                    '$' + parseFloat(summary.shipping).toFixed(2)
+                                ) : 'Calculating...'
+                            }
+                        </span>
                     </div>
-                ` : ''}
+                </div>
+                <div class="text-xs text-gray-500">
+                    <span>Zone: </span>
+                    <span id="popupShippingZone">United States</span>
+                </div>
             </div>
             <div class="border-t pt-3 flex justify-between items-center text-xl font-bold">
                 <span>Total:</span>
@@ -2572,13 +3014,41 @@ function renderCartPopup(popup, cartItems, summary) {
         <!-- You may also like -->
         <div class="p-6 bg-gray-50 border-t border-gray-200">
             <h3 class="font-bold text-gray-900 mb-4">You may also like</h3>
-            <div class="grid grid-cols-2 gap-4" id="cross-sell-products">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" id="cross-sell-products">
                 ${generateCrossSellProducts()}
             </div>
         </div>
     `;
+    
+    // Setup shipping calculator after rendering
+    setTimeout(() => {
+        setupPopupShippingCalculator();
+        
+        // Set zone name if available
+        if (shippingDetails && shippingDetails.zone_name) {
+            const zoneElement = document.getElementById('popupShippingZone');
+            if (zoneElement) {
+                zoneElement.textContent = shippingDetails.zone_name;
+            }
+        }
+    }, 100);
 }
 
+
+// Calculate item total including customizations (same as Cart model getTotalPrice())
+function calculateItemTotal(item) {
+    let total = parseFloat(item.price) * item.quantity;
+    
+    // Add customization prices
+    if (item.customizations && typeof item.customizations === 'object') {
+        Object.values(item.customizations).forEach(customization => {
+            const customPrice = parseFloat(customization.price || 0);
+            total += customPrice * item.quantity;
+        });
+    }
+    
+    return total;
+}
 
 function generateCartPopupItems(cartItems) {
     if (!cartItems || cartItems.length === 0) {
@@ -2677,7 +3147,7 @@ function generateCartPopupItems(cartItems) {
                         </button>
                     </div>
                             <div class="text-right">
-                                <p class="text-lg font-bold text-[#005366]">$${(parseFloat(item.price) * item.quantity).toFixed(2)}</p>
+                                <p class="text-lg font-bold text-[#005366]">$${calculateItemTotal(item).toFixed(2)}</p>
                                 ${item.quantity > 1 ? `
                                     <p class="text-xs text-gray-500">$${parseFloat(item.price).toFixed(2)} each</p>
                                 ` : ''}
@@ -2734,18 +3204,18 @@ function updateCartItemQuantity(e, cartItemId, newQuantity) {
             }, 100);
         } else {
             if (quantitySpan) quantitySpan.textContent = originalText;
-            alert('Không thể cập nhật số lượng: ' + (data.message || 'Unknown error'));
+            alert('Unable to update quantity: ' + (data.message || 'Unknown error'));
         }
     })
     .catch(error => {
         console.error('Error updating quantity:', error);
         if (quantitySpan) quantitySpan.textContent = originalText;
-        alert('Lỗi: ' + error.message);
+        alert('Error: ' + error.message);
     });
 }
 
 function removeCartItemById(cartItemId) {
-    if (!confirm('Bạn có chắc muốn xóa sản phẩm này?')) return;
+    if (!confirm('Are you sure you want to remove this product?')) return;
     
     console.log('Removing cart item:', cartItemId);
     
@@ -2775,14 +3245,14 @@ function removeCartItemById(cartItemId) {
                 refreshCartPopupContent();
             }, 100);
             // Show notification
-            showCartSuccess('Đã xóa sản phẩm khỏi giỏ hàng');
+            showCartSuccess('Product removed from cart');
         } else {
-            alert('Không thể xóa sản phẩm: ' + (data.message || 'Unknown error'));
+            alert('Unable to remove product: ' + (data.message || 'Unknown error'));
         }
     })
     .catch(error => {
         console.error('Error removing item:', error);
-        alert('Lỗi: ' + error.message);
+        alert('Error: ' + error.message);
     });
 }
 
@@ -2840,6 +3310,14 @@ function refreshCartPopupContent() {
                 }
             }
             
+            // Update shipping zone if available
+            if (data.shipping_details && data.shipping_details.zone_name) {
+                const zoneElement = document.getElementById('popupShippingZone');
+                if (zoneElement) {
+                    zoneElement.textContent = data.shipping_details.zone_name;
+                }
+            }
+            
             // Update total
             const totalElement = document.querySelector('#cart-popup-overlay .border-t.pt-3 span:last-child');
             if (totalElement) {
@@ -2852,7 +3330,7 @@ function refreshCartPopupContent() {
             // If cart is empty, close popup
             if (data.cart_items.length === 0) {
                 closeCartPopup();
-                showCartSuccess('Giỏ hàng đã trống');
+                showCartSuccess('Cart is empty');
             }
         }
     })
@@ -2863,9 +3341,9 @@ function refreshCartPopupContent() {
         if (cartItemsContainer) {
             cartItemsContainer.innerHTML = `
                 <div class="text-center py-4">
-                    <p class="text-red-600">Không thể cập nhật giỏ hàng</p>
+                    <p class="text-red-600">Unable to update cart</p>
                     <p class="text-sm text-gray-500">${error.message}</p>
-                    <button onclick="refreshCartPopupContent()" class="mt-2 text-[#005366] hover:underline">Thử lại</button>
+                    <button onclick="refreshCartPopupContent()" class="mt-2 text-[#005366] hover:underline">Try again</button>
         </div>
             `;
         }
@@ -2896,6 +3374,7 @@ function closeCartPopup() {
             'slug' => $product->slug,
             'price' => $product->base_price,
             'image' => $media && count($media) > 0 ? (is_array($media[0]) ? $media[0]['url'] : $media[0]) : null,
+            'has_variants' => $product->variants()->count() > 0,
         ];
     })->toArray();
 @endphp
@@ -2905,20 +3384,30 @@ function generateCrossSellProducts() {
     const relatedProducts = @json($crossSellData ?? []);
     
     if (!relatedProducts || relatedProducts.length === 0) {
-        return '<p class="col-span-2 text-center text-gray-500 py-4">No recommendations available</p>';
+        return '<p class="col-span-2 sm:col-span-4 text-center text-gray-500 py-4">No recommendations available</p>';
     }
     
-    // Take first 2 related products for cross-sell
-    const crossSellProducts = relatedProducts.slice(0, 2);
+    // Take first 4 related products for cross-sell
+    const crossSellProducts = relatedProducts.slice(0, 4);
     
     return crossSellProducts.map(product => `
-        <div class="border border-gray-200 rounded-lg p-3 hover:border-[#005366] transition-colors cursor-pointer cross-sell-product" 
-             onclick="addCrossSellToCart(${product.id}, '${product.name}', ${product.price}, '${product.image || ''}')">
+        <div class="border border-gray-200 rounded-lg p-3 hover:border-[#005366] transition-colors cursor-pointer cross-sell-product relative" 
+             onclick="handleCrossSellClick(${product.id}, '${product.name}', ${product.price}, '${product.image || ''}', '${product.slug}', ${product.has_variants})">
             ${product.image && product.image !== 'undefined' && product.image !== '' ? `
-                <img src="${product.image}" 
-                 alt="${product.name}" 
-                     class="w-full h-24 object-cover rounded-md mb-2"
-                     onerror="this.parentElement.innerHTML='<div class=\\'w-full h-24 bg-gray-200 rounded-md mb-2 flex items-center justify-center\\'><svg class=\\'w-8 h-8 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'></path></svg></div>'">
+                <div class="relative">
+                    <img src="${product.image}" 
+                     alt="${product.name}" 
+                         class="w-full h-24 object-cover rounded-md mb-2"
+                         onerror="this.parentElement.innerHTML='<div class=\\'w-full h-24 bg-gray-200 rounded-md mb-2 flex items-center justify-center\\'><svg class=\\'w-8 h-8 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'></path></svg></div>'">
+                    ${product.has_variants ? `
+                        <div class="absolute top-1 left-1 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-medium flex items-center space-x-0.5">
+                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                            </svg>
+                            <span>Options</span>
+                        </div>
+                    ` : ''}
+                </div>
             ` : `
                 <div class="w-full h-24 bg-gray-200 rounded-md mb-2 flex items-center justify-center">
                     <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2934,12 +3423,34 @@ function generateCrossSellProducts() {
                         <span class="text-xs text-gray-500 line-through">$${product.originalPrice}</span>
                     ` : ''}
                 </div>
-                <button class="bg-[#005366] text-white text-xs px-3 py-1 rounded hover:bg-[#003d4d] transition-colors">
-                    Add
+                <button class="bg-[#005366] text-white text-xs px-3 py-1 rounded hover:bg-[#003d4d] transition-colors flex items-center space-x-1" onclick="event.stopPropagation();">
+                    ${product.has_variants ? `
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                        <span>Select</span>
+                    ` : `
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span>Add</span>
+                    `}
                 </button>
             </div>
         </div>
     `).join('');
+}
+
+// Handle cross-sell product click
+function handleCrossSellClick(productId, productName, productPrice, productImage, productSlug, hasVariants) {
+    if (hasVariants) {
+        // If product has variants, redirect to product page to select
+        window.location.href = `/products/${productSlug}`;
+    } else {
+        // If no variants, add directly to cart
+        addCrossSellToCart(productId, productName, productPrice, productImage);
+    }
 }
 
 function addCrossSellToCart(productId, productName, productPrice, productImage) {
@@ -2976,12 +3487,12 @@ function addCrossSellToCart(productId, productName, productPrice, productImage) 
             syncLocalStorageWithBackend();
             // Refresh popup content
             refreshCartPopupContent();
-            showCartSuccess('Đã thêm vào giỏ hàng');
+            showCartSuccess('Product added to cart successfully!');
         }
     })
     .catch(error => {
         console.error('Failed to add cross-sell product:', error);
-        alert('Không thể thêm sản phẩm');
+        alert('Unable to add product to cart');
     });
 }
 
@@ -3143,5 +3654,353 @@ function updateCustomizationPrice() {
         priceDisplay.classList.add('hidden');
     }
 }
+
+// Size Guide Modal Functions
+let currentGender = 'male';
+let currentUnit = 'cm';
+
+// Size data for different product types and genders
+const sizeData = {
+    'baseball-jackets': {
+        male: {
+            'LENGTH': { 'S': 66, 'M': 69, 'L': 71, 'XL': 74, '2XL': 76, '3XL': 79, '4XL': 81, '5XL': 83 },
+            'BUST': { 'S': 102, 'M': 112, 'L': 122, 'XL': 132, '2XL': 142, '3XL': 152, '4XL': 158, '5XL': 164 },
+            'SLEEVE': { 'S': 62, 'M': 63, 'L': 65, 'XL': 66, '2XL': 67, '3XL': 68, '4XL': 69, '5XL': 70 }
+        },
+        female: {
+            'LENGTH': { 'S': 60, 'M': 63, 'L': 66, 'XL': 69, '2XL': 71, '3XL': 74, '4XL': 76, '5XL': 78 },
+            'BUST': { 'S': 86, 'M': 91, 'L': 97, 'XL': 102, '2XL': 107, '3XL': 112, '4XL': 117, '5XL': 122 },
+            'SLEEVE': { 'S': 58, 'M': 59, 'L': 60, 'XL': 61, '2XL': 62, '3XL': 63, '4XL': 64, '5XL': 65 }
+        },
+        youth: {
+            'LENGTH': { 'S': 50, 'M': 53, 'L': 56, 'XL': 59, '2XL': 62, '3XL': 65, '4XL': 68, '5XL': 71 },
+            'BUST': { 'S': 66, 'M': 71, 'L': 76, 'XL': 81, '2XL': 86, '3XL': 91, '4XL': 96, '5XL': 102 },
+            'SLEEVE': { 'S': 45, 'M': 47, 'L': 49, 'XL': 51, '2XL': 53, '3XL': 55, '4XL': 57, '5XL': 59 }
+        },
+        unisex: {
+            'LENGTH': { 'S': 66, 'M': 69, 'L': 71, 'XL': 74, '2XL': 76, '3XL': 79, '4XL': 81, '5XL': 83 },
+            'BUST': { 'S': 102, 'M': 112, 'L': 122, 'XL': 132, '2XL': 142, '3XL': 152, '4XL': 158, '5XL': 164 },
+            'SLEEVE': { 'S': 62, 'M': 63, 'L': 65, 'XL': 66, '2XL': 67, '3XL': 68, '4XL': 69, '5XL': 70 }
+        },
+        kids: {
+            'LENGTH': { 'S': 40, 'M': 43, 'L': 46, 'XL': 49, '2XL': 52, '3XL': 55, '4XL': 58, '5XL': 61 },
+            'BUST': { 'S': 56, 'M': 61, 'L': 66, 'XL': 71, '2XL': 76, '3XL': 81, '4XL': 86, '5XL': 91 },
+            'SLEEVE': { 'S': 35, 'M': 37, 'L': 39, 'XL': 41, '2XL': 43, '3XL': 45, '4XL': 47, '5XL': 49 }
+        }
+    },
+    't-shirts': {
+        male: {
+            'LENGTH': { 'S': 70, 'M': 72, 'L': 74, 'XL': 76, '2XL': 78, '3XL': 80, '4XL': 82, '5XL': 84 },
+            'BUST': { 'S': 96, 'M': 101, 'L': 106, 'XL': 111, '2XL': 116, '3XL': 121, '4XL': 126, '5XL': 131 },
+            'SLEEVE': { 'S': 20, 'M': 21, 'L': 22, 'XL': 23, '2XL': 24, '3XL': 25, '4XL': 26, '5XL': 27 }
+        },
+        female: {
+            'LENGTH': { 'S': 64, 'M': 66, 'L': 68, 'XL': 70, '2XL': 72, '3XL': 74, '4XL': 76, '5XL': 78 },
+            'BUST': { 'S': 86, 'M': 91, 'L': 97, 'XL': 102, '2XL': 107, '3XL': 112, '4XL': 117, '5XL': 122 },
+            'SLEEVE': { 'S': 18, 'M': 19, 'L': 20, 'XL': 21, '2XL': 22, '3XL': 23, '4XL': 24, '5XL': 25 }
+        },
+        youth: {
+            'LENGTH': { 'S': 50, 'M': 53, 'L': 56, 'XL': 59, '2XL': 62, '3XL': 65, '4XL': 68, '5XL': 71 },
+            'BUST': { 'S': 66, 'M': 71, 'L': 76, 'XL': 81, '2XL': 86, '3XL': 91, '4XL': 96, '5XL': 102 },
+            'SLEEVE': { 'S': 15, 'M': 16, 'L': 17, 'XL': 18, '2XL': 19, '3XL': 20, '4XL': 21, '5XL': 22 }
+        },
+        unisex: {
+            'LENGTH': { 'S': 70, 'M': 72, 'L': 74, 'XL': 76, '2XL': 78, '3XL': 80, '4XL': 82, '5XL': 84 },
+            'BUST': { 'S': 96, 'M': 101, 'L': 106, 'XL': 111, '2XL': 116, '3XL': 121, '4XL': 126, '5XL': 131 },
+            'SLEEVE': { 'S': 20, 'M': 21, 'L': 22, 'XL': 23, '2XL': 24, '3XL': 25, '4XL': 26, '5XL': 27 }
+        },
+        kids: {
+            'LENGTH': { 'S': 40, 'M': 43, 'L': 46, 'XL': 49, '2XL': 52, '3XL': 55, '4XL': 58, '5XL': 61 },
+            'BUST': { 'S': 56, 'M': 61, 'L': 66, 'XL': 71, '2XL': 76, '3XL': 81, '4XL': 86, '5XL': 91 },
+            'SLEEVE': { 'S': 15, 'M': 16, 'L': 17, 'XL': 18, '2XL': 19, '3XL': 20, '4XL': 21, '5XL': 22 }
+        }
+    },
+    'hoodies': {
+        male: {
+            'LENGTH': { 'S': 68, 'M': 70, 'L': 72, 'XL': 74, '2XL': 76, '3XL': 78, '4XL': 80, '5XL': 82 },
+            'BUST': { 'S': 104, 'M': 109, 'L': 114, 'XL': 119, '2XL': 124, '3XL': 129, '4XL': 134, '5XL': 139 },
+            'SLEEVE': { 'S': 64, 'M': 65, 'L': 66, 'XL': 67, '2XL': 68, '3XL': 69, '4XL': 70, '5XL': 71 }
+        },
+        female: {
+            'LENGTH': { 'S': 62, 'M': 64, 'L': 66, 'XL': 68, '2XL': 70, '3XL': 72, '4XL': 74, '5XL': 76 },
+            'BUST': { 'S': 88, 'M': 93, 'L': 98, 'XL': 103, '2XL': 108, '3XL': 113, '4XL': 118, '5XL': 123 },
+            'SLEEVE': { 'S': 60, 'M': 61, 'L': 62, 'XL': 63, '2XL': 64, '3XL': 65, '4XL': 66, '5XL': 67 }
+        },
+        youth: {
+            'LENGTH': { 'S': 48, 'M': 51, 'L': 54, 'XL': 57, '2XL': 60, '3XL': 63, '4XL': 66, '5XL': 69 },
+            'BUST': { 'S': 68, 'M': 73, 'L': 78, 'XL': 83, '2XL': 88, '3XL': 93, '4XL': 98, '5XL': 103 },
+            'SLEEVE': { 'S': 47, 'M': 49, 'L': 51, 'XL': 53, '2XL': 55, '3XL': 57, '4XL': 59, '5XL': 61 }
+        },
+        unisex: {
+            'LENGTH': { 'S': 68, 'M': 70, 'L': 72, 'XL': 74, '2XL': 76, '3XL': 78, '4XL': 80, '5XL': 82 },
+            'BUST': { 'S': 104, 'M': 109, 'L': 114, 'XL': 119, '2XL': 124, '3XL': 129, '4XL': 134, '5XL': 139 },
+            'SLEEVE': { 'S': 64, 'M': 65, 'L': 66, 'XL': 67, '2XL': 68, '3XL': 69, '4XL': 70, '5XL': 71 }
+        },
+        kids: {
+            'LENGTH': { 'S': 38, 'M': 41, 'L': 44, 'XL': 47, '2XL': 50, '3XL': 53, '4XL': 56, '5XL': 59 },
+            'BUST': { 'S': 58, 'M': 63, 'L': 68, 'XL': 73, '2XL': 78, '3XL': 83, '4XL': 88, '5XL': 93 },
+            'SLEEVE': { 'S': 37, 'M': 39, 'L': 41, 'XL': 43, '2XL': 45, '3XL': 47, '4XL': 49, '5XL': 51 }
+        }
+    }
+};
+
+function openSizeGuide() {
+    const modal = document.getElementById('size-guide-modal');
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    updateSizeTable();
+}
+
+function closeSizeGuide() {
+    const modal = document.getElementById('size-guide-modal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = 'auto';
+}
+
+function selectGender(gender) {
+    currentGender = gender;
+    
+    // Update button styles
+    document.querySelectorAll('[id^="gender-"]').forEach(btn => {
+        btn.classList.remove('bg-[#005366]', 'text-white');
+        btn.classList.add('bg-gray-100', 'text-gray-700');
+    });
+    
+    document.getElementById(`gender-${gender}`).classList.remove('bg-gray-100', 'text-gray-700');
+    document.getElementById(`gender-${gender}`).classList.add('bg-[#005366]', 'text-white');
+    
+    updateSizeTable();
+}
+
+function selectUnit(unit) {
+    currentUnit = unit;
+    
+    // Update button styles
+    document.querySelectorAll('[id^="unit-"]').forEach(btn => {
+        btn.classList.remove('bg-[#005366]', 'text-white');
+        btn.classList.add('bg-gray-100', 'text-gray-700');
+    });
+    
+    document.getElementById(`unit-${unit}`).classList.remove('bg-gray-100', 'text-gray-700');
+    document.getElementById(`unit-${unit}`).classList.add('bg-[#005366]', 'text-white');
+    
+    updateSizeTable();
+}
+
+function updateSizeTable() {
+    const productType = document.getElementById('product-type-selector').value;
+    const tableBody = document.getElementById('size-table-body');
+    
+    if (!sizeData[productType] || !sizeData[productType][currentGender]) {
+        tableBody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-gray-500">No size data available for this selection</td></tr>';
+        return;
+    }
+    
+    const measurements = sizeData[productType][currentGender];
+    const sizes = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+    
+    let tableHTML = '';
+    
+    Object.entries(measurements).forEach(([measurement, values]) => {
+        tableHTML += '<tr class="border-b border-gray-100">';
+        tableHTML += `<td class="py-2 font-medium text-gray-700">${measurement}:</td>`;
+        
+        sizes.forEach(size => {
+            let value = values[size] || '-';
+            if (value !== '-' && currentUnit === 'inches') {
+                // Convert cm to inches (1 cm = 0.393701 inches)
+                value = Math.round(value * 0.393701);
+            }
+            tableHTML += `<td class="text-center py-2 text-gray-600">${value}</td>`;
+        });
+        
+        tableHTML += '</tr>';
+    });
+    
+    tableBody.innerHTML = tableHTML;
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeSizeGuide();
+    }
+});
+
+// Close modal on overlay click
+document.getElementById('size-guide-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeSizeGuide();
+    }
+});
 </script>
+<!-- Size Guide Modal -->
+<div id="size-guide-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between p-6 border-b border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-900">Size & Fit Info</h2>
+            <button onclick="closeSizeGuide()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Modal Content -->
+        <div class="p-6">
+            <!-- Introduction Text -->
+            <p class="text-gray-700 mb-6">
+                If you're in between sizes, order a size up as our items can shrink up to half a size in the wash.
+            </p>
+            
+            <!-- Gender/Age Selection Tabs -->
+            <div class="flex flex-wrap gap-2 mb-6">
+                <button onclick="selectGender('male')" id="gender-male" class="px-4 py-2 rounded-lg font-medium transition-colors bg-[#005366] text-white">
+                    Male
+                </button>
+                <button onclick="selectGender('female')" id="gender-female" class="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
+                    Female
+                </button>
+                <button onclick="selectGender('youth')" id="gender-youth" class="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
+                    Youth
+                </button>
+                <button onclick="selectGender('unisex')" id="gender-unisex" class="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
+                    Unisex
+                </button>
+                <button onclick="selectGender('kids')" id="gender-kids" class="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
+                    Kids
+                </button>
+            </div>
+            
+            <!-- Product Type Dropdown -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Product Type</label>
+                <select id="product-type-selector" onchange="updateSizeTable()" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#005366] focus:border-transparent">
+                    <option value="baseball-jackets">Baseball Jackets</option>
+                    <option value="t-shirts">T-Shirts</option>
+                    <option value="hoodies">Hoodies</option>
+                    <option value="tank-tops">Tank Tops</option>
+                    <option value="long-sleeve">Long Sleeve</option>
+                </select>
+            </div>
+            
+            <!-- Size Table -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Product Measurements</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-200">
+                                <th class="text-left py-2 font-medium text-gray-700">Size</th>
+                                <th class="text-center py-2 font-medium text-gray-700">S</th>
+                                <th class="text-center py-2 font-medium text-gray-700">M</th>
+                                <th class="text-center py-2 font-medium text-gray-700">L</th>
+                                <th class="text-center py-2 font-medium text-gray-700">XL</th>
+                                <th class="text-center py-2 font-medium text-gray-700">2XL</th>
+                                <th class="text-center py-2 font-medium text-gray-700">3XL</th>
+                                <th class="text-center py-2 font-medium text-gray-700">4XL</th>
+                                <th class="text-center py-2 font-medium text-gray-700">5XL</th>
+                            </tr>
+                        </thead>
+                        <tbody id="size-table-body">
+                            <!-- Table content will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Unit Selection -->
+            <div class="flex items-center justify-end space-x-2">
+                <button onclick="selectUnit('cm')" id="unit-cm" class="px-4 py-2 rounded-lg font-medium transition-colors bg-[#005366] text-white">
+                    cm
+                </button>
+                <button onclick="selectUnit('inches')" id="unit-inches" class="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
+                    inches
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Cart Popup Shipping Calculator
+function setupPopupShippingCalculator() {
+    const popupShippingCountry = document.getElementById('popupShippingCountry');
+    const popupShippingCost = document.getElementById('popupShippingCost');
+    const popupShippingZone = document.getElementById('popupShippingZone');
+    
+    console.log('Setting up popup shipping calculator...', {
+        country: popupShippingCountry,
+        cost: popupShippingCost,
+        zone: popupShippingZone
+    });
+    
+    if (popupShippingCountry) {
+        popupShippingCountry.addEventListener('change', async function() {
+            const country = this.value;
+            console.log('Country changed to:', country);
+            
+            try {
+                const response = await fetch('/checkout/calculate-shipping', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ country: country })
+                });
+                
+                const data = await response.json();
+                console.log('Shipping calculation response:', data);
+                
+                if (data.success && data.shipping) {
+                    const shipping = parseFloat(data.shipping.total_shipping);
+                    console.log('New shipping cost:', shipping);
+                    
+                    // Update shipping cost
+                    if (popupShippingCost) {
+                        popupShippingCost.innerHTML = shipping === 0 ? 
+                            '<span class="text-green-600">FREE</span>' : 
+                            '$' + shipping.toFixed(2);
+                        console.log('Updated shipping cost element');
+                    }
+                    
+                    // Update zone
+                    if (popupShippingZone) {
+                        popupShippingZone.textContent = data.shipping.zone_name || country;
+                        console.log('Updated zone to:', data.shipping.zone_name);
+                    }
+                    
+                    // Update total in popup
+                    updatePopupTotal(shipping);
+                } else {
+                    console.error('Shipping calculation failed:', data);
+                }
+            } catch (error) {
+                console.error('Popup shipping calculation error:', error);
+            }
+        });
+    }
+}
+
+function updatePopupTotal(newShipping) {
+    // Get current subtotal from popup
+    const subtotalElement = document.querySelector('#cart-popup-overlay .space-y-2 .flex.justify-between span:last-child');
+    if (subtotalElement) {
+        const subtotal = parseFloat(subtotalElement.textContent.replace('$', ''));
+        const newTotal = subtotal + newShipping;
+        
+        // Update total
+        const totalElement = document.querySelector('#cart-popup-overlay .border-t.pt-3 span:last-child');
+        if (totalElement) {
+            totalElement.textContent = '$' + newTotal.toFixed(2);
+        }
+    }
+}
+
+// Note: setupPopupShippingCalculator is called automatically in renderCartPopup
+</script>
+
 @endsection

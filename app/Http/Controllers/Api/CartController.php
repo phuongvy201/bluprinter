@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\Product;
+use App\Services\ShippingCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -50,8 +51,9 @@ class CartController extends Controller
             }
 
             if ($existingCart) {
-                // Update quantity
+                // Update quantity and price (in case variant price changed)
                 $existingCart->increment('quantity', $request->quantity);
+                $existingCart->update(['price' => $request->price]);
                 $cartItem = $existingCart;
             } else {
                 // Create new cart item
@@ -123,7 +125,29 @@ class CartController extends Controller
 
             // Calculate summary (without tax)
             $subtotal = $totalPrice;
-            $shipping = $subtotal > 50 ? 0 : 10;
+            $shipping = 0;
+            $shippingDetails = null;
+
+            if (!$cartItems->isEmpty()) {
+                // Prepare cart items for shipping calculation
+                $items = $cartItems->map(function ($item) {
+                    return [
+                        'product_id' => $item->product_id,
+                        'quantity' => $item->quantity,
+                        'price' => $item->price,
+                    ];
+                });
+
+                // Calculate shipping for US (default)
+                $calculator = new ShippingCalculator();
+                $shippingResult = $calculator->calculateShipping($items, 'US');
+
+                if ($shippingResult['success']) {
+                    $shipping = $shippingResult['total_shipping'];
+                    $shippingDetails = $shippingResult;
+                }
+            }
+
             $total = $subtotal + $shipping;
 
             return response()->json([
@@ -135,7 +159,8 @@ class CartController extends Controller
                     'subtotal' => $subtotal,
                     'shipping' => $shipping,
                     'total' => $total
-                ]
+                ],
+                'shipping_details' => $shippingDetails
             ]);
         } catch (\Exception $e) {
             Log::error('Error getting cart', [

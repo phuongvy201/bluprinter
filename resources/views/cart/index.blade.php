@@ -145,36 +145,59 @@
                                 <span>Subtotal ({{ $cartItems->sum('quantity') }} items)</span>
                                 <span class="font-semibold">${{ number_format($subtotal, 2) }}</span>
                             </div>
-                            <div class="flex justify-between text-gray-600">
-                                <span>Shipping</span>
-                                @if($shipping == 0)
-                                    <span class="text-green-600 font-semibold">FREE</span>
-                                @else
-                                    <span class="font-semibold">${{ number_format($shipping, 2) }}</span>
+                            
+                            <!-- Shipping Details -->
+                            <div class="border-t pt-3">
+                                <div class="flex justify-between items-center text-gray-600 mb-3">
+                                    <span>Shipping</span>
+                                    <div class="flex items-center space-x-3">
+                                        <div class="relative">
+                                            <select id="shippingCountry" class="text-sm border-2 border-gray-200 rounded-lg px-3 py-2 appearance-none bg-white pr-8 cursor-pointer hover:border-gray-300 focus:border-[#005366] focus:outline-none transition-colors min-w-[90px] [&::-ms-expand]:hidden [&::-webkit-appearance]:none">
+                                                <option value="US">🇺🇸 US</option>
+                                                <option value="CA">🇨🇦 CA</option>
+                                                <option value="GB">🇬🇧 GB</option>
+                                                <option value="DE">🇩🇪 DE</option>
+                                                <option value="AU">🇦🇺 AU</option>
+                                                <option value="VN">🇻🇳 VN</option>
+                                            </select>
+                                            <div class="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                                                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <span id="shippingCost" class="font-semibold text-right min-w-[5rem] text-lg">
+                                            @if($shipping == 0)
+                                                <span class="text-green-600">FREE</span>
+                                            @else
+                                                ${{ number_format($shipping, 2) }}
+                                            @endif
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                @if($shippingDetails && $shipping > 0)
+                                    <div class="text-xs text-gray-500">
+                                        <div class="flex justify-between">
+                                            <span>Zone:</span>
+                                            <span>{{ $shippingDetails['zone_name'] ?? 'US' }}</span>
+                                        </div>
+                                    </div>
                                 @endif
                             </div>
-                            @if($subtotal < 50 && $subtotal > 0)
-                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                    <p class="text-xs text-blue-800">
-                                        <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                                        </svg>
-                                        Add ${{ number_format(50 - $subtotal, 2) }} more for FREE shipping!
-                                    </p>
-                                </div>
-                            @endif
+                            
                             <div class="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
                                 <span>Total</span>
                                 <span class="text-[#005366]">${{ number_format($total, 2) }}</span>
                             </div>
                         </div>
 
-                        <button class="w-full bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 rounded-xl transition-colors duration-200 mb-3 flex items-center justify-center space-x-2">
+                        <a href="{{ route('checkout.index') }}" class="block w-full bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 rounded-xl transition-colors duration-200 mb-3 flex items-center justify-center space-x-2">
                             <span>Proceed to Checkout</span>
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
                             </svg>
-                        </button>
+                        </a>
 
                         <a href="{{ route('products.index') }}" class="block w-full text-center text-[#005366] hover:text-[#003d4d] font-medium py-3 border-2 border-[#005366] rounded-xl hover:bg-[#005366] hover:text-white transition-all duration-200">
                             Continue Shopping
@@ -205,8 +228,62 @@
                 </div>
             </div>
         @endif
+
+        <!-- Recently Viewed Products -->
+        <div id="recentlyViewedSection" class="mt-12" style="display: none;">
+            <div class="mb-6 flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">Recently Viewed Products</h2>
+                    <p class="text-gray-600 mt-1">Continue shopping from where you left off</p>
+                </div>
+                <!-- Mobile Navigation Buttons -->
+                <div class="flex gap-2 lg:hidden">
+                    <button id="recentlyViewedPrevBtnMobile" class="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+                    <button id="recentlyViewedNextBtnMobile" class="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Products Container -->
+            <div class="relative group">
+                <!-- Desktop Navigation Buttons -->
+                <button id="recentlyViewedPrevBtnDesktop" class="hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-12 h-12 bg-white rounded-full shadow-lg items-center justify-center hover:bg-gray-50 transition-all disabled:opacity-0 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100">
+                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                </button>
+                <button id="recentlyViewedNextBtnDesktop" class="hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-12 h-12 bg-white rounded-full shadow-lg items-center justify-center hover:bg-gray-50 transition-all disabled:opacity-0 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100">
+                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+                
+                <div id="recentlyViewedContainer" class="overflow-x-auto hide-scrollbar" style="scroll-behavior: smooth;">
+                    <div id="recentlyViewedGrid" class="flex gap-4"></div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Styles for Recently Viewed -->
+<style>
+.hide-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+</style>
 
 <!-- JavaScript for Cart Operations -->
 <script>
@@ -264,6 +341,197 @@ function removeFromCart(cartItemId) {
         alert('An error occurred');
     });
 }
+
+// Recently Viewed Products Functionality
+function loadRecentlyViewed() {
+    const recentlyViewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+    
+    if (recentlyViewed.length === 0) {
+        document.getElementById('recentlyViewedSection').style.display = 'none';
+        return;
+    }
+
+    // Show section
+    document.getElementById('recentlyViewedSection').style.display = 'block';
+
+    // Limit to 12 products
+    const productsToShow = recentlyViewed.slice(0, 12);
+    const container = document.getElementById('recentlyViewedGrid');
+    
+    container.innerHTML = productsToShow.map(product => `
+        <div class="flex-shrink-0 w-48 bg-white rounded-lg overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow group">
+            <a href="/products/${product.slug}" class="block">
+                <div class="relative aspect-square overflow-hidden bg-gray-100">
+                    <img src="${product.image}" 
+                         alt="${product.name}" 
+                         class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
+                </div>
+                <div class="p-3">
+                    <h3 class="text-sm font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-[#005366] transition-colors">${product.name}</h3>
+                    <div class="flex items-center gap-1 mb-2">
+                        <div class="flex">
+                            ${Array(5).fill(0).map((_, i) => `
+                                <svg class="w-3 h-3 ${i < 4 ? 'text-yellow-400' : 'text-gray-300'}" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                </svg>
+                            `).join('')}
+                        </div>
+                        <span class="text-xs text-gray-500">4.5</span>
+                    </div>
+                    <p class="text-base font-bold text-[#005366]">$${parseFloat(product.price).toFixed(2)}</p>
+                </div>
+            </a>
+        </div>
+    `).join('');
+
+    // Setup navigation
+    setupNavigation();
+}
+
+function setupNavigation() {
+    const container = document.getElementById('recentlyViewedContainer');
+    const prevBtnMobile = document.getElementById('recentlyViewedPrevBtnMobile');
+    const nextBtnMobile = document.getElementById('recentlyViewedNextBtnMobile');
+    const prevBtnDesktop = document.getElementById('recentlyViewedPrevBtnDesktop');
+    const nextBtnDesktop = document.getElementById('recentlyViewedNextBtnDesktop');
+    
+    if (!container) return;
+
+    // Update button states on scroll
+    function updateButtonStates() {
+        const scrollLeft = container.scrollLeft;
+        const maxScroll = container.scrollWidth - container.clientWidth;
+        
+        const isAtStart = scrollLeft <= 0;
+        const isAtEnd = scrollLeft >= maxScroll - 1;
+        
+        // Update mobile buttons
+        if (prevBtnMobile && nextBtnMobile) {
+            prevBtnMobile.disabled = isAtStart;
+            nextBtnMobile.disabled = isAtEnd;
+        }
+        
+        // Update desktop buttons
+        if (prevBtnDesktop && nextBtnDesktop) {
+            prevBtnDesktop.disabled = isAtStart;
+            nextBtnDesktop.disabled = isAtEnd;
+        }
+    }
+
+    // Scroll by one item width (192px + 16px gap)
+    const scrollAmount = 208;
+
+    function scrollPrev() {
+        container.scrollBy({
+            left: -scrollAmount,
+            behavior: 'smooth'
+        });
+        setTimeout(updateButtonStates, 300);
+    }
+
+    function scrollNext() {
+        container.scrollBy({
+            left: scrollAmount,
+            behavior: 'smooth'
+        });
+        setTimeout(updateButtonStates, 300);
+    }
+
+    // Attach event handlers
+    if (prevBtnMobile) prevBtnMobile.onclick = scrollPrev;
+    if (nextBtnMobile) nextBtnMobile.onclick = scrollNext;
+    if (prevBtnDesktop) prevBtnDesktop.onclick = scrollPrev;
+    if (nextBtnDesktop) nextBtnDesktop.onclick = scrollNext;
+
+    // Update on scroll
+    container.addEventListener('scroll', updateButtonStates);
+    
+    // Initial state
+    updateButtonStates();
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadRecentlyViewed();
+    
+    // Shipping calculation
+    const shippingCountrySelect = document.getElementById('shippingCountry');
+    const shippingCostElement = document.getElementById('shippingCost');
+    const totalElement = document.querySelector('.text-\\[\\#005366\\]');
+    const subtotal = {{ $subtotal }};
+    
+    if (shippingCountrySelect) {
+        shippingCountrySelect.addEventListener('change', async function() {
+            const country = this.value;
+            
+            try {
+                const response = await fetch('/checkout/calculate-shipping', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ country: country })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.shipping) {
+                    const newShipping = parseFloat(data.shipping.total_shipping);
+                    const newTotal = subtotal + newShipping;
+                    
+                    // Update shipping cost display
+                    if (shippingCostElement) {
+                        shippingCostElement.innerHTML = newShipping === 0 ? 
+                            '<span class="text-green-600">FREE</span>' : 
+                            '$' + newShipping.toFixed(2);
+                    }
+                    
+                    // Update zone
+                    const zoneElement = document.querySelector('.text-xs.text-gray-500 span:last-child');
+                    if (zoneElement) {
+                        zoneElement.textContent = data.shipping.zone_name || country;
+                    }
+                    
+                    // Update total
+                    if (totalElement) {
+                        totalElement.textContent = '$' + newTotal.toFixed(2);
+                    }
+                }
+            } catch (error) {
+                console.error('Shipping calculation error:', error);
+            }
+        });
+    }
+});
 </script>
+
+<style>
+/* Hide default select arrows - Force override */
+select {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    background-image: none !important;
+}
+
+select::-ms-expand {
+    display: none !important;
+}
+
+select::-webkit-appearance {
+    -webkit-appearance: none !important;
+}
+
+/* Specific targeting for shipping selects */
+#shippingCountry {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    background-image: none !important;
+}
+</style>
+
 @endsection
 

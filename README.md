@@ -1,61 +1,218 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🎨 Bluprinter - Print on Demand Platform
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Print-on-Demand platform built with Laravel 11, allowing users to create and sell custom products.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🚀 API Documentation
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### 📌 Quick Access Links
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+| Resource                     | URL                                                                     | Description            |
+| ---------------------------- | ----------------------------------------------------------------------- | ---------------------- |
+| 🔑 **API Token Dashboard**   | http://localhost:8000/api-token.html                                    | View API token & stats |
+| 📖 **Swagger Documentation** | http://localhost:8000/api-docs.html                                     | Interactive API docs   |
+| 📥 **Postman Collection**    | http://localhost:8000/Bluprinter_API_Collection.postman_collection.json | Download & import      |
 
-## Learning Laravel
+### 📚 Documentation Files
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+| File                                                                   | Description                                  |
+| ---------------------------------------------------------------------- | -------------------------------------------- |
+| **[API_QUICK_START.md](API_QUICK_START.md)**                           | ⚡ Quick start guide - Test API trong 3 bước |
+| **[API_DOCUMENTATION_VIETNAMESE.md](API_DOCUMENTATION_VIETNAMESE.md)** | 📚 Hướng dẫn chi tiết bằng tiếng Việt        |
+| **[POSTMAN_STEP_BY_STEP.md](POSTMAN_STEP_BY_STEP.md)**                 | 🎯 Hướng dẫn test với Postman từng bước      |
+| **[API_PRODUCT_DOCUMENTATION.md](API_PRODUCT_DOCUMENTATION.md)**       | 📋 Technical documentation (English)         |
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+---
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 🔌 API Endpoints
 
-## Laravel Sponsors
+### Create Product (AI Integration)
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+```http
+POST /api/products/create
+Content-Type: multipart/form-data
+X-API-Token: bluprinter_xxxxx...
+Accept: application/json
 
-### Premium Partners
+Body:
+- name: string (required)
+- description: string (required)
+- template_id: integer (required) [1=T-Shirt, 2=Hoodie]
+- images[]: file[] (required, max 8 images)
+- video: file (optional)
+- price: decimal (optional)
+- shop_id: integer (optional)
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### Get Product
 
-## Contributing
+```http
+GET /api/products/{id}
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### List Products
 
-## Code of Conduct
+```http
+GET /api/products?page=1&per_page=15
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+---
 
-## Security Vulnerabilities
+## 🔑 Authentication
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Add these headers to all API requests:
 
-## License
+```bash
+X-API-Token: bluprinter_nW3Mw878gXQdMFt4ArO64uX7FdfjOyPCRsOBT3mwBGkQjGdcjmIpoK6nE4sZ
+Accept: application/json
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+⚠️ **Note:** No `Bearer` prefix needed!
+
+---
+
+## ⚡ Quick Test
+
+```bash
+# Test with cURL
+curl -X POST http://localhost:8000/api/products/create \
+  -H "X-API-Token: bluprinter_xxxxx..." \
+  -H "Accept: application/json" \
+  -F "name=AI T-Shirt" \
+  -F "description=Beautiful design" \
+  -F "template_id=1" \
+  -F "images[]=@image1.jpg" \
+  -F "images[]=@image2.jpg"
+```
+
+Expected response:
+
+```json
+{
+    "success": true,
+    "message": "Product created successfully",
+    "data": {
+        "product_id": 123,
+        "url": "http://localhost:8000/products/ai-t-shirt",
+        "media": ["https://s3.amazonaws.com/..."],
+        "created_at": "2025-10-16T10:30:00Z"
+    }
+}
+```
+
+---
+
+## 🛠️ Setup
+
+### Requirements
+
+-   PHP 8.2+
+-   MySQL 8.0+
+-   Composer
+-   Node.js & NPM
+-   AWS S3 (for media storage)
+
+### Installation
+
+```bash
+# Clone repository
+git clone https://github.com/your-repo/bluprinter.git
+cd bluprinter
+
+# Install dependencies
+composer install
+npm install
+
+# Environment setup
+cp .env.example .env
+php artisan key:generate
+
+# Database
+php artisan migrate
+php artisan db:seed
+
+# Build assets
+npm run build
+
+# Start server
+php artisan serve
+```
+
+### AWS S3 Configuration
+
+Add to `.env`:
+
+```env
+AWS_ACCESS_KEY_ID=your_key
+AWS_SECRET_ACCESS_KEY=your_secret
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=your_bucket
+AWS_URL=https://s3.amazonaws.com/your_bucket
+```
+
+---
+
+## 📦 Features
+
+-   ✅ User Authentication & Authorization (Spatie Permissions)
+-   ✅ Multi-Shop System
+-   ✅ Product Management with Templates
+-   ✅ Shopping Cart & Checkout
+-   ✅ Wishlist System
+-   ✅ Order Management
+-   ✅ Dynamic Shipping Calculator (by country, category, quantity)
+-   ✅ PayPal Integration
+-   ✅ **API for AI Product Creation**
+-   ✅ **AWS S3 Media Upload**
+-   ✅ Email Verification
+-   ✅ Password Reset
+-   ✅ Responsive Design (Tailwind CSS)
+
+---
+
+## 📊 Tech Stack
+
+-   **Backend:** Laravel 11
+-   **Frontend:** Blade Templates + Alpine.js
+-   **Styling:** Tailwind CSS
+-   **Database:** MySQL
+-   **Storage:** AWS S3
+-   **Authentication:** Laravel Breeze + Spatie Permissions
+-   **Payment:** PayPal SDK
+-   **API Documentation:** Swagger UI
+
+---
+
+## 🔐 Security
+
+-   CSRF Protection (API routes excluded)
+-   XSS Protection
+-   SQL Injection Protection (Eloquent ORM)
+-   API Token Authentication
+-   File Upload Validation
+-   Role-Based Access Control (RBAC)
+
+---
+
+## 📄 License
+
+The Bluprinter platform is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+## 📞 Support
+
+For support, email support@bluprinter.com or visit our documentation.
+
+---
+
+**Made with ❤️ by Bluprinter Team**
+
+Last Updated: 2025-10-16

@@ -13,11 +13,15 @@ class Category extends Model
         'slug',
         'parent_id',
         'description',
-        'image'
+        'image',
+        'featured',
+        'sort_order'
     ];
 
     protected $casts = [
         'parent_id' => 'integer',
+        'featured' => 'boolean',
+        'sort_order' => 'integer',
     ];
 
     // Relationships

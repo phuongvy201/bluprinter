@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Cart;
 use App\Models\Product;
+use App\Services\ShippingCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -37,9 +38,32 @@ class CartController extends Controller
             return $item->getTotalPrice();
         });
 
-        $shipping = $subtotal > 50 ? 0 : 10; // Free shipping over $50
+        // Calculate shipping using ShippingCalculator
+        $shipping = 0;
+        $shippingDetails = null;
+
+        if (!$cartItems->isEmpty()) {
+            // Prepare cart items for shipping calculation
+            $items = $cartItems->map(function ($item) {
+                return [
+                    'product_id' => $item->product_id,
+                    'quantity' => $item->quantity,
+                    'price' => $item->price,
+                ];
+            });
+
+            // Calculate shipping for US (default)
+            $calculator = new ShippingCalculator();
+            $shippingResult = $calculator->calculateShipping($items, 'US');
+
+            if ($shippingResult['success']) {
+                $shipping = $shippingResult['total_shipping'];
+                $shippingDetails = $shippingResult;
+            }
+        }
+
         $total = $subtotal + $shipping;
 
-        return view('cart.index', compact('cartItems', 'subtotal', 'shipping', 'total'));
+        return view('cart.index', compact('cartItems', 'subtotal', 'shipping', 'total', 'shippingDetails'));
     }
 }

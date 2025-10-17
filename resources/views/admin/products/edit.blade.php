@@ -100,20 +100,67 @@
                     </div>
                 </div>
 
-                <!-- Status -->
-                <div>
-                    <label for="status" class="block text-sm font-medium text-gray-700 mb-2">Status *</label>
-                    <select id="status" 
-                            name="status" 
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('status') border-red-500 @enderror"
-                            required>
-                        <option value="active" {{ old('status', $product->status) == 'active' ? 'selected' : '' }}>Active</option>
-                        <option value="inactive" {{ old('status', $product->status) == 'inactive' ? 'selected' : '' }}>Inactive</option>
-                        <option value="draft" {{ old('status', $product->status) == 'draft' ? 'selected' : '' }}>Draft</option>
-                    </select>
-                    @error('status')
-                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                    @enderror
+                <!-- Status & Shop Assignment Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Status -->
+                    <div>
+                        <label for="status" class="block text-sm font-medium text-gray-700 mb-2">Status *</label>
+                        <select id="status" 
+                                name="status" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('status') border-red-500 @enderror"
+                                required>
+                            <option value="active" {{ old('status', $product->status) == 'active' ? 'selected' : '' }}>Active</option>
+                            <option value="inactive" {{ old('status', $product->status) == 'inactive' ? 'selected' : '' }}>Inactive</option>
+                            <option value="draft" {{ old('status', $product->status) == 'draft' ? 'selected' : '' }}>Draft</option>
+                        </select>
+                        @error('status')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <!-- Shop Assignment (Admin Only) -->
+                    @if(auth()->user()->hasRole('admin') && $shops)
+                    <div>
+                        <label for="shop_id" class="block text-sm font-medium text-gray-700 mb-2">
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                                </svg>
+                                <span>Assign to Shop</span>
+                            </div>
+                        </label>
+                        <select id="shop_id" 
+                                name="shop_id" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent @error('shop_id') border-red-500 @enderror">
+                            <option value="">-- No Shop (Unassigned) --</option>
+                            @foreach($shops as $shop)
+                                <option value="{{ $shop->id }}" 
+                                        {{ old('shop_id', $product->shop_id) == $shop->id ? 'selected' : '' }}
+                                        data-owner="{{ $shop->user ? $shop->user->name : 'Unknown' }}"
+                                        data-status="{{ $shop->shop_status }}">
+                                    {{ $shop->shop_name }} 
+                                    @if($shop->shop_status === 'active')
+                                        ✓
+                                    @elseif($shop->shop_status === 'suspended')
+                                        ⚠️
+                                    @endif
+                                    (Owner: {{ $shop->user ? $shop->user->name : 'Unknown' }})
+                                </option>
+                            @endforeach
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">
+                            <span class="inline-flex items-center">
+                                <svg class="w-3 h-3 mr-1 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                                Admin can assign product to any shop
+                            </span>
+                        </p>
+                        @error('shop_id')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    @endif
                 </div>
 
                 <!-- Description -->
@@ -268,6 +315,12 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 @endsection
+
+
+
+
+
+
 
 
 

@@ -4,20 +4,30 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Admin\ProductTemplateController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\Admin\ProductImportController;
-use App\Http\Controllers\Admin\CollectionController;
+use App\Http\Controllers\Admin\CollectionController as AdminCollectionController;
+use App\Http\Controllers\CollectionController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Admin\ShopController as AdminShopController;
+use App\Http\Controllers\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Seller\SellerDashboardController;
 use App\Http\Controllers\Seller\ShopController as SellerShopController;
+use App\Http\Controllers\Seller\PostController as SellerPostController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\AboutController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\PageController;
+use App\Http\Controllers\BlogController;
 use App\Http\Controllers\Api\CartController as ApiCartController;
+use App\Http\Controllers\WishlistController;
+use App\Http\Controllers\Admin\ShippingZoneController;
+use App\Http\Controllers\Admin\ShippingRateController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -25,6 +35,76 @@ Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
 Route::get('/shops/{shop}', [App\Http\Controllers\ShopController::class, 'show'])->name('shops.show');
+
+// Collections routes
+Route::get('/collections', [CollectionController::class, 'index'])->name('collections.index');
+Route::get('/collections/{slug}', [CollectionController::class, 'show'])->name('collections.show');
+
+// Search routes
+Route::get('/search', [SearchController::class, 'index'])->name('search');
+Route::get('/api/search/suggestions', [SearchController::class, 'suggestions'])->name('search.suggestions');
+
+// Category routes
+Route::get('/category/{slug}', [CategoryController::class, 'show'])->name('category.show');
+
+// Checkout routes
+Route::get('/checkout', [App\Http\Controllers\CheckoutController::class, 'index'])->name('checkout.index');
+Route::post('/checkout/process', [App\Http\Controllers\CheckoutController::class, 'process'])->name('checkout.process');
+Route::post('/checkout/calculate-shipping', [App\Http\Controllers\CheckoutController::class, 'calculateShipping'])->name('checkout.calculate-shipping');
+Route::get('/checkout/success/{orderNumber}', [App\Http\Controllers\CheckoutController::class, 'success'])->name('checkout.success');
+
+// LianLian Pay callback routes
+Route::get('/checkout/lianlian/success', [App\Http\Controllers\CheckoutController::class, 'lianlianSuccess'])->name('checkout.lianlian.success');
+Route::get('/checkout/lianlian/cancel', [App\Http\Controllers\CheckoutController::class, 'lianlianCancel'])->name('checkout.lianlian.cancel');
+
+// LianLian Pay routes
+Route::prefix('payment/lianlian')->name('payment.lianlian.')->group(function () {
+    Route::post('/create/{order}', [App\Http\Controllers\Payment\LianLianPayController::class, 'createPayment'])->name('create');
+    Route::get('/return', [App\Http\Controllers\Payment\LianLianPayController::class, 'handleReturn'])->name('return');
+    Route::get('/cancel', [App\Http\Controllers\Payment\LianLianPayController::class, 'handleCancel'])->name('cancel');
+    Route::post('/webhook', [App\Http\Controllers\Payment\LianLianPayController::class, 'handleWebhook'])->name('webhook');
+    Route::post('/webhook-v2', [App\Http\Controllers\Payment\LianLianPayController::class, 'handleWebhookV2'])->name('webhook-v2');
+    Route::get('/query/{order}', [App\Http\Controllers\Payment\LianLianPayController::class, 'queryPayment'])->name('query');
+    Route::post('/refund/{order}', [App\Http\Controllers\Payment\LianLianPayController::class, 'processRefund'])->name('refund');
+    Route::get('/token', [App\Http\Controllers\Payment\LianLianPayController::class, 'getToken'])->name('token');
+    Route::post('/3ds-result', [App\Http\Controllers\Payment\LianLianPayController::class, 'handle3DSResult'])->name('3ds-result');
+
+    // New routes for separate payment page
+    Route::get('/payment', [App\Http\Controllers\Payment\LianLianPayController::class, 'showPaymentPage'])->name('payment');
+    Route::post('/process', [App\Http\Controllers\Payment\LianLianPayController::class, 'processPayment'])->name('process');
+});
+
+
+// Wishlist routes
+Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist.index');
+Route::post('/wishlist/add', [WishlistController::class, 'add'])->name('wishlist.add');
+Route::post('/wishlist/remove', [WishlistController::class, 'remove'])->name('wishlist.remove');
+Route::post('/wishlist/toggle', [WishlistController::class, 'toggle'])->name('wishlist.toggle');
+Route::get('/wishlist/count', [WishlistController::class, 'count'])->name('wishlist.count');
+Route::post('/wishlist/check', [WishlistController::class, 'check'])->name('wishlist.check');
+Route::post('/wishlist/clear', [WishlistController::class, 'clear'])->name('wishlist.clear');
+Route::post('/wishlist/transfer', [WishlistController::class, 'transferSessionToUser'])->name('wishlist.transfer');
+
+// Customer Orders routes (for logged in customers)
+Route::middleware(['auth'])->prefix('my')->name('customer.')->group(function () {
+    Route::get('/orders', [App\Http\Controllers\Customer\OrderController::class, 'index'])->name('orders.index');
+    Route::get('/orders/{orderNumber}', [App\Http\Controllers\Customer\OrderController::class, 'show'])->name('orders.show');
+    Route::post('/orders/{orderNumber}/cancel', [App\Http\Controllers\Customer\OrderController::class, 'cancel'])->name('orders.cancel');
+});
+
+// Order tracking (public - no login required)
+Route::get('/track-order', [App\Http\Controllers\Customer\OrderController::class, 'track'])->name('orders.track');
+Route::get('/checkout/paypal/success', [App\Http\Controllers\CheckoutController::class, 'paypalSuccess'])->name('checkout.paypal.success');
+Route::get('/checkout/paypal/cancel', [App\Http\Controllers\CheckoutController::class, 'paypalCancel'])->name('checkout.paypal.cancel');
+
+// Blog routes (Posts)
+Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
+Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
+Route::get('/blog/category/{slug}', [BlogController::class, 'category'])->name('blog.category');
+Route::get('/blog/tag/{slug}', [BlogController::class, 'tag'])->name('blog.tag');
+
+// Pages routes (must be last to avoid conflicts)
+Route::get('/page/{slug}', [PageController::class, 'show'])->name('page.show');
 
 // Test route
 Route::get('/test-shop', function () {
@@ -313,6 +393,13 @@ Route::prefix('api/cart')->middleware('web')->group(function () {
     Route::post('/sync', [ApiCartController::class, 'sync'])->name('api.cart.sync');
 });
 
+// Product API routes for AI integration
+Route::prefix('api/products')->group(function () {
+    Route::post('/create', [App\Http\Controllers\Api\ProductController::class, 'create'])->name('api.products.create');
+    Route::get('/{id}', [App\Http\Controllers\Api\ProductController::class, 'show'])->name('api.products.show');
+    Route::get('/', [App\Http\Controllers\Api\ProductController::class, 'index'])->name('api.products.index');
+});
+
 // Demo routes
 Route::get('/demo/color-libraries', function () {
     return view('demo.color-libraries');
@@ -358,7 +445,20 @@ Route::middleware('auth')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::resource('users', UserController::class);
         Route::resource('roles', RoleController::class);
-        Route::resource('categories', CategoryController::class);
+        Route::resource('categories', AdminCategoryController::class);
+        Route::get('categories/featured/manage', [AdminCategoryController::class, 'featured'])->name('categories.featured');
+        Route::put('categories/featured/update', [AdminCategoryController::class, 'updateFeatured'])->name('categories.update-featured');
+
+        // Pages (Admin only)
+        Route::resource('pages', AdminPageController::class);
+
+        // Orders management (Admin only)
+        Route::resource('orders', App\Http\Controllers\Admin\OrderController::class);
+        Route::get('orders/export', [App\Http\Controllers\Admin\OrderController::class, 'export'])->name('orders.export');
+
+        // Shipping Management (Admin only)
+        Route::resource('shipping-zones', ShippingZoneController::class);
+        Route::resource('shipping-rates', ShippingRateController::class);
     });
 
     // Seller routes (Seller + Admin)
@@ -379,14 +479,19 @@ Route::middleware('auth')->group(function () {
         Route::post('products/bulk-delete', [AdminProductController::class, 'bulkDelete'])->name('products.bulk-delete');
 
         // Collections
-        Route::resource('collections', CollectionController::class);
-        Route::post('collections/{collection}/toggle-featured', [CollectionController::class, 'toggleFeatured'])->name('collections.toggle-featured');
-        Route::post('collections/update-sort-order', [CollectionController::class, 'updateSortOrder'])->name('collections.update-sort-order');
+        Route::resource('collections', AdminCollectionController::class);
+        Route::post('collections/{collection}/toggle-featured', [AdminCollectionController::class, 'toggleFeatured'])->name('collections.toggle-featured');
+        Route::post('collections/update-sort-order', [AdminCollectionController::class, 'updateSortOrder'])->name('collections.update-sort-order');
 
         // Admin approval routes
-        Route::post('collections/{collection}/approve', [CollectionController::class, 'approve'])->name('collections.approve');
-        Route::post('collections/{collection}/reject', [CollectionController::class, 'reject'])->name('collections.reject');
-        Route::post('collections/bulk-approve', [CollectionController::class, 'bulkApprove'])->name('collections.bulk-approve');
+        Route::post('collections/{collection}/approve', [AdminCollectionController::class, 'approve'])->name('collections.approve');
+        Route::post('collections/{collection}/reject', [AdminCollectionController::class, 'reject'])->name('collections.reject');
+        Route::post('collections/bulk-approve', [AdminCollectionController::class, 'bulkApprove'])->name('collections.bulk-approve');
+
+        // Posts (Seller can manage their own posts)
+        Route::resource('posts', SellerPostController::class);
+        Route::post('posts/{post}/approve', [SellerPostController::class, 'approve'])->name('posts.approve');
+        Route::post('posts/{post}/reject', [SellerPostController::class, 'reject'])->name('posts.reject');
     });
 
     // Demo routes với role middleware
@@ -415,6 +520,10 @@ Route::middleware('auth')->group(function () {
             Route::get('/shop/dashboard', [SellerShopController::class, 'dashboard'])->name('shop.dashboard');
             Route::get('/shop/edit', [SellerShopController::class, 'edit'])->name('shop.edit');
             Route::put('/shop', [SellerShopController::class, 'update'])->name('shop.update');
+
+            // Seller Orders
+            Route::resource('orders', App\Http\Controllers\Seller\OrderController::class);
+            Route::get('orders/export', [App\Http\Controllers\Seller\OrderController::class, 'export'])->name('orders.export');
         });
     });
 

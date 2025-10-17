@@ -4,28 +4,16 @@
 
 @section('content')
 <!-- Shop Profile Banner -->
-<div class="relative border-b border-red-200 overflow-hidden" style="min-height: 300px;">
-    <!-- Background Image or Gradient -->
-    @if($shop->shop_banner)
-        <div class="absolute inset-0">
-            <img src="{{ $shop->shop_banner }}" alt="{{ $shop->shop_name }} Banner" class="w-full h-full object-cover">
-            <!-- Dark overlay for better text readability -->
-            <div class="absolute inset-0 bg-gradient-to-r from-black/50 to-black/30"></div>
-        </div>
-    @else
-        <div class="absolute inset-0 bg-gradient-to-r from-red-50 to-red-100"></div>
-    @endif
-    
-    <!-- Content -->
-    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+<div class="bg-gradient-to-r from-red-50 to-red-100 border-b border-red-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div class="flex flex-col lg:flex-row items-center justify-between">
             <!-- Left side - Shop Info -->
             <div class="flex-1 text-center lg:text-left mb-8 lg:mb-0">
                 <div class="flex items-center justify-center lg:justify-start mb-4">
                      <img src="{{ asset('images/bluprinter-logo.svg') }}" alt="Bluprinter" class="h-12 w-auto mr-4">
                     <div>
-                        <h1 class="text-3xl lg:text-4xl font-bold {{ $shop->shop_banner ? 'text-white' : 'text-gray-900' }}">{{ $shop->shop_name }}</h1>
-                        <p class="text-lg font-medium {{ $shop->shop_banner ? 'text-gray-100' : '' }}" style="color: {{ $shop->shop_banner ? '#E0E0E0' : '#065264' }};">Print Your Imagination</p>
+                        <h1 class="text-3xl lg:text-4xl font-bold text-gray-900">Bluprinter</h1>
+                        <p class="text-lg font-medium" style="color: #065264;">Print Your Imagination</p>
                     </div>
                 </div>
             </div>
@@ -173,88 +161,12 @@
         </div>
         @endif
         
-         <!-- Hot Products Section -->
-         @if($hotProducts->count() > 0)
-         <div class="mb-12">
-             <div class="flex items-center mb-8">
-                 <div class="w-1 h-8 mr-4" style="background-color: #D8140B;"></div>
-                 <h4 class="text-xl font-bold text-gray-900">Hot Products</h4>
-             </div>
-             
-             <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
-                 @foreach($hotProducts as $product)
-                 <div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 group overflow-hidden">
-                     <!-- Product Image -->
-                     <div class="relative aspect-square overflow-hidden">
-                         @php
-                             $media = $product->getEffectiveMedia();
-                         @endphp
-                         @if($media && count($media) > 0)
-                             <img src="{{ is_array($media[0]) ? $media[0]['url'] : $media[0] }}" 
-                                  alt="{{ $product->name }}" 
-                                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                         @else
-                             <div class="w-full h-full bg-gray-200 flex items-center justify-center">
-                                 <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                 </svg>
-                             </div>
-                         @endif
-                         
-                         <!-- Wishlist Button -->
-                         <button class="absolute top-2 left-2 sm:top-3 sm:left-3 p-1.5 sm:p-2 bg-white rounded-full shadow-md hover:shadow-lg transition-all duration-200 opacity-0 group-hover:opacity-100">
-                             <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                             </svg>
-                         </button>
-
-                         <!-- Discount Badge -->
-                         @if($product->template && $product->template->base_price > $product->price)
-                             @php
-                                 $discount = round((($product->template->base_price - $product->price) / $product->template->base_price) * 100);
-                             @endphp
-                             <div class="absolute top-2 right-2 sm:top-3 sm:right-3 text-white px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold" style="background-color: #D8140B;">
-                                 {{ $discount }}% off
-                             </div>
-                         @endif
-                     </div>
-
-                     <!-- Product Info -->
-                     <div class="p-2 sm:p-4">
-                         <h3 class="font-semibold text-gray-900 mb-1 sm:mb-2 line-clamp-2 transition-colors text-sm sm:text-base" style="group-hover:color: #005366;">
-                             <a href="{{ route('products.show', $product->slug) }}">
-                                 {{ Str::limit($product->name, 50) }}
-                             </a>
-                         </h3>
-                         
-                         <p class="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2 line-clamp-1">By {{ $product->shop->name ?? 'Unknown Shop' }}</p>
-                         
-                         <div class="flex items-center justify-between">
-                             <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
-                                 @if($product->template && $product->template->base_price > $product->price)
-                                     <span class="text-xs sm:text-sm text-gray-500 line-through">${{ number_format($product->template->base_price, 2) }}</span>
-                                     <span class="text-base sm:text-lg font-bold" style="color: #D8140B;">${{ number_format($product->price, 2) }}</span>
-                                 @else
-                                     <span class="text-base sm:text-lg font-bold" style="color: #D8140B;">${{ number_format($product->base_price, 2) }}</span>
-                                 @endif
-                             </div>
-                         </div>
-
-                         <!-- Sale End Date -->
-                         @if($product->template && $product->template->base_price > $product->price)
-                             <div class="mt-1 sm:mt-2 text-[10px] sm:text-xs font-medium" style="color: #D8140B;">
-                                 Sale ends at {{ now()->addDays(7)->format('F d') }}
-                             </div>
-                         @endif
-                     </div>
-                 </div>
-                 @endforeach
-             </div>
-         </div>
-         @endif
-        
         <!-- All Products Grid -->
         @if($allProducts->count() > 0)
+        <div class="flex items-center mb-8">
+            <div class="w-1 h-8 mr-4" style="background-color: #D8140B;"></div>
+            <h4 class="text-xl font-bold text-gray-900">All Products</h4>
+        </div>
         <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
             @foreach($allProducts as $product)
             <div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 group overflow-hidden">
@@ -334,7 +246,7 @@
             <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
             </svg>
-            <p class="text-gray-500 text-lg">Shop chưa có sản phẩm nào</p>
+            <p class="text-gray-500 text-lg">This shop has no products yet</p>
         </div>
         @endif
     </div>
@@ -345,7 +257,7 @@
     <div class="flex items-center justify-center min-h-screen p-4">
         <div class="bg-white rounded-lg max-w-md w-full p-6">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-900">Liên hệ với shop</h3>
+                <h3 class="text-lg font-semibold text-gray-900">Contact Shop</h3>
                 <button onclick="closeContactModal()" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -355,13 +267,13 @@
             
             <form id="contactForm">
                 <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Tiêu đề</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Subject</label>
                     <input type="text" id="subject" name="subject" required 
                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500">
                 </div>
                 
                 <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Tin nhắn</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Message</label>
                     <textarea id="message" name="message" rows="4" required 
                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"></textarea>
                 </div>
@@ -369,12 +281,12 @@
                 <div class="flex space-x-3">
                     <button type="button" onclick="closeContactModal()" 
                             class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
-                        Hủy
+                        Cancel
                     </button>
                      <button type="submit" 
                              class="flex-1 px-4 py-2 text-white rounded-md hover:opacity-90"
                              style="background-color: #D8140B;">
-                         Gửi tin nhắn
+                         Send Message
                      </button>
                 </div>
             </form>
@@ -450,7 +362,7 @@ function toggleFollow() {
     })
     .catch(error => {
         console.error('Error:', error);
-        showNotification('Có lỗi xảy ra. Vui lòng thử lại.', 'error');
+        showNotification('An error occurred. Please try again.', 'error');
     });
 }
 
@@ -493,7 +405,7 @@ document.getElementById('contactForm').addEventListener('submit', function(e) {
     })
     .catch(error => {
         console.error('Error:', error);
-        showNotification('Có lỗi xảy ra. Vui lòng thử lại.', 'error');
+        showNotification('An error occurred. Please try again.', 'error');
     });
 });
 

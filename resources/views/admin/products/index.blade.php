@@ -89,6 +89,16 @@
                                 <span>Template</span>
                             </div>
                         </th>
+                        @if(auth()->user()->hasRole('admin'))
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider" style="min-width: 200px;">
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-4 h-4 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                                </svg>
+                                <span>Shop</span>
+                            </div>
+                        </th>
+                        @endif
                         <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider" style="min-width: 120px;">
                             <div class="flex items-center space-x-2">
                                 <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -221,6 +231,41 @@
                                 </div>
                             </div>
                         </td>
+                        
+                        <!-- Shop (Admin only) -->
+                        @if(auth()->user()->hasRole('admin'))
+                        <td class="px-6 py-4">
+                            @if($product->shop)
+                            <div class="flex items-center space-x-2">
+                                <div class="w-10 h-10 rounded-lg bg-gradient-to-r from-pink-500 to-rose-600 flex items-center justify-center text-white font-bold shadow-sm">
+                                    @if($product->shop->shop_logo)
+                                        <img src="{{ $product->shop->shop_logo }}" alt="{{ $product->shop->shop_name }}" class="w-full h-full rounded-lg object-cover">
+                                    @else
+                                        {{ substr($product->shop->shop_name, 0, 2) }}
+                                    @endif
+                                </div>
+                                <div style="max-width: 150px;">
+                                    <p class="text-sm font-semibold text-gray-900 truncate" title="{{ $product->shop->shop_name }}">
+                                        {{ Str::limit($product->shop->shop_name, 20) }}
+                                    </p>
+                                    <div class="flex items-center space-x-1 mt-1">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium 
+                                            {{ $product->shop->shop_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                            {{ $product->shop->shop_status === 'active' ? '✓ Active' : '⚠ ' . ucfirst($product->shop->shop_status) }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            @else
+                                <div class="flex items-center space-x-2 text-gray-400">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                                    </svg>
+                                    <span class="text-xs italic">Chưa gán shop</span>
+                                </div>
+                            @endif
+                        </td>
+                        @endif
                         
                         <!-- Price -->
                         <td class="px-6 py-4 whitespace-nowrap">

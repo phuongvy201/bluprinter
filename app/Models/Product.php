@@ -19,7 +19,9 @@ class Product extends Model
         'description',
         'media',
         'quantity',
-        'status'
+        'status',
+        'created_by',
+        'api_token_id'
     ];
 
     protected $casts = [
@@ -62,6 +64,17 @@ class Product extends Model
     {
         // Price is always saved in database now
         return $this->price ?? 0;
+    }
+
+    public function getPrimaryImageAttribute()
+    {
+        $media = $this->getEffectiveMedia();
+        return !empty($media) ? $media[0] : null;
+    }
+
+    public function getCategoryAttribute()
+    {
+        return $this->template->category ?? null;
     }
 
     // Helper methods
