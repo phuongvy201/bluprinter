@@ -121,4 +121,27 @@ class PageController extends Controller
         return redirect()->route('admin.pages.index')
             ->with('success', 'Page deleted successfully!');
     }
+
+    /**
+     * Upload image for TinyMCE editor
+     */
+    public function uploadImage(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|image|max:2048',
+        ]);
+
+        if ($request->hasFile('file')) {
+            $path = $request->file('file')->store('pages/content', 'public');
+            $url = Storage::url($path);
+
+            return response()->json([
+                'location' => $url
+            ]);
+        }
+
+        return response()->json([
+            'error' => 'No file uploaded'
+        ], 400);
+    }
 }

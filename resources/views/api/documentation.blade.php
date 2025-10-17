@@ -40,12 +40,12 @@
                     },
                     servers: [
                         {
-                            url: "https://bluprinter.com",
-                            description: "Production Server",
-                        },
-                        {
                             url: "http://localhost:8000",
                             description: "Local Development Server",
+                        },
+                        {
+                            url: "https://your-production-domain.com",
+                            description: "Production Server",
                         },
                     ],
                     security: [
@@ -162,7 +162,7 @@
                                                             description:
                                                                 "URL to view the created product",
                                                             example:
-                                                                "https://bluprinter.com/products/ai-generated-t-shirt-design",
+                                                                "http://localhost:8000/products/ai-generated-t-shirt-design",
                                                         },
                                                     },
                                                 },
@@ -393,7 +393,7 @@
                                 in: "header",
                                 name: "X-API-Token",
                                 description:
-                                    "API Token for authentication. Format: `bluprinter_xxxxx...`\n\nĐể lấy token, đăng nhập với tài khoản admin và truy cập: https://bluprinter.com/admin/api-token",
+                                    "API Token for authentication. Format: `bluprinter_xxxxx...`\n\nĐể lấy token, đăng nhập với tài khoản admin và truy cập: {{ route('admin.api-token') }}",
                             },
                         },
                         schemas: {

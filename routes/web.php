@@ -106,6 +106,15 @@ Route::get('/blog/tag/{slug}', [BlogController::class, 'tag'])->name('blog.tag')
 // Pages routes (must be last to avoid conflicts)
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('page.show');
 
+// Customer Profile routes (requires authentication)
+Route::middleware('auth')->prefix('customer')->name('customer.')->group(function () {
+    Route::get('/profile', [App\Http\Controllers\Customer\ProfileController::class, 'index'])->name('profile.index');
+    Route::get('/profile/edit', [App\Http\Controllers\Customer\ProfileController::class, 'edit'])->name('profile.edit');
+    Route::put('/profile', [App\Http\Controllers\Customer\ProfileController::class, 'update'])->name('profile.update');
+    Route::put('/profile/password', [App\Http\Controllers\Customer\ProfileController::class, 'updatePassword'])->name('profile.password');
+    Route::delete('/profile', [App\Http\Controllers\Customer\ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
 // Test route
 Route::get('/test-shop', function () {
     $shop = App\Models\Shop::first();
@@ -450,6 +459,7 @@ Route::middleware('auth')->group(function () {
         Route::put('categories/featured/update', [AdminCategoryController::class, 'updateFeatured'])->name('categories.update-featured');
 
         // Pages (Admin only)
+        Route::post('pages/upload-image', [AdminPageController::class, 'uploadImage'])->name('pages.upload-image');
         Route::resource('pages', AdminPageController::class);
 
         // Orders management (Admin only)
@@ -459,6 +469,9 @@ Route::middleware('auth')->group(function () {
         // Shipping Management (Admin only)
         Route::resource('shipping-zones', ShippingZoneController::class);
         Route::resource('shipping-rates', ShippingRateController::class);
+
+        // API Token (Admin only)
+        Route::get('/api-token', [App\Http\Controllers\ApiDocController::class, 'tokenDashboard'])->name('api-token');
     });
 
     // Seller routes (Seller + Admin)
@@ -543,5 +556,8 @@ Route::get('/test-zoom-effect', function () {
 Route::get('/test-cart', function () {
     return view('test-cart');
 })->name('test.cart');
+
+// Page routes - Must be at the end to avoid conflicts
+Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller).*$');
 
 require __DIR__ . '/auth.php';

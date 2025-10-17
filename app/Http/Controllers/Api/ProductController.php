@@ -35,18 +35,30 @@ class ProductController extends Controller
             ], 403);
         }
 
-        // Validate request data
-        $validator = Validator::make($request->all(), [
+        // Validate request data - support both single file and array for Swagger UI
+        $validationRules = [
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string', // Optional - sẽ lấy từ template nếu không có
+            'description' => 'nullable|string',
             'template_id' => 'required|exists:product_templates,id',
-            'images' => 'required|array|min:1|max:8',
-            'images.*' => 'required|file|mimes:jpeg,jpg,png,webp|max:10240', // 10MB max
-            'video' => 'nullable|file|mimes:mp4,avi,mov,webm|max:102400', // 100MB max - Optional
-            'price' => 'nullable|numeric|min:0', // Optional - sẽ lấy từ template nếu không có
+            'video' => 'nullable|file|mimes:mp4,avi,mov,webm|max:102400',
+            'price' => 'nullable|numeric|min:0',
             'shop_id' => 'nullable|exists:shops,id',
-            'quantity' => 'nullable|integer|min:0', // Optional - mặc định 999
-        ]);
+            'quantity' => 'nullable|integer|min:0',
+        ];
+
+        // Check if images is array or single file
+        if ($request->hasFile('images')) {
+            if (is_array($request->file('images'))) {
+                $validationRules['images'] = 'required|array|min:1|max:8';
+                $validationRules['images.*'] = 'required|file|mimes:jpeg,jpg,png,webp|max:10240';
+            } else {
+                $validationRules['images'] = 'required|file|mimes:jpeg,jpg,png,webp|max:10240';
+            }
+        } else {
+            $validationRules['images'] = 'required';
+        }
+
+        $validator = Validator::make($request->all(), $validationRules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -70,9 +82,16 @@ class ProductController extends Controller
                 $counter++;
             }
 
-            // Upload images to AWS S3 (tham khảo Admin/ProductController)
+            // Upload images to AWS S3 (support both single file and array)
             $uploadedImages = [];
-            foreach ($request->file('images') as $index => $image) {
+            $images = $request->file('images');
+
+            // Normalize to array if single file (for Swagger UI)
+            if (!is_array($images)) {
+                $images = [$images];
+            }
+
+            foreach ($images as $index => $image) {
                 try {
                     // Validate file
                     if (!$image->isValid()) {
@@ -203,42 +222,7 @@ class ProductController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Product created successfully',
-                'data' => [
-                    'product_id' => $product->id,
-                    'name' => $product->name,
-                    'slug' => $product->slug,
-                    'description' => $product->description,
-                    'price' => $product->price,
-                    'quantity' => $product->quantity,
-                    'status' => $product->status,
-                    'url' => route('products.show', $product->slug),
-
-                    // Template info
-                    'template' => [
-                        'id' => $template->id,
-                        'name' => $template->name,
-                        'category' => $template->category ? [
-                            'id' => $template->category->id,
-                            'name' => $template->category->name,
-                        ] : null,
-                    ],
-
-                    // Shop info
-                    'shop_id' => $product->shop_id,
-
-                    // Media info
-                    'media' => $mediaUrls,
-                    'uploaded_images' => $uploadedImages,
-                    'uploaded_video' => $videoUrl,
-
-                    // Variants info (NEW!)
-                    'variants' => $createdVariants,
-                    'variants_count' => count($createdVariants),
-
-                    // Metadata
-                    'created_by' => 'api',
-                    'created_at' => $product->created_at,
-                ]
+                'product_url' => route('products.show', $product->slug)
             ], 201);
         } catch (\Exception $e) {
             return response()->json([

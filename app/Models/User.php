@@ -31,6 +31,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Page::class);
     }
 
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function wishlists(): HasMany
+    {
+        return $this->hasMany(Wishlist::class);
+    }
+
     // Helper methods
     public function hasShop(): bool
     {
@@ -52,6 +62,13 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'password',
         'roles',
+        'phone',
+        'avatar',
+        'address',
+        'city',
+        'state',
+        'postal_code',
+        'country',
     ];
 
     /**

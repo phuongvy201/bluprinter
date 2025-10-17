@@ -27,7 +27,7 @@
                         <a href="{{ route('register') }}" class="text-gray-600 hover:text-[#005366] transition font-medium">Register</a>
                     @else
                         <span class="text-sm text-gray-600">Welcome, {{ auth()->user()->name }}!</span>
-                        @if(auth()->user()->hasRole('admin') || auth()->user()->hasRole('seller'))
+                        @if(auth()->user()->hasRole('admin'))
                             <a href="{{ route('dashboard') }}" class="text-gray-600 hover:text-[#005366] transition font-medium">Dashboard</a>
                         @endif
                         @if(!auth()->user()->hasVerifiedEmail())
@@ -218,8 +218,15 @@
                     @auth
                         <div class="relative group">
                             <button class="flex items-center space-x-2 p-2 text-gray-600 hover:text-[#005366] transition-colors">
-                                <div class="w-9 h-9 bg-[#005366] rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md">
-                                    {{ substr(auth()->user()->name, 0, 1) }}
+                                <div class="header-user-avatar">
+                                    @if(auth()->user()->avatar)
+                                        <img src="{{ auth()->user()->avatar }}" alt="{{ auth()->user()->name }}" 
+                                             class="w-9 h-9 rounded-full object-cover shadow-md">
+                                    @else
+                                        <div class="w-9 h-9 bg-[#005366] rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md">
+                                            {{ substr(auth()->user()->name, 0, 1) }}
+                                        </div>
+                                    @endif
                                 </div>
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -233,7 +240,7 @@
                                         <p class="text-sm font-semibold text-gray-900">{{ auth()->user()->name }}</p>
                                         <p class="text-xs text-gray-500">{{ auth()->user()->email }}</p>
                                     </div>
-                                    @if(auth()->user()->hasRole('admin') || auth()->user()->hasRole('seller'))
+                                    @if(auth()->user()->hasRole('admin'))
                                         <a href="{{ route('dashboard') }}" class="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition">
                                             <svg class="w-4 h-4 mr-3 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
@@ -255,7 +262,7 @@
                                         </svg>
                                         My Orders
                                     </a>
-                                    <a href="#" class="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition">
+                                    <a href="{{ route('customer.profile.index') }}" class="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition">
                                         <svg class="w-4 h-4 mr-3 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                         </svg>
@@ -387,12 +394,34 @@
                                 </svg>
                                 Shops
                             </a>
-                            <a href="#" class="flex items-center px-3 py-3 text-gray-700 hover:text-[#005366] hover:bg-gray-50 rounded-xl transition font-medium">
-                                <svg class="w-5 h-5 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                                Help Center
-                            </a>
+                            <!-- Help Center Dropdown -->
+                            <div class="border-t border-gray-100">
+                                <button id="help-toggle" class="w-full flex items-center justify-between px-3 py-3 text-left text-gray-700 hover:text-[#005366] hover:bg-gray-50 rounded-xl transition font-medium">
+                                    <div class="flex items-center">
+                                        <svg class="w-5 h-5 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        <span>Help Center</span>
+                                    </div>
+                                    <svg id="help-arrow" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                                <div id="help-content" class="hidden px-4 pb-3">
+                                    @php
+                                        $mobileHelpPages = \App\Models\Page::where('status', 'published')
+                                            ->whereIn('slug', ['faq', 'how-to-order', 'size-guide', 'customization-guide', 'support-center', 'shipping-returns'])
+                                            ->orderBy('sort_order')
+                                            ->get();
+                                    @endphp
+                                    @foreach($mobileHelpPages as $page)
+                                        <a href="{{ route('pages.show', $page->slug) }}" class="flex items-center px-3 py-2 text-sm text-gray-600 hover:text-[#005366] hover:bg-gray-50 rounded-lg transition">
+                                            <div class="w-2 h-2 bg-[#005366] rounded-full mr-3"></div>
+                                            {{ $page->title }}
+                                        </a>
+                                    @endforeach
+                                </div>
+                            </div>
                         </div>
 
 
@@ -563,7 +592,69 @@
                         </div>
                     </div>
                     
-                    <a href="#" class="text-gray-700 hover:text-[#005366] transition font-medium">Help Center</a>
+                    <!-- Help Center Dropdown -->
+                    <div class="relative group">
+                        <button class="flex items-center space-x-1 text-gray-700 hover:text-[#005366] transition font-medium">
+                            <span>Help Center</span>
+                            <svg class="w-4 h-4 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        
+                        <!-- Help Center Dropdown -->
+                        <div class="absolute left-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                            <div class="p-4">
+                                <h3 class="text-sm font-semibold text-gray-900 mb-3">Help & Support</h3>
+                                <div class="grid grid-cols-1 gap-2">
+                                    @php
+                                        $helpPages = \App\Models\Page::where('status', 'published')
+                                            ->whereIn('slug', ['faq', 'how-to-order', 'size-guide', 'customization-guide', 'support-center', 'shipping-returns'])
+                                            ->orderBy('sort_order')
+                                            ->get();
+                                    @endphp
+                                    @foreach($helpPages as $page)
+                                        <a href="{{ route('pages.show', $page->slug) }}" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition group/item">
+                                            <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-[#005366] to-[#003d4d]">
+                                                @if($page->slug === 'faq')
+                                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                @elseif($page->slug === 'how-to-order')
+                                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                                                    </svg>
+                                                @elseif($page->slug === 'size-guide')
+                                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                                    </svg>
+                                                @elseif($page->slug === 'customization-guide')
+                                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z"></path>
+                                                    </svg>
+                                                @elseif($page->slug === 'support-center')
+                                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192L5.636 18.364M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5z"></path>
+                                                    </svg>
+                                                @elseif($page->slug === 'shipping-returns')
+                                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                                    </svg>
+                                                @else
+                                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                @endif
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-sm font-semibold text-gray-900 group-hover/item:text-[#005366] transition">{{ $page->title }}</p>
+                                                <p class="text-xs text-gray-500 line-clamp-1">{{ $page->excerpt }}</p>
+                                            </div>
+                                        </a>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                    
                 </div>
             </div>
@@ -594,6 +685,10 @@
             const blogToggle = document.getElementById('blog-toggle');
             const blogContent = document.getElementById('blog-content');
             const blogArrow = document.getElementById('blog-arrow');
+            
+            const helpToggle = document.getElementById('help-toggle');
+            const helpContent = document.getElementById('help-content');
+            const helpArrow = document.getElementById('help-arrow');
 
             // Collections toggle
             if (collectionsToggle && collectionsContent && collectionsArrow) {
@@ -621,6 +716,21 @@
                     } else {
                         blogContent.classList.add('hidden');
                         blogArrow.style.transform = 'rotate(0deg)';
+                    }
+                });
+            }
+
+            // Help toggle
+            if (helpToggle && helpContent && helpArrow) {
+                helpToggle.addEventListener('click', function() {
+                    const isHidden = helpContent.classList.contains('hidden');
+                    
+                    if (isHidden) {
+                        helpContent.classList.remove('hidden');
+                        helpArrow.style.transform = 'rotate(180deg)';
+                    } else {
+                        helpContent.classList.add('hidden');
+                        helpArrow.style.transform = 'rotate(0deg)';
                     }
                 });
             }
