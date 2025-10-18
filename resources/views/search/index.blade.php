@@ -87,8 +87,19 @@
                                 @foreach($products as $product)
                                     <div class="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow duration-300 overflow-hidden group">
                                         <div class="aspect-square bg-gray-100 overflow-hidden">
-                                            @if($product->getEffectiveMedia() && count($product->getEffectiveMedia()) > 0)
-                                                <img src="{{ $product->getEffectiveMedia()[0] }}" 
+                                            @php
+                                                $media = $product->getEffectiveMedia();
+                                                $imageUrl = null;
+                                                if ($media && count($media) > 0) {
+                                                    if (is_string($media[0])) {
+                                                        $imageUrl = $media[0];
+                                                    } elseif (is_array($media[0])) {
+                                                        $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? null;
+                                                    }
+                                                }
+                                            @endphp
+                                            @if($imageUrl)
+                                                <img src="{{ $imageUrl }}" 
                                                      alt="{{ $product->name }}" 
                                                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                                             @else

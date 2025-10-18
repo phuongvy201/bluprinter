@@ -169,8 +169,19 @@
                         <div class="relative">
                             <!-- Product Image -->
                             <div class="mb-4">
-                                @if($wishlistItem->product && count($wishlistItem->product->getEffectiveMedia()) > 0)
-                                    <img src="{{ $wishlistItem->product->getEffectiveMedia()[0] }}" 
+                                @php
+                                    $media = $wishlistItem->product ? $wishlistItem->product->getEffectiveMedia() : [];
+                                    $imageUrl = null;
+                                    if ($media && count($media) > 0) {
+                                        if (is_string($media[0])) {
+                                            $imageUrl = $media[0];
+                                        } elseif (is_array($media[0])) {
+                                            $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? null;
+                                        }
+                                    }
+                                @endphp
+                                @if($imageUrl)
+                                    <img src="{{ $imageUrl }}" 
                                          alt="{{ $wishlistItem->product->name }}" 
                                          class="product-image">
                                 @else

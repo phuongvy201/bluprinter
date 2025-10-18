@@ -231,8 +231,19 @@
                 <h3 style="color: #1e40af; margin-bottom: 15px;">Order Items</h3>
                 @foreach($order->items as $item)
                     <div class="item">
-                        @if($item->product && $item->product->getEffectiveMedia() && count($item->product->getEffectiveMedia()) > 0)
-                            <img src="{{ $item->product->getEffectiveMedia()[0] }}" 
+                        @php
+                            $media = $item->product ? $item->product->getEffectiveMedia() : [];
+                            $imageUrl = null;
+                            if ($media && count($media) > 0) {
+                                if (is_string($media[0])) {
+                                    $imageUrl = $media[0];
+                                } elseif (is_array($media[0])) {
+                                    $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? null;
+                                }
+                            }
+                        @endphp
+                        @if($imageUrl)
+                            <img src="{{ $imageUrl }}" 
                                  alt="{{ $item->product_name }}" 
                                  class="item-image">
                         @else

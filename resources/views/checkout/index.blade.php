@@ -696,8 +696,19 @@
                     <div class="space-y-3 mb-6 max-h-64 overflow-y-auto">
                         @foreach($products as $item)
                             <div class="product-item flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                                @if($item['product']->getEffectiveMedia() && count($item['product']->getEffectiveMedia()) > 0)
-                                    <img src="{{ $item['product']->getEffectiveMedia()[0] }}" 
+                                @php
+                                    $media = $item['product']->getEffectiveMedia();
+                                    $imageUrl = null;
+                                    if ($media && count($media) > 0) {
+                                        if (is_string($media[0])) {
+                                            $imageUrl = $media[0];
+                                        } elseif (is_array($media[0])) {
+                                            $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? null;
+                                        }
+                                    }
+                                @endphp
+                                @if($imageUrl)
+                                    <img src="{{ $imageUrl }}" 
                                          alt="{{ $item['product']->name }}"
                                          class="w-12 h-12 object-cover rounded-lg">
                                 @else

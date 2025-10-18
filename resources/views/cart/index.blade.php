@@ -37,7 +37,18 @@
                             <div class="flex flex-col sm:flex-row gap-6">
                                 <!-- Product Image -->
                                 <div class="flex-shrink-0">
-                                    <img src="{{ $item->product->media[0] ?? '/images/placeholder.jpg' }}" 
+                                    @php
+                                        $media = $item->product->getEffectiveMedia();
+                                        $imageUrl = '/images/placeholder.jpg';
+                                        if ($media && count($media) > 0) {
+                                            if (is_string($media[0])) {
+                                                $imageUrl = $media[0];
+                                            } elseif (is_array($media[0])) {
+                                                $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? '/images/placeholder.jpg';
+                                            }
+                                        }
+                                    @endphp
+                                    <img src="{{ $imageUrl }}" 
                                          alt="{{ $item->product->name }}" 
                                          class="w-full sm:w-32 h-32 object-cover rounded-xl">
                                 </div>

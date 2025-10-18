@@ -46,11 +46,15 @@ class ProductController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'template_id' => 'required|exists:product_templates,id',
-            'video' => 'nullable|file|mimes:mp4,avi,mov,webm|max:102400',
             'price' => 'nullable|numeric|min:0',
             'shop_id' => 'nullable|exists:shops,id',
             'quantity' => 'nullable|integer|min:0',
         ];
+
+        // Only validate video if it's present
+        if ($request->hasFile('video')) {
+            $validationRules['video'] = 'file|mimes:mp4,avi,mov,webm|max:102400';
+        }
 
         // Check if images is array or single file
         if ($request->hasFile('images')) {
@@ -125,22 +129,24 @@ class ProductController extends Controller
                 }
             }
 
-            // Upload video to AWS S3 (tham khảo Admin/ProductController)
+            // Upload video to AWS S3 (optional)
             $video = $request->file('video');
             $videoUrl = null;
 
-            try {
-                if ($video->isValid()) {
-                    $videoFileName = time() . '_' . Str::random(10) . '.' . $video->getClientOriginalExtension();
-                    $videoPath = Storage::disk('s3')->putFileAs('products', $video, $videoFileName);
+            if ($video) {
+                try {
+                    if ($video->isValid()) {
+                        $videoFileName = time() . '_' . Str::random(10) . '.' . $video->getClientOriginalExtension();
+                        $videoPath = Storage::disk('s3')->putFileAs('products', $video, $videoFileName);
 
-                    if ($videoPath) {
-                        // Create the correct S3 URL format (giống Admin/ProductController)
-                        $videoUrl = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $videoPath;
+                        if ($videoPath) {
+                            // Create the correct S3 URL format (giống Admin/ProductController)
+                            $videoUrl = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $videoPath;
+                        }
                     }
+                } catch (\Exception $e) {
+                    // Continue without video if upload fails
                 }
-            } catch (\Exception $e) {
-                // Continue without video if upload fails
             }
 
             // Prepare media array (giống format trong Admin/ProductController)
