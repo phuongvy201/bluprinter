@@ -137,21 +137,22 @@
                                 @if(str_contains($mediaUrl, '.mp4') || str_contains($mediaUrl, '.mov') || str_contains($mediaUrl, '.avi'))
                                     <div class="aspect-square rounded-lg overflow-hidden mb-2 bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
                                         <video class="w-full h-full object-cover" controls>
-                                    <source src="{{ $mediaUrl }}" type="video/mp4">
-                                </video>
+                                            <source src="{{ $mediaUrl }}" type="video/mp4">
+                                        </video>
                                     </div>
                                     <div class="absolute top-4 left-4 bg-purple-500 text-white text-xs px-2 py-1 rounded-full font-semibold">
                                         Video
                                     </div>
-                            @else
+                                @else
                                     <div class="aspect-square rounded-lg overflow-hidden mb-2 bg-gray-100">
                                         <img src="{{ $mediaUrl }}" alt="Media" class="w-full h-full object-cover">
                                     </div>
                                     <div class="absolute top-4 left-4 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-semibold">
                                         Image
                                     </div>
+                                @endif
+                            </div>
                             @endif
-                        </div>
                     @endforeach
             </div>
         </div>

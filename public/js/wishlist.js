@@ -62,6 +62,22 @@ class WishlistManager {
             .then((response) => response.json())
             .then((data) => {
                 if (data.success) {
+                    // Track Facebook Pixel AddToWishlist event (only if item was added)
+                    if (data.action === "added" && typeof fbq !== "undefined") {
+                        const productName =
+                            button.getAttribute("data-product-name");
+                        const productPrice =
+                            button.getAttribute("data-product-price");
+
+                        fbq("track", "AddToWishlist", {
+                            content_name: productName,
+                            content_ids: [productId],
+                            content_type: "product",
+                            value: productPrice,
+                            currency: "USD",
+                        });
+                    }
+
                     // Show success message
                     this.showMessage(data.message, "success");
 

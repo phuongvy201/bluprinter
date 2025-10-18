@@ -4,6 +4,17 @@
 @section('meta_description', $collection->meta_description ?? $collection->description)
 
 @section('content')
+<script>
+// Track Facebook Pixel ViewContent for collection page
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof fbq !== 'undefined') {
+        fbq('track', 'ViewContent', {
+            content_name: '{{ addslashes($collection->name) }}',
+            content_type: 'product_group'
+        });
+    }
+});
+</script>
 <style>
     @keyframes fadeInUp {
         from {

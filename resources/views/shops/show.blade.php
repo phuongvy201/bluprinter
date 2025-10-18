@@ -3,6 +3,17 @@
 @section('title', $shop->shop_name . ' - Shop Profile')
 
 @section('content')
+<script>
+// Track Facebook Pixel ViewContent for shop page
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof fbq !== 'undefined') {
+        fbq('track', 'ViewContent', {
+            content_name: '{{ addslashes($shop->name) }}',
+            content_type: 'product_group'
+        });
+    }
+});
+</script>
 <!-- Shop Profile Banner -->
 <div class="bg-gradient-to-r from-red-50 to-red-100 border-b border-red-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -10,7 +21,7 @@
             <!-- Left side - Shop Info -->
             <div class="flex-1 text-center lg:text-left mb-8 lg:mb-0">
                 <div class="flex items-center justify-center lg:justify-start mb-4">
-                     <img src="{{ asset('images/bluprinter-logo.svg') }}" alt="Bluprinter" class="h-12 w-auto mr-4">
+                     <img src="{{ asset('images/logo nhỏ.png') }}" alt="Bluprinter" class="h-12 w-auto mr-4">
                     <div>
                         <h1 class="text-3xl lg:text-4xl font-bold text-gray-900">Bluprinter</h1>
                         <p class="text-lg font-medium" style="color: #065264;">Print Your Imagination</p>
@@ -117,46 +128,88 @@
         <!-- Product Categories Carousel -->
         @if($categories->count() > 0)
         <div class="relative mb-12">
-            <div class="flex space-x-6 overflow-x-auto pb-4 scrollbar-hide">
-                @foreach($categories as $category)
-                <div class="flex-shrink-0 text-center group cursor-pointer">
-                    <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all duration-300 group-hover:scale-110 mb-3">
-                        @php
-                            $firstProduct = null;
-                            if ($category->templates->isNotEmpty()) {
-                                foreach ($category->templates as $template) {
-                                    if ($template->products->isNotEmpty()) {
-                                        $firstProduct = $template->products->first();
-                                        break;
+            <!-- Navigation arrows -->
+            <button onclick="scrollCategories('left')" class="absolute left-0 top-1/2 transform -translate-y-1/2 z-10 w-10 h-10 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 nav-arrow">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </button>
+            
+            <button onclick="scrollCategories('right')" class="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 w-10 h-10 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 nav-arrow">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
+            
+            <div class="group">
+                <div id="categoriesContainer" class="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth">
+                    @foreach($categories as $category)
+                    <div class="flex-shrink-0 text-center group cursor-pointer" onclick="filterByCategory('{{ $category->id }}')">
+                        <!-- Category Card -->
+                        <div class="relative w-32 h-32 bg-white rounded-2xl shadow-lg overflow-hidden category-card">
+                            <!-- Gradient overlay -->
+                            <div class="absolute inset-0 gradient-overlay opacity-0 group-hover:opacity-100"></div>
+                            
+                            <!-- Category Image Container -->
+                            <div class="relative w-full h-full flex items-center justify-center p-4">
+                                @php
+                                    $firstProduct = null;
+                                    if ($category->templates->isNotEmpty()) {
+                                        foreach ($category->templates as $template) {
+                                            if ($template->products->isNotEmpty()) {
+                                                $firstProduct = $template->products->first();
+                                                break;
+                                            }
+                                        }
                                     }
-                                }
-                            }
-                        @endphp
-                         @if($firstProduct && count($firstProduct->getEffectiveMedia()) > 0)
-                             @php
-                                 $media = $firstProduct->getEffectiveMedia();
-                                 $imageUrl = is_array($media) && isset($media[0]) ? $media[0] : (is_string($media) ? $media : '');
-                             @endphp
-                             @if($imageUrl)
-                             <img src="{{ $imageUrl }}" 
-                                  alt="{{ $category->name }}" 
-                                  class="w-12 h-12 object-cover rounded-full">
-                             @else
-                             <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                             </svg>
-                             @endif
-                         @else
-                             <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                             </svg>
-                         @endif
-                     </div>
-                     <span class="text-sm font-medium text-gray-700 transition-colors" style="group-hover:color: #D8140B;">
-                         {{ $category->name }}
-                     </span>
+                                @endphp
+                                
+                                @if($firstProduct && count($firstProduct->getEffectiveMedia()) > 0)
+                                     @php
+                                         $media = $firstProduct->getEffectiveMedia();
+                                         $imageUrl = is_array($media) && isset($media[0]) ? $media[0] : (is_string($media) ? $media : '');
+                                     @endphp
+                                     @if($imageUrl)
+                                     <img src="{{ $imageUrl }}" 
+                                          alt="{{ $category->name }}" 
+                                          class="w-16 h-16 object-cover rounded-xl shadow-md">
+                                     @else
+                                     <div class="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center">
+                                         <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                                         </svg>
+                                     </div>
+                                     @endif
+                                 @else
+                                     <div class="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center">
+                                         <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                                         </svg>
+                                     </div>
+                                 @endif
+                                 
+                                 <!-- Product count badge -->
+                                 <div class="absolute top-2 right-2 bg-white rounded-full px-2 py-1 shadow-sm">
+                                     <span class="text-xs font-semibold" style="color: #D8140B;">{{ $category->templates->count() }}</span>
+                                 </div>
+                            </div>
+                            
+                            <!-- Hover effect overlay -->
+                            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-300 rounded-2xl"></div>
+                        </div>
+                        
+                        <!-- Category Name -->
+                        <div class="mt-3 px-2">
+                            <span class="text-sm font-semibold text-gray-700 group-hover:text-red-600 transition-colors duration-200 block category-name">
+                                {{ $category->name }}
+                            </span>
+                            <span class="text-xs text-gray-500 group-hover:text-gray-600 transition-colors duration-200">
+                                {{ $category->templates->count() }} items
+                            </span>
+                        </div>
+                    </div>
+                    @endforeach
                 </div>
-                @endforeach
             </div>
         </div>
         @endif
@@ -317,6 +370,84 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
+
+/* Category card animations */
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(216, 20, 11, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(216, 20, 11, 0);
+    }
+}
+
+.category-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.category-card:hover {
+    transform: translateY(-2px) scale(1.02);
+    animation: pulse-glow 2s infinite;
+}
+
+/* Smooth gradient transitions */
+.gradient-overlay {
+    background: linear-gradient(135deg, rgba(216, 20, 11, 0.1) 0%, rgba(6, 82, 100, 0.1) 100%);
+    transition: opacity 0.3s ease;
+}
+
+/* Custom scrollbar for categories */
+#categoriesContainer::-webkit-scrollbar {
+    height: 4px;
+}
+
+#categoriesContainer::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+#categoriesContainer::-webkit-scrollbar-thumb {
+    background: #D8140B;
+    border-radius: 10px;
+}
+
+#categoriesContainer::-webkit-scrollbar-thumb:hover {
+    background: #b0110a;
+}
+
+/* Navigation arrows styling */
+.nav-arrow {
+    backdrop-filter: blur(10px);
+    background: rgba(216, 20, 11, 0.9);
+    transition: all 0.3s ease;
+}
+
+.nav-arrow:hover {
+    background: rgba(216, 20, 11, 1);
+    transform: scale(1.1);
+}
+
+/* Category name styling */
+.category-name {
+    background: linear-gradient(135deg, #D8140B, #065264);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 600;
+}
+
+/* Responsive improvements */
+@media (max-width: 640px) {
+    .category-card {
+        width: 120px;
+        height: 120px;
+    }
+    
+    .nav-arrow {
+        width: 8px;
+        height: 8px;
+    }
+}
 </style>
 
 <script>
@@ -417,12 +548,71 @@ document.getElementById('contactForm').addEventListener('submit', function(e) {
     });
 });
 
+// Category scrolling functionality
+function scrollCategories(direction) {
+    const container = document.getElementById('categoriesContainer');
+    const scrollAmount = 200;
+    
+    if (direction === 'left') {
+        container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+    } else {
+        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+}
+
+// Category filtering functionality
+function filterByCategory(categoryId) {
+    // Add loading state
+    const productsGrid = document.querySelector('.grid');
+    if (productsGrid) {
+        productsGrid.style.opacity = '0.5';
+        productsGrid.style.pointerEvents = 'none';
+    }
+    
+    // Show loading spinner
+    showNotification('Đang tải sản phẩm...', 'info');
+    
+    // Here you can add AJAX call to filter products by category
+    // For now, we'll just scroll to products section
+    document.getElementById('productsContent').scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+    });
+    
+    // Reset loading state
+    setTimeout(() => {
+        if (productsGrid) {
+            productsGrid.style.opacity = '1';
+            productsGrid.style.pointerEvents = 'auto';
+        }
+    }, 1000);
+}
+
+// Show/hide navigation arrows based on scroll position
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('categoriesContainer');
+    if (container) {
+        container.addEventListener('scroll', function() {
+            const leftArrow = document.querySelector('button[onclick="scrollCategories(\'left\')"]');
+            const rightArrow = document.querySelector('button[onclick="scrollCategories(\'right\')"]');
+            
+            if (leftArrow && rightArrow) {
+                // Show/hide arrows based on scroll position
+                leftArrow.style.opacity = this.scrollLeft > 0 ? '1' : '0';
+                rightArrow.style.opacity = this.scrollLeft < (this.scrollWidth - this.clientWidth) ? '1' : '0';
+            }
+        });
+    }
+});
+
 // Notification function
 function showNotification(message, type) {
     const notification = document.createElement('div');
-    notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 ${
-        type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-    }`;
+    const bgColor = type === 'success' ? 'bg-green-500' : 
+                   type === 'error' ? 'bg-red-500' : 
+                   type === 'info' ? 'bg-blue-500' : 'bg-gray-500';
+    
+    notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 text-white ${bgColor}`;
     notification.textContent = message;
     
     document.body.appendChild(notification);

@@ -3,6 +3,41 @@
 @section('title', 'Order Confirmation - Bluprinter')
 
 @section('content')
+<script>
+// Track Facebook Pixel Purchase event
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof fbq !== 'undefined') {
+        // Collect product IDs from order items
+        const productIds = [
+            @foreach($order->items as $item)
+                '{{ $item->product_id }}'{{ !$loop->last ? ',' : '' }}
+            @endforeach
+        ];
+        
+        // Track Purchase event
+        fbq('track', 'Purchase', {
+            content_ids: productIds,
+            content_type: 'product',
+            value: '{{ $order->total_amount }}',
+            currency: 'USD',
+            transaction_id: '{{ $order->order_number }}',
+            num_items: {{ $order->items->count() }}
+        });
+        
+        console.log('✅ Facebook Pixel: Purchase tracked', {
+            order: '{{ $order->order_number }}',
+            total: '{{ $order->total_amount }}',
+            items: {{ $order->items->count() }}
+        });
+        
+        // Clear cart from localStorage after successful purchase
+        localStorage.removeItem('cart');
+        
+        // Dispatch cart updated event to update header
+        window.dispatchEvent(new CustomEvent('cartUpdated'));
+    }
+});
+</script>
 <style>
     @keyframes fadeInUp {
         from {

@@ -768,6 +768,40 @@
 // Clear any cached data
 console.log('🔄 Loading checkout script...', new Date().toISOString());
 
+// Track Facebook Pixel InitiateCheckout event
+document.addEventListener('DOMContentLoaded', function() {
+    // Get cart data from localStorage
+    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+    
+    if (cart.length > 0 && typeof fbq !== 'undefined') {
+        // Calculate cart total and collect product IDs
+        let cartTotal = 0;
+        const productIds = [];
+        
+        cart.forEach(item => {
+            const price = parseFloat(item.price) || 0;
+            const quantity = parseInt(item.quantity) || 1;
+            cartTotal += price * quantity;
+            productIds.push(item.id);
+        });
+        
+        // Track InitiateCheckout event
+        fbq('track', 'InitiateCheckout', {
+            content_ids: productIds,
+            content_type: 'product',
+            value: cartTotal.toFixed(2),
+            currency: 'USD',
+            num_items: cart.length
+        });
+        
+        console.log('✅ Facebook Pixel: InitiateCheckout tracked', {
+            items: cart.length,
+            total: cartTotal.toFixed(2),
+            ids: productIds
+        });
+    }
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📅 DOM Content Loaded at:', new Date().toISOString());
     const form = document.getElementById('checkout-form');

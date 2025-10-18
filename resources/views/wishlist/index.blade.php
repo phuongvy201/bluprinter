@@ -406,6 +406,14 @@ function addToCart(productId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            // Track Facebook Pixel AddToCart event
+            if (typeof fbq !== 'undefined') {
+                fbq('track', 'AddToCart', {
+                    content_ids: [productId],
+                    content_type: 'product'
+                });
+            }
+            
             showToast('Product added to cart successfully!', 'success');
             // Update cart count if needed
             updateCartCount();

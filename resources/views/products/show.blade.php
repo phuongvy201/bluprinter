@@ -3,6 +3,20 @@
 @section('title', $product->name)
 
 @section('content')
+<script>
+// Track Facebook Pixel ViewContent for product detail page
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof fbq !== 'undefined') {
+        fbq('track', 'ViewContent', {
+            content_name: '{{ addslashes($product->name) }}',
+            content_ids: ['{{ $product->id }}'],
+            content_type: 'product',
+            value: {{ $product->base_price }},
+            currency: 'USD'
+        });
+    }
+});
+</script>
 <!-- Breadcrumb -->
 <div class="bg-gray-50 border-b border-gray-200 hidden md:block">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -797,8 +811,11 @@
                             <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                         </div>
                     </button>
-                    <button class="flex-1 bg-[#E2150C] hover:bg-[#c0120a] text-white font-bold py-4 px-6 rounded-xl transition-colors duration-200">
-                        Buy Now
+                    <button onclick="buyNow()" class="flex-1 bg-[#E2150C] hover:bg-[#c0120a] text-white font-bold py-4 px-6 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2">
+                        <span>Buy Now</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                        </svg>
                     </button>
                 </div>
 
@@ -2690,6 +2707,17 @@ function addToCart() {
     // Add to localStorage immediately for fast UX
     addToLocalCart(productData);
     
+    // Track Facebook Pixel AddToCart event
+    if (typeof fbq !== 'undefined') {
+        fbq('track', 'AddToCart', {
+            content_name: productData.name,
+            content_ids: [productData.id],
+            content_type: 'product',
+            value: productData.price,
+            currency: 'USD'
+        });
+    }
+    
     // Try to sync with backend
     syncCartToBackend(productData)
         .then(response => response.json())
@@ -4071,6 +4099,78 @@ function updatePopupTotal(newShipping) {
 }
 
 // Note: setupPopupShippingCalculator is called automatically in renderCartPopup
+
+// Buy Now Function - Add to cart and go to checkout
+function buyNow() {
+    // Get selected variant and customizations
+    const selectedVariant = getSelectedVariant();
+    const variantPrice = selectedVariant && selectedVariant.price ? selectedVariant.price : {{ $product->base_price }};
+    
+    // Get product data
+    const productData = {
+        id: {{ $product->id }},
+        name: '{{ addslashes($product->name) }}',
+        slug: '{{ $product->slug }}',
+        price: variantPrice,
+        image: '@php
+            if ($media && count($media) > 0) {
+                if (is_string($media[0])) {
+                    echo $media[0];
+                } elseif (is_array($media[0])) {
+                    echo $media[0]["url"] ?? $media[0]["path"] ?? reset($media[0]) ?? "";
+                }
+            }
+        @endphp',
+        shop: '{{ $product->shop->name ?? "Unknown Shop" }}',
+        quantity: 1,
+        selectedVariant: selectedVariant,
+        customizations: getSelectedCustomizations(),
+        addedAt: Date.now()
+    };
+    
+    // Add to localStorage
+    addToLocalCart(productData);
+    
+    // Track Facebook Pixel AddToCart
+    if (typeof fbq !== 'undefined') {
+        fbq('track', 'AddToCart', {
+            content_name: productData.name,
+            content_ids: [productData.id],
+            content_type: 'product',
+            value: productData.price,
+            currency: 'USD'
+        });
+    }
+    
+    // Sync with backend
+    syncCartToBackend(productData)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                syncLocalStorageWithBackend();
+            }
+        })
+        .catch(error => {
+            console.log('Backend sync failed, proceeding anyway:', error);
+        })
+        .finally(() => {
+            // Track InitiateCheckout
+            if (typeof fbq !== 'undefined') {
+                fbq('track', 'InitiateCheckout', {
+                    content_ids: [productData.id],
+                    content_type: 'product',
+                    value: productData.price,
+                    currency: 'USD',
+                    num_items: 1
+                });
+                
+                console.log('✅ Facebook Pixel: Buy Now - AddToCart & InitiateCheckout tracked');
+            }
+            
+            // Redirect to checkout
+            window.location.href = '{{ route("checkout.index") }}';
+        });
+}
 </script>
 
 @endsection

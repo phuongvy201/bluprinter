@@ -1,6 +1,17 @@
 @extends('layouts.app')
 
 @section('content')
+<script>
+// Track Facebook Pixel ViewContent for home page
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof fbq !== 'undefined') {
+        fbq('track', 'ViewContent', {
+            content_name: 'Home Page',
+            content_type: 'home'
+        });
+    }
+});
+</script>
 <style>
     @keyframes fadeInUp {
         from {

@@ -3,6 +3,24 @@
 @section('title', 'Search Results' . ($query ? ' for "' . $query . '"' : ''))
 
 @section('content')
+<script>
+// Track Facebook Pixel Search event
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof fbq !== 'undefined') {
+        @if($query)
+        fbq('track', 'Search', {
+            search_string: '{{ addslashes($query) }}',
+            content_category: 'product'
+        });
+        @endif
+        
+        fbq('track', 'ViewContent', {
+            content_name: 'Search Results',
+            content_type: 'search'
+        });
+    }
+});
+</script>
 <div class="min-h-screen bg-gray-50 py-8">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Search Header -->

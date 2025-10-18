@@ -50,23 +50,33 @@ class PayPalService
     {
         $accessToken = $this->getAccessToken();
 
-        // Format amounts
-        $subtotal = number_format((float)$order->subtotal, 2, '.', '');
-        $tax = number_format((float)$order->tax_amount, 2, '.', '');
-        $shipping = number_format((float)$order->shipping_cost, 2, '.', '');
-        $total = number_format((float)$order->total_amount, 2, '.', '');
-
-        // Build items
+        // Build items first to calculate accurate subtotal
         $paypalItems = [];
+        $itemsSubtotal = 0;
+
         foreach ($items as $item) {
+            // Calculate unit price from total (total / quantity)
+            // This ensures we use the actual cart price (with variants/customizations)
+            $unitPrice = (float)$item['total'] / (int)$item['quantity'];
+            $formattedUnitPrice = number_format($unitPrice, 2, '.', '');
+
             $paypalItems[] = [
                 'name' => substr($item['product']->name, 0, 127),
                 'sku' => $item['product']->id,
-                'price' => number_format((float)$item['product']->base_price, 2, '.', ''),
+                'price' => $formattedUnitPrice,
                 'currency' => 'USD',
                 'quantity' => (int)$item['quantity']
             ];
+
+            // Calculate subtotal from formatted prices to match PayPal's rounding
+            $itemsSubtotal += (float)$formattedUnitPrice * (int)$item['quantity'];
         }
+
+        // Format amounts - use calculated subtotal to avoid rounding errors
+        $subtotal = number_format($itemsSubtotal, 2, '.', '');
+        $tax = number_format((float)$order->tax_amount, 2, '.', '');
+        $shipping = number_format((float)$order->shipping_cost, 2, '.', '');
+        $total = number_format($itemsSubtotal + (float)$tax + (float)$shipping, 2, '.', '');
 
         // Build payment data
         $paymentData = [

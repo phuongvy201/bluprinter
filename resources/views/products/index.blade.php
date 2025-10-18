@@ -3,6 +3,17 @@
 @section('title', 'All Products')
 
 @section('content')
+<script>
+// Track Facebook Pixel ViewContent for products listing page
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof fbq !== 'undefined') {
+        fbq('track', 'ViewContent', {
+            content_type: 'product_list',
+            content_name: 'All Products'
+        });
+    }
+});
+</script>
 <!-- Header Section -->
 <div class="bg-white border-b border-gray-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

@@ -4,6 +4,18 @@
 @section('meta_description', $category->meta_description ?? 'Browse ' . $category->name . ' products and designs')
 
 @section('content')
+<script>
+// Track Facebook Pixel ViewContent for category page
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof fbq !== 'undefined') {
+        fbq('track', 'ViewContent', {
+            content_name: '{{ addslashes($category->name) }}',
+            content_category: '{{ addslashes($category->name) }}',
+            content_type: 'product_group'
+        });
+    }
+});
+</script>
 <style>
     @keyframes fadeInUp {
         from {

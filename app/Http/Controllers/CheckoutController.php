@@ -8,11 +8,13 @@ use App\Models\Product;
 use App\Models\Cart;
 use App\Services\PayPalService;
 use App\Services\ShippingCalculator;
+use App\Mail\OrderConfirmation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class CheckoutController extends Controller
 {
@@ -205,18 +207,13 @@ class CheckoutController extends Controller
             ]);
         }
 
-        // Xóa giỏ hàng sau khi tạo đơn hàng thành công
-        Cart::where(function ($query) use ($sessionId, $userId) {
-            if ($userId) {
-                $query->where('user_id', $userId);
-            } else {
-                $query->where('session_id', $sessionId);
-            }
-        })->delete();
+        // NOTE: Không xóa cart ở đây vì user chưa thanh toán!
+        // Cart sẽ được xóa trong paypalSuccess() hoặc lianlianSuccess() sau khi payment thành công
 
-        Log::info('Cart cleared after order creation', [
+        Log::info('Order created, waiting for payment confirmation', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
+            'payment_method' => $request->payment_method,
             'user_id' => $userId,
             'session_id' => $sessionId
         ]);
@@ -372,14 +369,8 @@ class CheckoutController extends Controller
                         ]);
                     }
 
-                    // Clear cart
-                    Cart::where(function ($query) use ($sessionId, $userId) {
-                        if ($userId) {
-                            $query->where('user_id', $userId);
-                        } else {
-                            $query->where('session_id', $sessionId);
-                        }
-                    })->delete();
+                    // NOTE: Không xóa cart ở đây, chờ đến khi payment thành công
+                    // Cart sẽ được xóa trong lianlianSuccess() sau khi verify payment
 
                     // Return JSON response for frontend
                     return response()->json([
@@ -413,15 +404,8 @@ class CheckoutController extends Controller
             }
         }
 
-        // For other payment methods, clear cart and redirect to success
-        Cart::where(function ($query) use ($sessionId, $userId) {
-            if ($userId) {
-                $query->where('user_id', $userId);
-            } else {
-                $query->where('session_id', $sessionId);
-            }
-        })->delete();
-
+        // For other payment methods (should not reach here normally)
+        // Cart will be cleared in respective success callbacks
         return redirect()->route('checkout.success', $order->order_number);
     }
 
@@ -457,7 +441,8 @@ class CheckoutController extends Controller
             $order->update([
                 'payment_status' => 'paid',
                 'status' => 'processing',
-                'payment_id' => $paymentId
+                'payment_id' => $paymentId,
+                'paid_at' => now()
             ]);
 
             // Clear session and cart from database
@@ -472,6 +457,21 @@ class CheckoutController extends Controller
                     $query->where('session_id', $sessionId);
                 }
             })->delete();
+
+            // Send order confirmation email
+            try {
+                Mail::to($order->customer_email)->send(new OrderConfirmation($order));
+                Log::info('📧 Order confirmation email sent', [
+                    'order_number' => $order->order_number,
+                    'email' => $order->customer_email
+                ]);
+            } catch (\Exception $e) {
+                Log::error('❌ Failed to send order confirmation email', [
+                    'order_number' => $order->order_number,
+                    'email' => $order->customer_email,
+                    'error' => $e->getMessage()
+                ]);
+            }
 
             return redirect()->route('checkout.success', $order->order_number)
                 ->with('success', 'Payment completed successfully!');
@@ -508,6 +508,32 @@ class CheckoutController extends Controller
 
             // Clear session
             Session::forget('pending_order');
+
+            // Clear cart from database after successful payment
+            $sessionId = session()->getId();
+            $userId = Auth::id();
+            Cart::where(function ($query) use ($sessionId, $userId) {
+                if ($userId) {
+                    $query->where('user_id', $userId);
+                } else {
+                    $query->where('session_id', $sessionId);
+                }
+            })->delete();
+
+            // Send order confirmation email
+            try {
+                Mail::to($order->customer_email)->send(new OrderConfirmation($order));
+                Log::info('📧 Order confirmation email sent', [
+                    'order_number' => $order->order_number,
+                    'email' => $order->customer_email
+                ]);
+            } catch (\Exception $e) {
+                Log::error('❌ Failed to send order confirmation email', [
+                    'order_number' => $order->order_number,
+                    'email' => $order->customer_email,
+                    'error' => $e->getMessage()
+                ]);
+            }
 
             return redirect()->route('checkout.success', $order->order_number)
                 ->with('success', 'Payment completed successfully!');

@@ -254,4 +254,25 @@ class PostController extends Controller
         return redirect()->route('admin.posts.index')
             ->with('success', 'Post deleted successfully!');
     }
+
+    /**
+     * Upload image for TinyMCE editor
+     */
+    public function uploadImage(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|image|max:2048'
+        ]);
+
+        if ($request->hasFile('file')) {
+            $path = $request->file('file')->store('posts/editor', 'public');
+            $url = Storage::disk('public')->url($path);
+
+            return response()->json([
+                'location' => $url
+            ]);
+        }
+
+        return response()->json(['error' => 'No file uploaded'], 400);
+    }
 }

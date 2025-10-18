@@ -203,7 +203,9 @@
                             </div>
                         </div>
 
-                        <a href="{{ route('checkout.index') }}" class="block w-full bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 rounded-xl transition-colors duration-200 mb-3 flex items-center justify-center space-x-2">
+                        <a href="{{ route('checkout.index') }}" 
+                           onclick="trackInitiateCheckout(event)"
+                           class="block w-full bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 rounded-xl transition-colors duration-200 mb-3 flex items-center justify-center space-x-2">
                             <span>Proceed to Checkout</span>
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
@@ -459,6 +461,44 @@ function setupNavigation() {
     
     // Initial state
     updateButtonStates();
+}
+
+// Track InitiateCheckout when clicking Proceed to Checkout
+function trackInitiateCheckout(event) {
+    if (typeof fbq !== 'undefined') {
+        // Get cart data
+        const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+        
+        if (cart.length > 0) {
+            // Calculate cart total and collect product IDs
+            let cartTotal = 0;
+            const productIds = [];
+            
+            cart.forEach(item => {
+                const price = parseFloat(item.price) || 0;
+                const quantity = parseInt(item.quantity) || 1;
+                cartTotal += price * quantity;
+                productIds.push(item.id);
+            });
+            
+            // Track InitiateCheckout event
+            fbq('track', 'InitiateCheckout', {
+                content_ids: productIds,
+                content_type: 'product',
+                value: cartTotal.toFixed(2),
+                currency: 'USD',
+                num_items: cart.length
+            });
+            
+            console.log('✅ Facebook Pixel: InitiateCheckout tracked from cart', {
+                items: cart.length,
+                total: cartTotal.toFixed(2),
+                ids: productIds
+            });
+        }
+    }
+    // Let the link navigate normally
+    return true;
 }
 
 // Initialize on page load

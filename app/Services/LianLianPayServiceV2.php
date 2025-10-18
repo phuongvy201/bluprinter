@@ -479,6 +479,35 @@ class LianLianPayServiceV2
                         'payment_transaction_id' => $llTransactionId
                     ]);
                     Log::info("Order {$order->id} status updated to paid (PS)");
+
+                    // Clear cart from database for logged-in users only
+                    // For guest users, cart will be cleared in frontend (checkout.success.blade.php)
+                    if ($order->user_id) {
+                        \App\Models\Cart::where('user_id', $order->user_id)->delete();
+                        Log::info('🗑️ Cart cleared after LianLian Pay webhook success', [
+                            'order_id' => $order->id,
+                            'user_id' => $order->user_id
+                        ]);
+                    } else {
+                        Log::info('ℹ️ Guest order - cart will be cleared in frontend', [
+                            'order_id' => $order->id
+                        ]);
+                    }
+
+                    // Send order confirmation email
+                    try {
+                        \Illuminate\Support\Facades\Mail::to($order->customer_email)
+                            ->send(new \App\Mail\OrderConfirmation($order));
+                        Log::info('📧 Order confirmation email sent (webhook)', [
+                            'order_number' => $order->order_number,
+                            'email' => $order->customer_email
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error('❌ Failed to send order confirmation email (webhook)', [
+                            'order_number' => $order->order_number,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
                     break;
 
                 case 'PP': // Payment Processing

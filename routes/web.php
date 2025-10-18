@@ -513,6 +513,7 @@ Route::middleware('auth')->group(function () {
         Route::post('collections/bulk-approve', [AdminCollectionController::class, 'bulkApprove'])->name('collections.bulk-approve');
 
         // Posts (Seller can manage their own posts)
+        Route::post('posts/upload-image', [SellerPostController::class, 'uploadImage'])->name('posts.upload-image');
         Route::resource('posts', SellerPostController::class);
         Route::post('posts/{post}/approve', [SellerPostController::class, 'approve'])->name('posts.approve');
         Route::post('posts/{post}/reject', [SellerPostController::class, 'reject'])->name('posts.reject');

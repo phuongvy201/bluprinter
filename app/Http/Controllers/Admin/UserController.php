@@ -44,6 +44,7 @@ class UserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'email_verified_at' => now(), // Auto-verify email when admin creates user
         ]);
 
         if ($request->has('roles')) {
@@ -53,7 +54,7 @@ class UserController extends Controller
         }
 
         return redirect()->route('admin.users.index')
-            ->with('success', 'User created successfully.');
+            ->with('success', 'User created successfully. Email has been auto-verified.');
     }
 
     /**

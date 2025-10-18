@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Payment;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\Cart;
 use App\Services\LianLianPayServiceV2;
+use App\Mail\OrderConfirmation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class LianLianPayController extends Controller
 {
@@ -345,6 +348,38 @@ class LianLianPayController extends Controller
                                 'payment_status' => $paymentStatus
                             ]);
 
+                            // Clear cart from database after successful payment
+                            $sessionId = session()->getId();
+                            $userId = auth()->id();
+                            Cart::where(function ($query) use ($sessionId, $userId) {
+                                if ($userId) {
+                                    $query->where('user_id', $userId);
+                                } else {
+                                    $query->where('session_id', $sessionId);
+                                }
+                            })->delete();
+
+                            Log::info('🗑️ Cart cleared after LianLian Pay success', [
+                                'order_id' => $order->id,
+                                'user_id' => $userId,
+                                'session_id' => $sessionId
+                            ]);
+
+                            // Send order confirmation email
+                            try {
+                                Mail::to($order->customer_email)->send(new OrderConfirmation($order));
+                                Log::info('📧 Order confirmation email sent', [
+                                    'order_number' => $order->order_number,
+                                    'email' => $order->customer_email
+                                ]);
+                            } catch (\Exception $e) {
+                                Log::error('❌ Failed to send order confirmation email', [
+                                    'order_number' => $order->order_number,
+                                    'email' => $order->customer_email,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+
                             $querySuccess = true;
                         } elseif ($paymentStatus === 'processing') {
                             $order->update([
@@ -394,6 +429,38 @@ class LianLianPayController extends Controller
                             'order_id' => $order->id,
                             'order_number' => $order->order_number
                         ]);
+
+                        // Clear cart from database after successful payment (fallback)
+                        $sessionId = session()->getId();
+                        $userId = auth()->id();
+                        Cart::where(function ($query) use ($sessionId, $userId) {
+                            if ($userId) {
+                                $query->where('user_id', $userId);
+                            } else {
+                                $query->where('session_id', $sessionId);
+                            }
+                        })->delete();
+
+                        Log::info('🗑️ Cart cleared after LianLian Pay success (fallback)', [
+                            'order_id' => $order->id,
+                            'user_id' => $userId,
+                            'session_id' => $sessionId
+                        ]);
+
+                        // Send order confirmation email
+                        try {
+                            Mail::to($order->customer_email)->send(new OrderConfirmation($order));
+                            Log::info('📧 Order confirmation email sent (fallback)', [
+                                'order_number' => $order->order_number,
+                                'email' => $order->customer_email
+                            ]);
+                        } catch (\Exception $e) {
+                            Log::error('❌ Failed to send order confirmation email (fallback)', [
+                                'order_number' => $order->order_number,
+                                'email' => $order->customer_email,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
                     }
                 }
 
