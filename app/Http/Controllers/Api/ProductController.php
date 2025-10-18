@@ -24,7 +24,10 @@ class ProductController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid or expired API token'
-            ], 401);
+            ], 401)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
         }
 
         // Check permissions
@@ -32,7 +35,10 @@ class ProductController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Insufficient permissions'
-            ], 403);
+            ], 403)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
         }
 
         // Validate request data - support both single file and array for Swagger UI
@@ -65,7 +71,10 @@ class ProductController extends Controller
                 'success' => false,
                 'message' => 'Validation failed',
                 'errors' => $validator->errors()
-            ], 422);
+            ], 422)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
         }
 
         try {
@@ -223,12 +232,18 @@ class ProductController extends Controller
                 'success' => true,
                 'message' => 'Product created successfully',
                 'product_url' => route('products.show', $product->slug)
-            ], 201);
+            ], 201)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create product: ' . $e->getMessage()
-            ], 500);
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
         }
     }
 

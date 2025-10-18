@@ -253,3 +253,4 @@ fetch('/api/products/create', {
 | 422 | Validation Error |
 | 500 | Server Error |
 
+

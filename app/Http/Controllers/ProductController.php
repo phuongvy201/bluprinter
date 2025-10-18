@@ -18,9 +18,7 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $query = Product::with(['shop', 'template.category', 'variants'])
-            ->whereHas('shop', function ($q) {
-                $q->where('shop_status', 'active');
-            });
+            ->availableForDisplay();
 
         // Filter by category
         if ($request->filled('category')) {
@@ -117,21 +115,21 @@ class ProductController extends Controller
      */
     public function show($slug)
     {
+        // Get product and require all display conditions
         $product = Product::where('slug', $slug)
-            ->whereHas('shop', function ($q) {
-                $q->where('shop_status', 'active');
-            })
+            ->availableForDisplay()
             ->with(['shop', 'template.category', 'variants'])
             ->firstOrFail();
 
-        // Get related products from the same category
+        // Shop is available and active if we reach here
+        $shopAvailable = true;
+
+        // Get related products from the same category (chỉ lấy đủ điều kiện hiển thị)
         $relatedProducts = Product::whereHas('template', function ($q) use ($product) {
             $q->where('category_id', $product->template->category_id);
         })
             ->where('id', '!=', $product->id)
-            ->whereHas('shop', function ($q) {
-                $q->where('shop_status', 'active');
-            })
+            ->availableForDisplay()
             ->with(['shop', 'template'])
             ->limit(8)
             ->get();
@@ -147,6 +145,6 @@ class ProductController extends Controller
         }
         $breadcrumbs[] = ['name' => $product->name, 'url' => ''];
 
-        return view('products.show', compact('product', 'relatedProducts', 'breadcrumbs'));
+        return view('products.show', compact('product', 'relatedProducts', 'breadcrumbs', 'shopAvailable'));
     }
 }

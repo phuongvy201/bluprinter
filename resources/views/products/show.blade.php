@@ -46,8 +46,14 @@
                 // Add product images first
                 if($media && count($media) > 0) {
                     foreach($media as $mediaItem) {
-                        $mediaUrl = is_array($mediaItem) ? $mediaItem['url'] : $mediaItem;
-                        $allImages[] = $mediaUrl;
+                        if (is_string($mediaItem)) {
+                            $allImages[] = $mediaItem;
+                        } elseif (is_array($mediaItem)) {
+                            $mediaUrl = $mediaItem['url'] ?? $mediaItem['path'] ?? reset($mediaItem) ?? null;
+                            if ($mediaUrl) {
+                                $allImages[] = $mediaUrl;
+                            }
+                        }
                     }
                 }
                 
@@ -55,8 +61,13 @@
                 if($product->template && $product->template->media) {
                     $templateMedia = is_array($product->template->media) ? $product->template->media : json_decode($product->template->media, true);
                     $templateMediaUrls = collect($templateMedia)->map(function($item) {
-                        return is_array($item) ? $item['url'] : $item;
-                    })->toArray();
+                        if (is_string($item)) {
+                            return $item;
+                        } elseif (is_array($item)) {
+                            return $item['url'] ?? $item['path'] ?? reset($item) ?? null;
+                        }
+                        return null;
+                    })->filter()->toArray();
                     
                     // Only add template images that are not already in product images
                     foreach($templateMediaUrls as $templateUrl) {
@@ -71,7 +82,14 @@
             <div class="aspect-square bg-white rounded-xl shadow-lg overflow-hidden relative group" id="image-container">
                 @if($media && count($media) > 0)
                     @php
-                        $firstMediaUrl = is_array($media[0]) ? $media[0]['url'] : $media[0];
+                        // Get first media URL safely
+                        if (is_string($media[0])) {
+                            $firstMediaUrl = $media[0];
+                        } elseif (is_array($media[0])) {
+                            $firstMediaUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? '';
+                        } else {
+                            $firstMediaUrl = '';
+                        }
                         $isVideo = str_contains($firstMediaUrl, '.mp4') || str_contains($firstMediaUrl, '.mov') || str_contains($firstMediaUrl, '.avi') || str_contains($firstMediaUrl, '.webm');
                     @endphp
                     
@@ -91,7 +109,14 @@
                                 $templateMedia = is_array($product->template->media) ? $product->template->media : json_decode($product->template->media, true);
                                 if ($templateMedia && count($templateMedia) > 0) {
                                     foreach($templateMedia as $tmItem) {
-                                        $tmUrl = is_array($tmItem) ? ($tmItem['url'] ?? $tmItem) : $tmItem;
+                                        // Get URL safely
+                                        if (is_string($tmItem)) {
+                                            $tmUrl = $tmItem;
+                                        } elseif (is_array($tmItem)) {
+                                            $tmUrl = $tmItem['url'] ?? $tmItem['path'] ?? reset($tmItem) ?? '';
+                                        } else {
+                                            $tmUrl = '';
+                                        }
                                         if (!str_contains($tmUrl, '.mp4') && !str_contains($tmUrl, '.mov') && !str_contains($tmUrl, '.avi') && !str_contains($tmUrl, '.webm')) {
                                             $posterImage = $tmUrl;
                                             break;
@@ -285,9 +310,17 @@
                                         <div class="relative aspect-square overflow-hidden">
                                             @php
                                                 $relatedMedia = $relatedProduct->getEffectiveMedia();
+                                                $relatedImageUrl = null;
+                                                if ($relatedMedia && count($relatedMedia) > 0) {
+                                                    if (is_string($relatedMedia[0])) {
+                                                        $relatedImageUrl = $relatedMedia[0];
+                                                    } elseif (is_array($relatedMedia[0])) {
+                                                        $relatedImageUrl = $relatedMedia[0]['url'] ?? $relatedMedia[0]['path'] ?? reset($relatedMedia[0]) ?? null;
+                                                    }
+                                                }
                                             @endphp
-                                            @if($relatedMedia && count($relatedMedia) > 0)
-                                                <img src="{{ is_array($relatedMedia[0]) ? $relatedMedia[0]['url'] : $relatedMedia[0] }}" 
+                                            @if($relatedImageUrl)
+                                                <img src="{{ $relatedImageUrl }}" 
                                                      alt="{{ $relatedProduct->name }}" 
                                                      class="w-full h-full object-cover group-hover/item:scale-105 transition-transform duration-300">
                                             @else
@@ -753,7 +786,9 @@
 
                 <!-- Action Buttons -->
                 <div class="flex space-x-4">
-                    <button id="add-to-cart-btn" onclick="addToCart()" class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 px-6 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button id="add-to-cart-btn" 
+                            onclick="addToCart()"
+                            class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 px-6 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
                         <svg id="cart-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 11-4 0v-6m4 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01"></path>
                         </svg>
@@ -958,11 +993,19 @@
                     <div class="relative aspect-square overflow-hidden">
                         @php
                             $relatedMedia = $relatedProduct->getEffectiveMedia();
+                            $relatedImageUrl = null;
+                            if ($relatedMedia && count($relatedMedia) > 0) {
+                                if (is_string($relatedMedia[0])) {
+                                    $relatedImageUrl = $relatedMedia[0];
+                                } elseif (is_array($relatedMedia[0])) {
+                                    $relatedImageUrl = $relatedMedia[0]['url'] ?? $relatedMedia[0]['path'] ?? reset($relatedMedia[0]) ?? null;
+                                }
+                            }
                         @endphp
-                        @if($relatedMedia && count($relatedMedia) > 0)
-                            <img src="{{ is_array($relatedMedia[0]) ? $relatedMedia[0]['url'] : $relatedMedia[0] }}" 
+                        @if($relatedImageUrl)
+                            <img src="{{ $relatedImageUrl }}" 
                                  alt="{{ $relatedProduct->name }}" 
-                                             class="w-full h-full object-cover group-hover/item:scale-105 transition-transform duration-300">
+                                            class="w-full h-full object-cover group-hover/item:scale-105 transition-transform duration-300">
                         @else
                             <div class="w-full h-full bg-gray-200 flex items-center justify-center">
                                             <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2247,7 +2290,15 @@ function saveToRecentlyViewed() {
         slug: '{{ $product->slug }}',
         name: '{{ addslashes($product->name) }}',
         price: {{ $product->base_price }},
-        image: '{{ $media && count($media) > 0 ? (is_array($media[0]) ? $media[0]["url"] : $media[0]) : "" }}',
+        image: '@php
+            if ($media && count($media) > 0) {
+                if (is_string($media[0])) {
+                    echo $media[0];
+                } elseif (is_array($media[0])) {
+                    echo $media[0]["url"] ?? $media[0]["path"] ?? reset($media[0]) ?? "";
+                }
+            }
+        @endphp',
         shop: '{{ $product->shop->name ?? "Unknown Shop" }}',
         shop_slug: '{{ $product->shop->shop_slug ?? "" }}',
         timestamp: Date.now()
@@ -2620,7 +2671,15 @@ function addToCart() {
         name: '{{ addslashes($product->name) }}',
         slug: '{{ $product->slug }}',
         price: variantPrice,
-        image: '{{ $media && count($media) > 0 ? (is_array($media[0]) ? $media[0]["url"] : $media[0]) : "" }}',
+        image: '@php
+            if ($media && count($media) > 0) {
+                if (is_string($media[0])) {
+                    echo $media[0];
+                } elseif (is_array($media[0])) {
+                    echo $media[0]["url"] ?? $media[0]["path"] ?? reset($media[0]) ?? "";
+                }
+            }
+        @endphp',
         shop: '{{ $product->shop->name ?? "Unknown Shop" }}',
         quantity: 1,
         selectedVariant: selectedVariant,
@@ -3368,12 +3427,23 @@ function closeCartPopup() {
 @php
     $crossSellData = $relatedProducts->map(function($product) {
         $media = $product->getEffectiveMedia();
+        
+        // Get image URL safely
+        $imageUrl = null;
+        if ($media && count($media) > 0) {
+            if (is_string($media[0])) {
+                $imageUrl = $media[0];
+            } elseif (is_array($media[0])) {
+                $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? null;
+            }
+        }
+        
         return [
             'id' => $product->id,
             'name' => $product->name,
             'slug' => $product->slug,
             'price' => $product->base_price,
-            'image' => $media && count($media) > 0 ? (is_array($media[0]) ? $media[0]['url'] : $media[0]) : null,
+            'image' => $imageUrl,
             'has_variants' => $product->variants()->count() > 0,
         ];
     })->toArray();

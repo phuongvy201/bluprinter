@@ -217,7 +217,7 @@
 </div>
 
 <script>
-// Preview avatar when selected
+// Preview avatar when selected (without compression to avoid upload issues)
 document.getElementById('avatar').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
@@ -245,6 +245,27 @@ document.addEventListener('DOMContentLoaded', function() {
             headerAvatar.innerHTML = `<img src="${userAvatar}" alt="Avatar" class="w-9 h-9 rounded-full object-cover shadow-md">`;
         }
     }
+});
+
+// Show loading overlay when form is submitted
+document.querySelector('form[action="{{ route('customer.profile.update') }}"]').addEventListener('submit', function(e) {
+    // Create loading overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'upload-overlay';
+    overlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center';
+    overlay.innerHTML = `
+        <div class="bg-white rounded-xl p-8 shadow-2xl max-w-sm mx-4">
+            <div class="text-center">
+                <svg class="animate-spin h-12 w-12 text-[#005366] mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Uploading...</h3>
+                <p class="text-sm text-gray-600">Please wait while we update your profile</p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
 });
 </script>
 @endsection

@@ -79,8 +79,10 @@ class CollectionController extends Controller
             ->approved()
             ->firstOrFail();
 
-        // Get products in this collection
-        $query = $collection->activeProducts()->with(['template.category', 'shop']);
+        // Get products in this collection (chỉ lấy đủ điều kiện hiển thị)
+        $query = $collection->activeProducts()
+            ->availableForDisplay()
+            ->with(['template.category', 'shop']);
 
         // Filter by price range
         if ($request->filled('min_price')) {

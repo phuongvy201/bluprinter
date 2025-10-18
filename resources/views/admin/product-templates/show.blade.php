@@ -72,17 +72,29 @@
                 </div>
                 <div class="p-6">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        @foreach($productTemplate->media as $media)
+                        @foreach($productTemplate->media as $mediaItem)
+                            @php
+                                // Get media URL safely
+                                if (is_string($mediaItem)) {
+                                    $mediaUrl = $mediaItem;
+                                } elseif (is_array($mediaItem) && !empty($mediaItem)) {
+                                    $mediaUrl = $mediaItem['url'] ?? $mediaItem['path'] ?? reset($mediaItem) ?? null;
+                                } else {
+                                    $mediaUrl = null;
+                                }
+                            @endphp
+                            
+                            @if($mediaUrl)
                             <div class="relative group">
-                                @if(str_contains($media, '.mp4') || str_contains($media, '.mov'))
+                                @if(str_contains($mediaUrl, '.mp4') || str_contains($mediaUrl, '.mov'))
                                     <video class="w-full h-32 object-cover rounded-lg" controls>
-                                        <source src="{{ $media }}" type="video/mp4">
+                                        <source src="{{ $mediaUrl }}" type="video/mp4">
                                     </video>
                                 @else
-                                    <img src="{{ $media }}" alt="Template media" class="w-full h-32 object-cover rounded-lg">
+                                    <img src="{{ $mediaUrl }}" alt="Template media" class="w-full h-32 object-cover rounded-lg">
                                 @endif
                                 <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
-                                    <a href="{{ $media }}" target="_blank" class="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                    <a href="{{ $mediaUrl }}" target="_blank" class="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                         <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
                                         </svg>

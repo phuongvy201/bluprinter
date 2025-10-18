@@ -107,6 +107,77 @@ class Product extends Model
     public function canEdit($user = null): bool
     {
         $user = $user ?? auth()->user();
+        if (!$user) {
+            return false;
+        }
         return $user->hasRole('admin') || $this->user_id === $user->id;
+    }
+
+    /**
+     * Scope: Chỉ lấy sản phẩm đủ điều kiện hiển thị
+     * - Status = active
+     * - Shop tồn tại và active
+     * - Có quantity > 0 HOẶC có variants với quantity > 0
+     * - Có media (từ product hoặc template)
+     */
+    public function scopeAvailableForDisplay($query)
+    {
+        return $query->where('products.status', 'active')
+            // Kiểm tra shop active
+            ->whereHas('shop', function ($q) {
+                $q->where('shop_status', 'active');
+            })
+            // Kiểm tra có quantity HOẶC có variants với quantity
+            ->where(function ($q) {
+                $q->where('products.quantity', '>', 0)
+                    ->orWhereHas('variants', function ($variantQuery) {
+                        $variantQuery->where('quantity', '>', 0);
+                    });
+            })
+            // Kiểm tra có media (product media hoặc template media)
+            ->where(function ($q) {
+                $q->whereNotNull('products.media')
+                    ->where('products.media', '!=', '[]')
+                    ->where('products.media', '!=', '')
+                    ->orWhereHas('template', function ($templateQuery) {
+                        $templateQuery->whereNotNull('media')
+                            ->where('media', '!=', '[]')
+                            ->where('media', '!=', '');
+                    });
+            });
+    }
+
+    /**
+     * Check if product has valid media
+     */
+    public function hasMedia(): bool
+    {
+        $media = $this->getEffectiveMedia();
+        return !empty($media);
+    }
+
+    /**
+     * Check if product has available quantity
+     */
+    public function hasStock(): bool
+    {
+        if ($this->quantity > 0) {
+            return true;
+        }
+
+        // Check variants
+        return $this->variants()->where('quantity', '>', 0)->exists();
+    }
+
+    /**
+     * Check if product is available for display
+     */
+    public function isAvailableForDisplay(): bool
+    {
+        return $this->status === 'active'
+            && $this->shop
+            && $this->shop->shop_status === 'active'
+            && $this->hasStock()
+            && $this->hasMedia();
     }
 }

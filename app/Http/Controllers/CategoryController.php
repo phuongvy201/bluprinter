@@ -17,11 +17,11 @@ class CategoryController extends Controller
             }])
             ->firstOrFail();
 
-        // Get products in this category
+        // Get products in this category (chỉ lấy đủ điều kiện hiển thị)
         $products = Product::whereHas('template', function ($query) use ($category) {
             $query->where('category_id', $category->id);
         })
-            ->where('status', 'active')
+            ->availableForDisplay()
             ->with(['template', 'shop'])
             ->paginate(12);
 
@@ -42,11 +42,11 @@ class CategoryController extends Controller
             ->limit(6)
             ->get();
 
-        // Get featured products from this category (latest products)
+        // Get featured products from this category (chỉ lấy đủ điều kiện hiển thị)
         $featuredProducts = Product::whereHas('template', function ($query) use ($category) {
             $query->where('category_id', $category->id);
         })
-            ->where('status', 'active')
+            ->availableForDisplay()
             ->with(['template', 'shop'])
             ->orderBy('created_at', 'desc')
             ->limit(6)

@@ -173,23 +173,32 @@
                                 <!-- Thumbnail -->
                                 <div class="flex-shrink-0">
                                     @php
-                                        // Get first media (models auto-cast to array)
-                                        $media = $product->media && is_array($product->media) && count($product->media) > 0 
+                                        // Get first media URL safely
+                                        $mediaItem = $product->media && is_array($product->media) && count($product->media) > 0 
                                             ? $product->media[0] 
                                             : ($product->template->media && is_array($product->template->media) && count($product->template->media) > 0 
                                                 ? $product->template->media[0] 
                                                 : null);
+                                        
+                                        // Convert to URL string
+                                        if (is_string($mediaItem)) {
+                                            $mediaUrl = $mediaItem;
+                                        } elseif (is_array($mediaItem) && !empty($mediaItem)) {
+                                            $mediaUrl = $mediaItem['url'] ?? $mediaItem['path'] ?? reset($mediaItem) ?? null;
+                                        } else {
+                                            $mediaUrl = null;
+                                        }
                                     @endphp
                                     
-                                    @if($media)
-                                        @if(str_contains($media, '.mp4') || str_contains($media, '.mov') || str_contains($media, '.avi'))
+                                    @if($mediaUrl)
+                                        @if(str_contains($mediaUrl, '.mp4') || str_contains($mediaUrl, '.mov') || str_contains($mediaUrl, '.avi'))
                                             <div class="w-16 h-16 rounded-lg bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
                                                 <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
                                                 </svg>
                                             </div>
                                         @else
-                                            <img src="{{ $media }}" alt="{{ $product->name }}" class="w-16 h-16 rounded-lg object-cover border-2 border-gray-200">
+                                            <img src="{{ $mediaUrl }}" alt="{{ $product->name }}" class="w-16 h-16 rounded-lg object-cover border-2 border-gray-200">
                                         @endif
                                     @else
                                         <div class="w-16 h-16 rounded-lg bg-gradient-to-br from-green-100 to-teal-100 flex items-center justify-center">

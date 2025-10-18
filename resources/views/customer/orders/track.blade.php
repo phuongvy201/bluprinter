@@ -168,9 +168,17 @@
                             <div class="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg">
                                 @php
                                     $productMedia = $item->product ? $item->product->getEffectiveMedia() : [];
+                                    $productImageUrl = null;
+                                    if (!empty($productMedia)) {
+                                        if (is_string($productMedia[0])) {
+                                            $productImageUrl = $productMedia[0];
+                                        } elseif (is_array($productMedia[0])) {
+                                            $productImageUrl = $productMedia[0]['url'] ?? $productMedia[0]['path'] ?? reset($productMedia[0]) ?? null;
+                                        }
+                                    }
                                 @endphp
-                                @if(!empty($productMedia))
-                                    <img src="{{ is_array($productMedia[0]) ? $productMedia[0]['url'] : $productMedia[0] }}" 
+                                @if($productImageUrl)
+                                    <img src="{{ $productImageUrl }}" 
                                          alt="{{ $item->product_name }}"
                                          class="w-16 h-16 object-cover rounded-lg">
                                 @else

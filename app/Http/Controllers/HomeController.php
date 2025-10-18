@@ -20,9 +20,9 @@ class HomeController extends Controller
             ->limit(6)
             ->get();
 
-        // Get featured products
+        // Get featured products (chỉ lấy sản phẩm đủ điều kiện hiển thị)
         $featuredProducts = Product::with(['template.category', 'shop'])
-            ->where('status', 'active')
+            ->availableForDisplay()
             ->inRandomOrder()
             ->limit(8)
             ->get();

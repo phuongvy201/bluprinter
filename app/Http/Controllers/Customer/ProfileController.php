@@ -56,23 +56,36 @@ class ProfileController extends Controller
             'country' => 'nullable|string|max:100',
         ]);
 
-        // Handle avatar upload to AWS S3
+        // Handle avatar upload to AWS S3 (optimized)
         if ($request->hasFile('avatar')) {
             $avatar = $request->file('avatar');
 
             try {
                 // Validate file
                 if ($avatar->isValid()) {
-                    // Delete old avatar from S3 if exists
+                    // Delete old avatar from S3 asynchronously (don't wait for it)
                     if ($user->avatar) {
-                        // Extract filename from URL
-                        $oldFileName = basename(parse_url($user->avatar, PHP_URL_PATH));
-                        Storage::disk('s3')->delete('avatars/' . $oldFileName);
+                        try {
+                            $oldFileName = basename(parse_url($user->avatar, PHP_URL_PATH));
+                            Storage::disk('s3')->delete('avatars/' . $oldFileName);
+                        } catch (\Exception $e) {
+                            // Ignore deletion errors
+                        }
                     }
 
-                    // Upload to AWS S3
+                    // Generate unique filename
                     $fileName = time() . '_' . Str::random(10) . '.' . $avatar->getClientOriginalExtension();
-                    $filePath = Storage::disk('s3')->putFileAs('avatars', $avatar, $fileName);
+
+                    // Upload to AWS S3 with optimized settings
+                    $filePath = Storage::disk('s3')->putFileAs(
+                        'avatars',
+                        $avatar,
+                        $fileName,
+                        [
+                            'visibility' => 'public',
+                            'CacheControl' => 'max-age=31536000',
+                        ]
+                    );
 
                     if ($filePath) {
                         // Create the correct S3 URL format (giống ProductController)
@@ -80,7 +93,7 @@ class ProfileController extends Controller
                     }
                 }
             } catch (\Exception $e) {
-                // If S3 upload fails, continue without updating avatar
+                // If S3 upload fails, return error
                 return back()->withErrors(['avatar' => 'Failed to upload avatar: ' . $e->getMessage()]);
             }
         }

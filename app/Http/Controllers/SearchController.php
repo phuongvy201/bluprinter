@@ -34,10 +34,10 @@ class SearchController extends Controller
         ];
 
         if (strlen($query) >= 2) {
-            // Search Products
+            // Search Products (chỉ lấy đủ điều kiện hiển thị)
             if ($type === 'all' || $type === 'products') {
                 $products = Product::with(['template.category', 'shop'])
-                    ->where('status', 'active')
+                    ->availableForDisplay()
                     ->where(function ($q) use ($query) {
                         $q->where('name', 'like', "%{$query}%")
                             ->orWhere('description', 'like', "%{$query}%")
@@ -95,7 +95,7 @@ class SearchController extends Controller
             // Count results for each type
             // When type is 'all', need to query actual counts, not just limited results
             $counts = [
-                'products' => $type === 'products' ? $products->total() : ($type === 'all' ? Product::where('status', 'active')
+                'products' => $type === 'products' ? $products->total() : ($type === 'all' ? Product::availableForDisplay()
                     ->where(function ($q) use ($query) {
                         $q->where('name', 'like', "%{$query}%")
                             ->orWhere('description', 'like', "%{$query}%")
@@ -148,9 +148,9 @@ class SearchController extends Controller
             return response()->json([]);
         }
 
-        // Get top 5 products
+        // Get top 5 products (chỉ lấy đủ điều kiện hiển thị)
         $products = Product::with('template')
-            ->where('status', 'active')
+            ->availableForDisplay()
             ->where(function ($q) use ($query) {
                 $q->where('name', 'like', "%{$query}%")
                     ->orWhereHas('template', function ($q) use ($query) {

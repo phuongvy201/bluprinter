@@ -187,18 +187,31 @@
                 <div class="mb-6">
                     <h4 class="text-sm font-semibold text-gray-700 mb-4">Current Media:</h4>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        @foreach($product->media as $media)
+                        @foreach($product->media as $mediaItem)
+                            @php
+                                // Get media URL safely
+                                if (is_string($mediaItem)) {
+                                    $mediaUrl = $mediaItem;
+                                } elseif (is_array($mediaItem) && !empty($mediaItem)) {
+                                    $mediaUrl = $mediaItem['url'] ?? $mediaItem['path'] ?? reset($mediaItem) ?? null;
+                                } else {
+                                    $mediaUrl = null;
+                                }
+                            @endphp
+                            
+                            @if($mediaUrl)
                             <div class="relative bg-white rounded-lg border-2 border-gray-200 p-2">
-                                @if(str_contains($media, '.mp4') || str_contains($media, '.mov') || str_contains($media, '.avi'))
+                                @if(str_contains($mediaUrl, '.mp4') || str_contains($mediaUrl, '.mov') || str_contains($mediaUrl, '.avi'))
                                     <div class="aspect-square rounded-lg bg-purple-100 flex items-center justify-center">
                                         <svg class="w-12 h-12 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
                                         </svg>
                                     </div>
                                 @else
-                                    <img src="{{ $media }}" class="w-full aspect-square object-cover rounded-lg">
+                                    <img src="{{ $mediaUrl }}" class="w-full aspect-square object-cover rounded-lg">
                                 @endif
                             </div>
+                            @endif
                         @endforeach
                     </div>
                 </div>

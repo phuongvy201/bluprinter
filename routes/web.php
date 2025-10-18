@@ -402,11 +402,22 @@ Route::prefix('api/cart')->middleware('web')->group(function () {
     Route::post('/sync', [ApiCartController::class, 'sync'])->name('api.cart.sync');
 });
 
-// Product API routes for AI integration
-Route::prefix('api/products')->group(function () {
-    Route::post('/create', [App\Http\Controllers\Api\ProductController::class, 'create'])->name('api.products.create');
-    Route::get('/{id}', [App\Http\Controllers\Api\ProductController::class, 'show'])->name('api.products.show');
-    Route::get('/', [App\Http\Controllers\Api\ProductController::class, 'index'])->name('api.products.index');
+// Product API routes for AI integration (with CORS support)
+Route::prefix('api/products')->middleware(['web'])->group(function () {
+    // Add OPTIONS route for CORS preflight
+    Route::options('/create', function () {
+        return response('', 200)
+            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+    });
+
+    Route::post('/create', [App\Http\Controllers\Api\ProductController::class, 'create'])
+        ->name('api.products.create');
+    Route::get('/{id}', [App\Http\Controllers\Api\ProductController::class, 'show'])
+        ->name('api.products.show');
+    Route::get('/', [App\Http\Controllers\Api\ProductController::class, 'index'])
+        ->name('api.products.index');
 });
 
 // Demo routes
