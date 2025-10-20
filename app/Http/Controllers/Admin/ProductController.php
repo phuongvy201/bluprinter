@@ -466,11 +466,27 @@ class ProductController extends Controller
             }
         }
 
-        if ($deletedCount === 0) {
-            return back()->with('error', 'No products were deleted. You may not have permission to delete the selected products.');
+        $message = $deletedCount === 0
+            ? 'No products were deleted. You may not have permission to delete the selected products.'
+            : "{$deletedCount} product(s) deleted successfully! 🗑️";
+
+        $success = $deletedCount > 0;
+
+        // Return JSON response for AJAX requests
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => $success,
+                'message' => $message,
+                'deleted_count' => $deletedCount
+            ]);
         }
 
-        return back()->with('success', "{$deletedCount} product(s) deleted successfully! 🗑️");
+        // Return redirect for form submissions
+        if ($deletedCount === 0) {
+            return back()->with('error', $message);
+        }
+
+        return back()->with('success', $message);
     }
 
     /**

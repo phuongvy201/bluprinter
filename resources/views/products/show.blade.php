@@ -3451,6 +3451,11 @@ function refreshCartPopupContent() {
             // Update header cart count
             updateCartCount();
             
+            // Re-setup shipping calculator after refresh
+            setTimeout(() => {
+                setupPopupShippingCalculator();
+            }, 100);
+            
             // If cart is empty, close popup
             if (data.cart_items.length === 0) {
                 closeCartPopup();
@@ -4072,66 +4077,107 @@ function setupPopupShippingCalculator() {
     });
     
     if (popupShippingCountry) {
-        popupShippingCountry.addEventListener('change', async function() {
-            const country = this.value;
-            console.log('Country changed to:', country);
-            
-            try {
-                const response = await fetch('/checkout/calculate-shipping', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ country: country })
-                });
-                
-                const data = await response.json();
-                console.log('Shipping calculation response:', data);
-                
-                if (data.success && data.shipping) {
-                    const shipping = parseFloat(data.shipping.total_shipping);
-                    console.log('New shipping cost:', shipping);
-                    
-                    // Update shipping cost
-                    if (popupShippingCost) {
-                        popupShippingCost.innerHTML = shipping === 0 ? 
-                            '<span class="text-green-600">FREE</span>' : 
-                            '$' + shipping.toFixed(2);
-                        console.log('Updated shipping cost element');
-                    }
-                    
-                    // Update zone
-                    if (popupShippingZone) {
-                        popupShippingZone.textContent = data.shipping.zone_name || country;
-                        console.log('Updated zone to:', data.shipping.zone_name);
-                    }
-                    
-                    // Update total in popup
-                    updatePopupTotal(shipping);
-                } else {
-                    console.error('Shipping calculation failed:', data);
-                }
-            } catch (error) {
-                console.error('Popup shipping calculation error:', error);
-            }
+        // Remove existing event listeners to avoid duplicates
+        popupShippingCountry.removeEventListener('change', handlePopupCountryChange);
+        
+        // Add new event listener
+        popupShippingCountry.addEventListener('change', handlePopupCountryChange);
+    }
+}
+
+// Separate function for handling country change to avoid duplicate listeners
+async function handlePopupCountryChange() {
+    const country = this.value;
+    const popupShippingCost = document.getElementById('popupShippingCost');
+    const popupShippingZone = document.getElementById('popupShippingZone');
+    
+    console.log('Country changed to:', country);
+    
+    try {
+        const response = await fetch('/checkout/calculate-shipping', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ country: country })
         });
+        
+        const data = await response.json();
+        console.log('Shipping calculation response:', data);
+        
+        if (data.success && data.shipping) {
+            const shipping = parseFloat(data.shipping.total_shipping || 0);
+            console.log('New shipping cost:', shipping);
+            
+            // Update shipping cost display
+            if (popupShippingCost) {
+                popupShippingCost.innerHTML = shipping === 0 ? 
+                    '<span class="text-green-600">FREE</span>' : 
+                    '$' + shipping.toFixed(2);
+                console.log('Updated shipping cost element');
+            }
+            
+            // Update zone display
+            if (popupShippingZone) {
+                popupShippingZone.textContent = data.shipping.zone_name || country;
+                console.log('Updated zone to:', data.shipping.zone_name);
+            }
+            
+            // Update total in popup - need to get current subtotal and add new shipping
+            updatePopupTotal(shipping);
+            
+            // Show success feedback
+            console.log('Shipping updated successfully:', {
+                country: country,
+                shipping: shipping,
+                zone: data.shipping.zone_name
+            });
+        } else {
+            console.error('Shipping calculation failed:', data);
+            // Show error to user
+            if (popupShippingCost) {
+                popupShippingCost.innerHTML = '<span class="text-red-600">Error</span>';
+            }
+        }
+    } catch (error) {
+        console.error('Popup shipping calculation error:', error);
+        // Show error to user
+        if (popupShippingCost) {
+            popupShippingCost.innerHTML = '<span class="text-red-600">Error</span>';
+        }
     }
 }
 
 function updatePopupTotal(newShipping) {
-    // Get current subtotal from popup
-    const subtotalElement = document.querySelector('#cart-popup-overlay .space-y-2 .flex.justify-between span:last-child');
-    if (subtotalElement) {
-        const subtotal = parseFloat(subtotalElement.textContent.replace('$', ''));
-        const newTotal = subtotal + newShipping;
-        
-        // Update total
-        const totalElement = document.querySelector('#cart-popup-overlay .border-t.pt-3 span:last-child');
-        if (totalElement) {
-            totalElement.textContent = '$' + newTotal.toFixed(2);
+    // Get current subtotal from popup - look for the subtotal line specifically
+    const subtotalElements = document.querySelectorAll('#cart-popup-overlay .space-y-2 .flex.justify-between');
+    let subtotal = 0;
+    
+    // Find the subtotal element (should be the first one with "items" text)
+    subtotalElements.forEach(element => {
+        const text = element.textContent;
+        if (text.includes('items')) {
+            const subtotalSpan = element.querySelector('span:last-child');
+            if (subtotalSpan) {
+                subtotal = parseFloat(subtotalSpan.textContent.replace('$', '').replace(',', '')) || 0;
+                console.log('Found subtotal:', subtotal);
+            }
         }
+    });
+    
+    // Calculate new total
+    const newTotal = subtotal + newShipping;
+    console.log('Calculating new total:', subtotal, '+', newShipping, '=', newTotal);
+    
+    // Update total display
+    const totalElement = document.querySelector('#cart-popup-overlay .border-t.pt-3 span:last-child');
+    if (totalElement) {
+        totalElement.textContent = '$' + newTotal.toFixed(2);
+        console.log('Updated total to:', '$' + newTotal.toFixed(2));
+    } else {
+        console.error('Total element not found');
     }
 }
 

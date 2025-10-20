@@ -719,33 +719,64 @@ function closeBulkDeleteModal() {
     }, 200);
 }
 
-function submitBulkDelete() {
+async function submitBulkDelete() {
     const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
     const productIds = Array.from(checkedBoxes).map(cb => cb.value);
     
-    // Create form and submit
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '{{ route("admin.products.bulk-delete") }}';
+    if (productIds.length === 0) {
+        alert('Please select products to delete.');
+        return;
+    }
     
-    // Add CSRF token
-    const csrfToken = document.createElement('input');
-    csrfToken.type = 'hidden';
-    csrfToken.name = '_token';
-    csrfToken.value = '{{ csrf_token() }}';
-    form.appendChild(csrfToken);
+    // Show loading state
+    const submitBtn = document.querySelector('#bulkDeleteModal button[onclick="submitBulkDelete()"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Deleting...';
     
-    // Add product IDs
-    productIds.forEach(id => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'product_ids[]';
-        input.value = id;
-        form.appendChild(input);
-    });
-    
-    document.body.appendChild(form);
-    form.submit();
+    try {
+        // Use fetch API instead of form submission to avoid browser security warning
+        const response = await fetch('{{ route("admin.products.bulk-delete") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                product_ids: productIds
+            })
+        });
+        
+        let data;
+        try {
+            data = await response.json();
+        } catch (parseError) {
+            // If response is not JSON, handle as error
+            throw new Error('Invalid response from server');
+        }
+        
+        if (response.ok && data.success) {
+            // Show success message
+            if (data.message) {
+                alert(data.message);
+            }
+            
+            // Close modal and reload page
+            closeBulkDeleteModal();
+            window.location.reload();
+        } else {
+            // Show error message
+            alert(data.message || data.error || 'An error occurred while deleting products.');
+        }
+    } catch (error) {
+        console.error('Bulk delete error:', error);
+        alert('An error occurred while deleting products. Please try again.');
+    } finally {
+        // Reset button state
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
 }
 
 function showNoSelectionModal() {
