@@ -93,7 +93,7 @@
                         <!-- Cart -->
                         <a href="{{ route('cart.index') }}" class="relative p-2 md:p-3 text-gray-600 hover:text-[#E2150C] transition rounded-lg hover:bg-gray-50">
                             <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 11-4 0v-6m4 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
                             </svg>
                             <span id="mobile-cart-count" class="cart-count absolute -top-1 -right-1 bg-[#E2150C] text-white text-xs rounded-full w-4 h-4 md:w-5 md:h-5 flex items-center justify-center font-semibold" style="display: none;">0</span>
                         </a>
@@ -206,7 +206,7 @@
                     <!-- Cart -->
                     <a href="{{ route('cart.index') }}" class="relative p-3 text-gray-600 hover:text-[#E2150C] transition-colors group">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 11-4 0v-6m4 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
                         </svg>
                         <span id="desktop-cart-count" class="cart-count absolute -top-1 -right-1 bg-[#E2150C] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold" style="display: none;">0</span>
                         <span id="cart-tooltip" class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg">
@@ -410,28 +410,22 @@
                                 </button>
                                 <div id="help-content" class="hidden px-4 pb-3">
                                     @php
-                                        $mobileImportantPagesData = [
-                                            'faq' => ['title' => 'FAQ'],
-                                            'how-to-order' => ['title' => 'How to Order'],
-                                            'size-guide' => ['title' => 'Size Guide'],
-                                            'customization-guide' => ['title' => 'Customization Guide'],
-                                            'support-center' => ['title' => 'Support Center'],
-                                            'shipping-returns' => ['title' => 'Shipping & Returns']
-                                        ];
-                                        
-                                        $mobileHelpPages = \App\Models\Page::where('status', 'published')
-                                            ->whereIn('slug', array_keys($mobileImportantPagesData))
+                                        // Get important pages from database (from PageSeeder) for mobile
+                                        $mobileImportantPages = \App\Models\Page::where('status', 'published')
+                                            ->whereIn('slug', [
+                                                'faqs', 'about-us', 'privacy-policy', 'terms-of-service', 
+                                                'contact-us', 'refund-policy', 'returns-exchanges-policy'
+                                            ])
                                             ->orderBy('sort_order')
-                                            ->get()
-                                            ->keyBy('slug');
+                                            ->get();
                                     @endphp
                                     
-                                    @foreach($mobileImportantPagesData as $slug => $defaultData)
+                                    @foreach($mobileImportantPages as $page)
                                         @php
-                                            $page = $mobileHelpPages->get($slug);
-                                            $title = $page ? $page->title : $defaultData['title'];
+                                            $title = $page->title;
+                                            $url = '/page/' . $page->slug;
                                         @endphp
-                                        <a href="{{ route('pages.show', $slug) }}" class="flex items-center px-3 py-2 text-sm text-gray-600 hover:text-[#005366] hover:bg-gray-50 rounded-lg transition">
+                                        <a href="{{ $url }}" class="flex items-center px-3 py-2 text-sm text-gray-600 hover:text-[#005366] hover:bg-gray-50 rounded-lg transition">
                                             <div class="w-2 h-2 bg-[#005366] rounded-full mr-3"></div>
                                             {{ $title }}
                                         </a>
@@ -623,51 +617,61 @@
                                 <h3 class="text-sm font-semibold text-gray-900 mb-3">Help & Support</h3>
                                 <div class="grid grid-cols-1 gap-2">
                                     @php
-                                        $importantPagesData = [
-                                            'faq' => ['title' => 'FAQ', 'excerpt' => 'Frequently Asked Questions'],
-                                            'how-to-order' => ['title' => 'How to Order', 'excerpt' => 'Step-by-step ordering guide'],
-                                            'size-guide' => ['title' => 'Size Guide', 'excerpt' => 'Find your perfect fit'],
-                                            'customization-guide' => ['title' => 'Customization Guide', 'excerpt' => 'How to customize products'],
-                                            'support-center' => ['title' => 'Support Center', 'excerpt' => 'Get help and support'],
-                                            'shipping-returns' => ['title' => 'Shipping & Returns', 'excerpt' => 'Shipping info and return policy']
-                                        ];
-                                        
-                                        $helpPages = \App\Models\Page::where('status', 'published')
-                                            ->whereIn('slug', array_keys($importantPagesData))
+                                        // Get important pages from database (from PageSeeder)
+                                        $importantPages = \App\Models\Page::where('status', 'published')
+                                            ->whereIn('slug', [
+                                                'faqs', 'about-us', 'privacy-policy', 'terms-of-service', 
+                                                'contact-us', 'refund-policy', 'returns-exchanges-policy'
+                                            ])
                                             ->orderBy('sort_order')
-                                            ->get()
-                                            ->keyBy('slug');
+                                            ->get();
+                                        
+                                        // Fallback data if page doesn't exist
+                                        $fallbackPages = [
+                                            'faqs' => ['title' => 'FAQ', 'excerpt' => 'Frequently Asked Questions'],
+                                            'about-us' => ['title' => 'About Us', 'excerpt' => 'Learn more about our company'],
+                                            'privacy-policy' => ['title' => 'Privacy Policy', 'excerpt' => 'How we protect your data'],
+                                            'terms-of-service' => ['title' => 'Terms of Service', 'excerpt' => 'Terms and conditions'],
+                                            'contact-us' => ['title' => 'Contact Us', 'excerpt' => 'Get in touch with us'],
+                                            'refund-policy' => ['title' => 'Refund Policy', 'excerpt' => 'Our refund policy'],
+                                            'returns-exchanges-policy' => ['title' => 'Returns & Exchanges', 'excerpt' => 'Return and exchange policy']
+                                        ];
                                     @endphp
                                     
-                                    @foreach($importantPagesData as $slug => $defaultData)
+                                    @foreach($importantPages as $page)
                                         @php
-                                            $page = $helpPages->get($slug);
-                                            $title = $page ? $page->title : $defaultData['title'];
-                                            $excerpt = $page ? $page->excerpt : $defaultData['excerpt'];
+                                            $slug = $page->slug;
+                                            $title = $page->title;
+                                            $excerpt = $page->excerpt ?? ($fallbackPages[$slug]['excerpt'] ?? '');
+                                            $url = '/page/' . $page->slug;
                                         @endphp
-                                        <a href="{{ route('pages.show', $slug) }}" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition group/item">
+                                        <a href="{{ $url }}" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition group/item">
                                             <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-[#005366] to-[#003d4d]">
-                                                @if($slug === 'faq')
+                                                @if($slug === 'faqs')
                                                     <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                                     </svg>
-                                                @elseif($slug === 'how-to-order')
+                                                @elseif($slug === 'about-us')
                                                     <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                                     </svg>
-                                                @elseif($slug === 'size-guide')
+                                                @elseif($slug === 'privacy-policy')
                                                     <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
                                                     </svg>
-                                                @elseif($slug === 'customization-guide')
+                                                @elseif($slug === 'terms-of-service')
                                                     <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z"></path>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                                     </svg>
-                                                @elseif($slug === 'support-center')
+                                                @elseif($slug === 'contact-us')
                                                     <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192L5.636 18.364M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5z"></path>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                                                     </svg>
-                                                @elseif($slug === 'shipping-returns')
+                                                @elseif($slug === 'refund-policy')
+                                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                                                    </svg>
+                                                @elseif($slug === 'returns-exchanges-policy')
                                                     <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
                                                     </svg>

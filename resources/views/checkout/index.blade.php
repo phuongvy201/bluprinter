@@ -120,40 +120,33 @@
         @apply block text-sm font-medium text-gray-700 mb-2;
     }
 
-    .payment-card {
-        @apply p-4 border-2 border-gray-200 cursor-pointer transition-all duration-300 hover:border-blue-500 hover:shadow-lg;
-        border-radius: 16px;
+    /* Payment option styling for new radio button interface */
+    .payment-option {
+        transition: all 0.3s ease;
     }
 
-    .payment-card.selected {
+    .payment-option:hover {
+        @apply border-blue-500 shadow-lg;
+    }
+
+    /* Radio button checked state styling - using sibling selector */
+    input[type="radio"]:checked + * {
         @apply border-blue-500 bg-blue-50;
-        border-radius: 16px;
     }
 
-    .payment-card.selected .w-2.h-2 {
-        @apply opacity-100 bg-blue-500;
+    /* Style the label when radio is checked */
+    label.payment-option:has(input[type="radio"]:checked) {
+        @apply border-blue-500 bg-blue-50;
     }
 
-    .payment-card.selected svg.text-green-500 {
-        @apply opacity-100;
+    /* Fallback for browsers that don't support :has() */
+    .payment-option input[type="radio"]:checked {
+        @apply text-blue-600 border-blue-600;
     }
-
-    /* Custom radio button styling */
-    .payment-card.selected .flex-shrink-0 {
-        @apply border-blue-500 bg-blue-500;
-    }
-
-    .payment-card.selected .flex-shrink-0 .w-2.h-2 {
-        @apply opacity-100 bg-white;
-    }
-
-    /* More specific selectors for radio button states */
-    .payment-card.selected > div > div.flex-shrink-0 {
-        @apply border-blue-500 bg-blue-500;
-    }
-
-    .payment-card.selected > div > div.flex-shrink-0 > div.w-2.h-2 {
-        @apply opacity-100 bg-white;
+    
+    /* Alternative approach using JavaScript classes */
+    .payment-option.selected {
+        @apply border-blue-500 bg-blue-50;
     }
 
     .checkout-btn {
@@ -517,69 +510,77 @@
                                 </div>
                                 <h3 class="text-lg font-bold text-gray-800">Payment Method</h3>
                             </div>
-                            <div class="space-y-3">
-                                <label class="payment-card group">
-                                    <input type="radio" name="payment_method" value="paypal" class="hidden">
-                                    <div class="flex items-center">
-                                        <div class="flex-shrink-0 w-5 h-5 border-2 border-gray-300 rounded-full mr-4 flex items-center justify-center group-hover:border-blue-500 transition-all duration-200">
-                                            <div class="w-2 h-2 bg-blue-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                        </div>
+                            <div class="space-y-4">
+                                <!-- LianLian Pay -->
+                                <div class="relative">
+                                    <label for="payment_lianlian" class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all duration-300 payment-option">
+                                        <input type="radio" id="payment_lianlian" name="payment_method" value="lianlian_pay" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mr-4" checked>
                                         <div class="flex items-center flex-1">
-                                            <div class="bg-blue-600 rounded-lg p-2 mr-4">
-                                                <img src="https://www.paypalobjects.com/webstatic/icon/pp258.png" 
-                                                     alt="PayPal" class="h-6 w-6">
-                                            </div>
-                                            <div>
-                                                <span class="font-semibold text-gray-900">PayPal</span>
-                                                <p class="text-sm text-gray-600">Safe & secure payment</p>
-                                            </div>
-                                        </div>
-                                        <svg class="w-5 h-5 text-green-500 opacity-0 transition-opacity duration-200" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                        </svg>
-                                    </div>
-                                </label>
-                                
-                                <label class="payment-card group">
-                                    <input type="radio" name="payment_method" value="lianlian_pay" class="hidden">
-                                    <div class="flex items-center">
-                                        <div class="flex-shrink-0 w-5 h-5 border-2 border-gray-300 rounded-full mr-4 flex items-center justify-center group-hover:border-blue-500 transition-all duration-200">
-                                            <div class="w-2 h-2 bg-blue-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                        </div>
-                                        <div class="flex items-center flex-1">
-                                            <div class="bg-gradient-to-r from-orange-500 to-red-500 rounded-lg p-2 mr-4">
-                                                <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                            <div class="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-3 mr-4 shadow-md">
+                                                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                                                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                                                 </svg>
                                             </div>
-                                            <div>
-                                                <span class="font-semibold text-gray-900">LianLian Pay</span>
-                                                <p class="text-sm text-gray-600">Credit Card & Digital Wallet</p>
+                                            <div class="flex-1">
+                                                <div class="flex items-center space-x-2">
+                                                    <span class="font-bold text-gray-900 text-lg">LianLian Pay</span>
+                                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">RECOMMENDED</span>
+                                                </div>
+                                                <p class="text-sm text-gray-600 mt-1">Credit Card & Digital Wallet with 3D Secure</p>
+                                                <div class="flex items-center mt-2 text-xs text-blue-600">
+                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                    <span>3DS authentication may be required</span>
+                                                </div>
                                             </div>
                                         </div>
-                                        <svg class="w-5 h-5 text-green-500 opacity-0 transition-opacity duration-200" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                        </svg>
-                                    </div>
-                                </label>
-                                
-                                <label class="payment-card opacity-50 cursor-not-allowed">
-                                    <input type="radio" name="payment_method" value="stripe" class="hidden" disabled>
-                                    <div class="flex items-center">
-                                        <div class="flex-shrink-0 w-5 h-5 border-2 border-gray-300 rounded-full mr-4"></div>
+                                    </label>
+                                </div>
+
+                                <!-- PayPal -->
+                                <div class="relative">
+                                    <label for="payment_paypal" class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all duration-300 payment-option">
+                                        <input type="radio" id="payment_paypal" name="payment_method" value="paypal" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mr-4">
                                         <div class="flex items-center flex-1">
-                                            <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-2 mr-4">
-                                                <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                            <div class="bg-blue-600 rounded-xl p-3 mr-4 shadow-md">
+                                                <img src="https://www.paypalobjects.com/webstatic/icon/pp258.png" 
+                                                     alt="PayPal" class="h-8 w-8">
+                                            </div>
+                                            <div class="flex-1">
+                                                <span class="font-bold text-gray-900 text-lg">PayPal</span>
+                                                <p class="text-sm text-gray-600 mt-1">Safe & secure payment platform</p>
+                                                <div class="flex items-center mt-2 text-xs text-green-600">
+                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                    <span>Fast and reliable checkout</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                                
+                                <!-- Stripe - Disabled -->
+                                <div class="relative opacity-50">
+                                    <label class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-not-allowed payment-option">
+                                        <input type="radio" name="payment_method" value="stripe" class="w-5 h-5 text-gray-400 border-gray-300 mr-4" disabled>
+                                        <div class="flex items-center flex-1">
+                                            <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-3 mr-4 shadow-md">
+                                                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                                                     <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.274 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.386-2.061 1.386-1.705 0-3.888-.921-5.811-1.758L4.443 24c2.254.893 5.18 1.758 7.83 1.758 2.532 0 4.633-.624 6.123-1.844 1.543-1.271 2.346-3.116 2.346-5.342 0-3.896-2.467-5.76-6.476-7.219z"/>
                                                 </svg>
                                             </div>
-                                            <div>
-                                                <span class="font-semibold text-gray-900">Credit Card (Stripe)</span>
-                                                <p class="text-sm text-gray-600">Coming soon</p>
+                                            <div class="flex-1">
+                                                <div class="flex items-center space-x-2">
+                                                    <span class="font-bold text-gray-900 text-lg">Credit Card (Stripe)</span>
+                                                    <span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">COMING SOON</span>
+                                                </div>
+                                                <p class="text-sm text-gray-600 mt-1">Direct credit card processing</p>
                                             </div>
                                         </div>
-                                    </div>
-                                </label>
+                                    </label>
+                                </div>
                             </div>
                             @error('payment_method')
                                 <p class="text-red-500 text-sm mt-2">{{ $message }}</p>
@@ -612,39 +613,76 @@
                         </div>
 
                         <!-- LianLian Pay Info (Redirects to separate page) -->
-                        <div id="lianlian-pay-info" class="hidden mt-6 p-6 border-2 border-blue-200 rounded-lg bg-blue-50">
+                        <div id="lianlian-pay-info" class="hidden mt-6 p-6 border-2 border-orange-200 rounded-xl bg-gradient-to-r from-orange-50 to-red-50">
                             <div class="flex items-start">
                                 <div class="flex-shrink-0">
-                                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
+                                    <div class="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
+                                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                        </svg>
+                                    </div>
                                 </div>
-                                <div class="ml-3">
-                                    <h4 class="font-semibold text-blue-900 mb-2">Secure Card Payment</h4>
-                                    <p class="text-blue-800 text-sm mb-3">
-                                        You will be redirected to our secure payment page to enter your card details.
+                                <div class="ml-4 flex-1">
+                                    <h4 class="font-bold text-orange-900 mb-2 text-lg">🛡️ LianLian Pay Security Notice</h4>
+                                    <p class="text-orange-800 text-sm mb-4">
+                                        You will be redirected to our secure payment page where <strong>3D Secure (3DS) authentication</strong> may be required for additional security.
                                     </p>
-                                    <ul class="text-blue-700 text-sm space-y-1">
-                                        <li class="flex items-center">
+                                    
+                                    <div class="bg-white/60 rounded-lg p-4 mb-4">
+                                        <div class="flex items-center mb-3">
+                                            <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center mr-3">
+                                                <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h5 class="font-semibold text-orange-900">3DS Authentication Process:</h5>
+                                                <p class="text-sm text-orange-700">Your bank may request additional verification</p>
+                                            </div>
+                                        </div>
+                                        <ul class="text-orange-700 text-sm space-y-2 ml-11">
+                                            <li class="flex items-center">
+                                                <svg class="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                SMS or mobile app verification
+                                            </li>
+                                            <li class="flex items-center">
+                                                <svg class="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                Secure PIN or biometric authentication
+                                            </li>
+                                            <li class="flex items-center">
+                                                <svg class="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                Automatic redirect back after verification
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                        <div class="flex items-center text-orange-700">
                                             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                                             </svg>
                                             256-bit SSL encryption
-                                        </li>
-                                        <li class="flex items-center">
+                                        </div>
+                                        <div class="flex items-center text-orange-700">
                                             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                                             </svg>
                                             PCI-DSS compliant
-                                        </li>
-                                        <li class="flex items-center">
+                                        </div>
+                                        <div class="flex items-center text-orange-700">
                                             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                                             </svg>
-                                            Supports VISA, MasterCard, AMEX
-                                        </li>
-                                    </ul>
-                            </div>
+                                            VISA, MasterCard, AMEX
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -798,6 +836,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📅 DOM Content Loaded at:', new Date().toISOString());
+    console.log('📱 User Agent:', navigator.userAgent);
+    console.log('📱 Is Mobile:', /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    console.log('🔒 Current protocol:', window.location.protocol);
+    console.log('🔒 Current origin:', window.location.origin);
+    console.log('🔒 Full URL:', window.location.href);
+    
     const form = document.getElementById('checkout-form');
     
     // Check if form exists
@@ -806,85 +850,66 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
+    console.log('✅ Checkout form found and ready');
+    
     const submitBtn = form.querySelector('button[type="submit"]');
-    const paymentCards = document.querySelectorAll('.payment-card');
+    const paymentOptions = document.querySelectorAll('.payment-option');
     
     // LianLian Pay integration
     let isRedirecting3DS = false;
     
-    // Payment method selection
-    paymentCards.forEach(card => {
-        card.addEventListener('click', function() {
-            if (this.classList.contains('cursor-not-allowed')) return;
-            
-            // Remove selected class from all cards and reset radio buttons
-            paymentCards.forEach(c => {
-                c.classList.remove('selected');
-                const radioButton = c.querySelector('.flex-shrink-0');
-                const radioDot = c.querySelector('.w-2.h-2');
-                if (radioButton) {
-                    radioButton.classList.remove('border-blue-500', 'bg-blue-500');
-                    radioButton.classList.add('border-gray-300');
-                }
-                if (radioDot) {
-                    radioDot.classList.add('opacity-0');
-                    radioDot.classList.remove('opacity-100', 'bg-white');
-                    radioDot.classList.add('bg-blue-500');
-                }
-            });
-            
-            // Add selected class to clicked card
-            this.classList.add('selected');
-            
-            const radio = this.querySelector('input[type="radio"]');
-            if (radio) radio.checked = true;
-            
-            // Apply selected styling to current card
-            const radioButton = this.querySelector('.flex-shrink-0');
-            const radioDot = this.querySelector('.w-2.h-2');
-            if (radioButton) {
-                radioButton.classList.add('border-blue-500', 'bg-blue-500');
-                radioButton.classList.remove('border-gray-300');
+    // Payment method change handler
+    const handlePaymentMethodChange = function() {
+        const selectedRadio = document.querySelector('input[name="payment_method"]:checked');
+        const lianLianInfo = document.getElementById('lianlian-pay-info');
+        
+        // Remove selected class from all payment options
+        paymentOptions.forEach(option => {
+            option.classList.remove('selected');
+        });
+        
+        // Add selected class to the parent label of checked radio
+        if (selectedRadio) {
+            const label = selectedRadio.closest('.payment-option');
+            if (label) {
+                label.classList.add('selected');
             }
-            if (radioDot) {
-                radioDot.classList.remove('opacity-0', 'bg-blue-500');
-                radioDot.classList.add('opacity-100', 'bg-white');
-            }
-            
-            console.log('💳 Payment method selected:', radio.value);
-            
-            // Show/hide LianLian Pay info
-            const lianLianInfo = document.getElementById('lianlian-pay-info');
-            if (radio && radio.value === 'lianlian_pay') {
-                console.log('🔧 LianLian Pay selected - showing info');
+        }
+        
+        console.log('💳 Payment method changed:', selectedRadio ? selectedRadio.value : 'none');
+        
+        if (selectedRadio && selectedRadio.value === 'lianlian_pay') {
+            console.log('🔧 LianLian Pay selected - showing info');
+            if (lianLianInfo) {
                 lianLianInfo.classList.remove('hidden');
-            } else {
-                console.log('🔧 Hiding LianLian Pay info...');
+            }
+        } else {
+            console.log('🔧 Hiding LianLian Pay info...');
+            if (lianLianInfo) {
                 lianLianInfo.classList.add('hidden');
             }
-        });
+        }
+    };
+
+    // Listen for radio button changes
+    document.addEventListener('change', function(e) {
+        if (e.target.name === 'payment_method' && e.target.type === 'radio') {
+            console.log('💳 Radio button changed:', e.target.value, 'checked:', e.target.checked);
+            handlePaymentMethodChange();
+        }
     });
     
-    // Set default selection to PayPal
-    const defaultPaymentCard = document.querySelector('input[value="paypal"]');
-    if (defaultPaymentCard) {
-        defaultPaymentCard.checked = true;
-        const card = defaultPaymentCard.closest('.payment-card');
-        card.classList.add('selected');
+    // Set default selection to LianLian Pay
+    const defaultPaymentRadio = document.querySelector('input[value="lianlian_pay"]');
+    if (defaultPaymentRadio) {
+        console.log('🎯 Setting default to LianLian Pay');
+        // Ensure it's checked
+        defaultPaymentRadio.checked = true;
         
-        // Apply selected styling to default card
-        const radioButton = card.querySelector('.flex-shrink-0');
-        const radioDot = card.querySelector('.w-2.h-2');
-        if (radioButton) {
-            radioButton.classList.add('border-blue-500', 'bg-blue-500');
-            radioButton.classList.remove('border-gray-300');
-        }
-        if (radioDot) {
-            radioDot.classList.remove('opacity-0', 'bg-blue-500');
-            radioDot.classList.add('opacity-100', 'bg-white');
-        }
+        // Show LianLian Pay info since it's the default
+        handlePaymentMethodChange();
         
-        console.log('✅ Default payment method set to PayPal');
+        console.log('✅ Default payment method set to LianLian Pay');
     }
     
     
@@ -892,7 +917,31 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', function(e) {
         e.preventDefault();
         
-        const selectedPaymentMethod = form.querySelector('input[name="payment_method"]:checked').value;
+        // Check if payment method is selected
+        const selectedPaymentRadio = form.querySelector('input[name="payment_method"]:checked');
+        if (!selectedPaymentRadio) {
+            showToast('error', 'Payment Error', 'Please select a payment method');
+            return;
+        }
+        
+        const selectedPaymentMethod = selectedPaymentRadio.value;
+        console.log('💳 Selected payment method:', selectedPaymentMethod);
+        
+        // Validate form data before proceeding
+        const requiredFields = ['customer_name', 'customer_email', 'shipping_address', 'city', 'postal_code', 'country'];
+        const missingFields = [];
+        
+        requiredFields.forEach(fieldName => {
+            const field = form.querySelector(`[name="${fieldName}"]`);
+            if (!field || !field.value.trim()) {
+                missingFields.push(fieldName);
+            }
+        });
+        
+        if (missingFields.length > 0) {
+            showToast('error', 'Form Error', 'Please fill in all required fields: ' + missingFields.join(', '));
+            return;
+        }
         
         if (selectedPaymentMethod === 'lianlian_pay') {
             handleLianLianRedirect();
@@ -919,16 +968,23 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('✅ Form element is valid:', checkoutForm instanceof HTMLFormElement);
             
-            // Get token first
+            // Get token first - ensure HTTPS protocol
             console.log('📡 Fetching token for LianLian Pay...');
-            // Use relative URL to avoid Mixed Content issues when running on HTTPS
-            const tokenResponse = await fetch('/payment/lianlian/token', {
+            console.log('📡 Current location:', window.location.href);
+            
+            // Ensure we use the same protocol as current page
+            const tokenUrl = new URL('/payment/lianlian/token', window.location.origin);
+            console.log('📡 Token URL:', tokenUrl.toString());
+            
+            const tokenResponse = await fetch(tokenUrl.toString(), {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}'
                 },
-                credentials: 'same-origin'
+                credentials: 'same-origin',
+                mode: 'same-origin' // Explicitly set same-origin mode
             });
             console.log('📡 Token response status:', tokenResponse.status);
             
@@ -946,63 +1002,52 @@ document.addEventListener('DOMContentLoaded', function() {
             const token = tokenData.token;
             console.log('✅ Token received:', token);
             
-            // Get form data for order creation
+            // Get form data for order creation - improved for mobile compatibility
             console.log('📝 Creating FormData from form...');
             
-            let formData;
-            try {
-                formData = new FormData(checkoutForm);
-                console.log('✅ FormData created successfully with form element');
-        } catch (error) {
-                console.warn('⚠️ FormData creation failed, trying alternative method:', error);
-                // Alternative method: create FormData manually
-                formData = new FormData();
-                const formElements = checkoutForm.elements;
-                for (let i = 0; i < formElements.length; i++) {
-                    const element = formElements[i];
-                    if (element.name && element.value) {
-                        formData.append(element.name, element.value);
-                    }
-                }
-                console.log('✅ FormData created successfully with manual method');
-            }
-            
+            // Create order data directly from form inputs for better mobile compatibility
             const orderData = {
-                    customer_name: formData.get('customer_name'),
-                    customer_email: formData.get('customer_email'),
-                    customer_phone: formData.get('customer_phone'),
-                    shipping_address: formData.get('shipping_address'),
-                    city: formData.get('city'),
-                    state: formData.get('state'),
-                    postal_code: formData.get('postal_code'),
-                    country: formData.get('country'),
-                    payment_method: 'lianlian_pay',
-                    notes: formData.get('notes'),
-                };
+                customer_name: checkoutForm.querySelector('[name="customer_name"]')?.value?.trim() || '',
+                customer_email: checkoutForm.querySelector('[name="customer_email"]')?.value?.trim() || '',
+                customer_phone: checkoutForm.querySelector('[name="customer_phone"]')?.value?.trim() || '',
+                shipping_address: checkoutForm.querySelector('[name="shipping_address"]')?.value?.trim() || '',
+                city: checkoutForm.querySelector('[name="city"]')?.value?.trim() || '',
+                state: checkoutForm.querySelector('[name="state"]')?.value?.trim() || '',
+                postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
+                country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
+                payment_method: 'lianlian_pay',
+                notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
+            };
+            
+            // Validate order data
+            const requiredFields = ['customer_name', 'customer_email', 'shipping_address', 'city', 'postal_code', 'country'];
+            const missingFields = requiredFields.filter(field => !orderData[field]);
+            
+            if (missingFields.length > 0) {
+                throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+            }
                 
             console.log('📦 Order data to send:', orderData);
                 
             // Create order first
             console.log('📦 Creating order...');
             
-            // Create FormData properly
-                const formDataToSend = new FormData();
-            Object.keys(orderData).forEach(key => {
-                if (orderData[key] !== null && orderData[key] !== undefined) {
-                    formDataToSend.append(key, orderData[key]);
-                }
-            });
+            // Send as JSON for better mobile compatibility - ensure HTTPS
+            const checkoutUrl = new URL('/checkout/process', window.location.origin);
+            console.log('📦 Order URL:', checkoutUrl.toString());
             
-            const orderResponse = await fetch('/checkout/process', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: formDataToSend,
-                    credentials: 'same-origin'
-                });
+            const orderResponse = await fetch(checkoutUrl.toString(), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(orderData),
+                credentials: 'same-origin',
+                mode: 'same-origin' // Explicitly set same-origin mode
+            });
                 
             console.log('📦 Order response status:', orderResponse.status);
             
@@ -1019,13 +1064,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(orderResult.message || 'Failed to create order');
             }
             
-            // Redirect to LianLian Pay page using relative URL to maintain HTTPS
-            const paymentUrl = new URL('/payment/lianlian/payment', window.location.href);
+            // Redirect to LianLian Pay page - ensure HTTPS protocol
+            const paymentUrl = new URL('/payment/lianlian/payment', window.location.origin);
             paymentUrl.searchParams.set('token', token);
             paymentUrl.searchParams.set('order_id', orderResult.order_id);
             paymentUrl.searchParams.set('amount', '{{ $total }}');
             
-            console.log('🔄 Redirecting to LianLian Pay page:', paymentUrl.toString());
+            console.log('🔄 Current origin:', window.location.origin);
+            console.log('🔄 Payment URL will be:', paymentUrl.toString());
+            console.log('🔄 Protocol check - Current:', window.location.protocol, 'Payment URL:', paymentUrl.protocol);
             
             showToast('info', 'Redirecting to Payment...', 'Please complete your payment on the secure page');
             
@@ -1035,31 +1082,61 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } catch (error) {
             console.error('❌ LianLian Pay redirect error:', error);
-            showToast('error', 'Payment Error', 'Failed to initialize payment: ' + error.message);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                userAgent: navigator.userAgent,
+                isNaN: navigator.userAgent.includes('Mobile') || navigator.userAgent.includes('Android') || navigator.userAgent.includes('iPhone')
+            });
+            
+            // Show more detailed error for mobile debugging
+            let errorMessage = 'Failed to initialize payment: ' + error.message;
+            if (error.message.includes('fetch')) {
+                errorMessage = 'Network error. Please check your connection and try again.';
+            } else if (error.message.includes('Failed to get payment token')) {
+                errorMessage = 'Payment service unavailable. Please try again later.';
+            }
+            
+            showToast('error', 'Payment Error', errorMessage);
             showLoading(false);
         }
     };
     
     
-    // Handle regular payment (PayPal)
-    const handleRegularPayment = () => {
-        // Disable submit button
-        submitBtn.disabled = true;
-        submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
-        submitBtn.innerHTML = `
-            <span class="flex items-center justify-center">
-                <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Processing...
-            </span>
-        `;
-        
-        // Submit form
-        setTimeout(() => {
-            form.submit();
-        }, 500);
+    // Handle regular payment (PayPal) - improved for mobile
+    const handleRegularPayment = async () => {
+        try {
+            console.log('🔄 Processing PayPal payment...');
+            showLoading(true);
+            
+            // Double-check form validation before submitting
+            const requiredFields = ['customer_name', 'customer_email', 'shipping_address', 'city', 'postal_code', 'country'];
+            const missingFields = [];
+            
+            requiredFields.forEach(fieldName => {
+                const field = form.querySelector(`[name="${fieldName}"]`);
+                if (!field || !field.value.trim()) {
+                    missingFields.push(fieldName);
+                }
+            });
+            
+            if (missingFields.length > 0) {
+                showLoading(false);
+                showToast('error', 'Form Error', 'Please fill in all required fields: ' + missingFields.join(', '));
+                return;
+            }
+            
+            // Submit form after validation
+            console.log('✅ Form validated, submitting to PayPal...');
+            setTimeout(() => {
+                form.submit();
+            }, 300);
+            
+        } catch (error) {
+            console.error('❌ PayPal payment error:', error);
+            showLoading(false);
+            showToast('error', 'Payment Error', 'Failed to process payment: ' + error.message);
+        }
     };
     
     // Handle 3DS redirect
@@ -1163,14 +1240,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             try {
-                const response = await fetch('{{ route('checkout.calculate-shipping') }}', {
+                // Ensure HTTPS for shipping calculation
+                const shippingUrl = new URL('{{ route('checkout.calculate-shipping') }}', window.location.origin);
+                console.log('🚚 Shipping calculation URL:', shippingUrl.toString());
+                
+                const response = await fetch(shippingUrl.toString(), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify({ country: country })
+                    body: JSON.stringify({ country: country }),
+                    credentials: 'same-origin',
+                    mode: 'same-origin'
                 });
                 
                 const data = await response.json();

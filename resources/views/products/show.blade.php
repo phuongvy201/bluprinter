@@ -3079,7 +3079,7 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
                         <div class="relative">
                             <select id="popupShippingCountry" class="text-sm border-2 border-gray-200 rounded-lg px-3 py-2 appearance-none bg-white pr-8 cursor-pointer hover:border-gray-300 focus:border-[#005366] focus:outline-none transition-colors min-w-[80px] [&::-ms-expand]:hidden [&::-webkit-appearance]:none">
                                 <option value="US">🇺🇸 US</option>
-                                <option value="GB">🇬🇧 UK</option>
+                                <option value="UK">🇺k UK</option>
                             </select>
                             <div class="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
                                 <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
