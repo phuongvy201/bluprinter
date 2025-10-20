@@ -5,6 +5,9 @@
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
+<!-- PayPal SDK -->
+<script src="https://www.paypal.com/sdk/js?client-id={{ config('services.paypal.client_id') }}&currency=USD&intent=capture&components=buttons"></script>
+
 @section('content')
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -230,6 +233,58 @@
 
     .order-summary-container {
         border-radius: 20px;
+    }
+
+    /* LianLian Pay iframe styles */
+    #llpay-card-element {
+        min-height: 280px;
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        background: white;
+        position: relative;
+        overflow: hidden;
+    }
+
+    #llpay-card-element iframe {
+        width: 100% !important;
+        height: 280px !important;
+        border: none !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 1000 !important;
+        background: white !important;
+    }
+
+    #lianlian-loading-placeholder {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        z-index: 999;
+    }
+
+    /* PayPal button styles */
+    #paypal-button-container {
+        min-height: 200px;
+        border-radius: 12px;
+        position: relative;
+    }
+
+    #paypal-button {
+        min-height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #paypal-button button {
+        border-radius: 8px !important;
+        min-height: 48px !important;
     }
 </style>
 
@@ -561,6 +616,24 @@
                                     </label>
                                 </div>
                                 
+                                <!-- PayPal Button Container -->
+                                <div id="paypal-button-container" class="hidden mt-4 p-6 border-2 border-blue-200 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50">
+                                    <div class="flex items-center mb-4">
+                                        <div class="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white mr-3">
+                                            <img src="https://www.paypalobjects.com/webstatic/icon/pp258.png" 
+                                                 alt="PayPal" class="h-6 w-6">
+                                        </div>
+                                        <h4 class="font-bold text-blue-900 text-lg">💳 PayPal Checkout</h4>
+                                    </div>
+                                    <!-- PayPal button will be rendered here -->
+                                    <div id="paypal-button" class="min-h-[120px] flex items-center justify-center">
+                                        <div class="text-center">
+                                            <div class="animate-spin w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full mx-auto mb-3"></div>
+                                            <p class="text-blue-600 text-sm">Loading PayPal...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <!-- Stripe - Disabled -->
                                 <div class="relative opacity-50">
                                     <label class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-not-allowed payment-option">
@@ -612,75 +685,43 @@
                             </div>
                         </div>
 
-                        <!-- LianLian Pay Info (Redirects to separate page) -->
+                        <!-- LianLian Pay iframe Integration -->
                         <div id="lianlian-pay-info" class="hidden mt-6 p-6 border-2 border-orange-200 rounded-xl bg-gradient-to-r from-orange-50 to-red-50">
-                            <div class="flex items-start">
-                                <div class="flex-shrink-0">
-                                    <div class="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
-                                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                                        </svg>
+                            <div class="flex items-center mb-4">
+                                <div class="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center mr-3">
+                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                    </svg>
+                                </div>
+                                <h4 class="font-bold text-orange-900 text-lg">💳 LianLian Pay Secure Checkout</h4>
+                            </div>
+                            
+                            <!-- Card Type Logos -->
+                            <div class="flex gap-3 mb-4 justify-center">
+                                <div class="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded text-white text-xs font-bold flex items-center justify-center">VISA</div>
+                                <div class="w-12 h-8 bg-gradient-to-r from-red-500 to-red-700 rounded text-white text-xs font-bold flex items-center justify-center">MC</div>
+                                <div class="w-12 h-8 bg-gradient-to-r from-blue-400 to-blue-600 rounded text-white text-xs font-bold flex items-center justify-center">AMEX</div>
+                            </div>
+
+                            <!-- LianLian Pay iframe Container -->
+                            <div id="llpay-card-element" class="min-h-[280px] border-2 border-gray-200 rounded-xl bg-white relative overflow-hidden">
+                                <div id="lianlian-loading-placeholder" class="absolute inset-0 flex items-center justify-center bg-gray-50">
+                                    <div class="text-center">
+                                        <div class="animate-spin w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full mx-auto mb-3"></div>
+                                        <p class="text-gray-600 text-sm">Loading secure payment form...</p>
                                     </div>
                                 </div>
-                                <div class="ml-4 flex-1">
-                                    <h4 class="font-bold text-orange-900 mb-2 text-lg">🛡️ LianLian Pay Security Notice</h4>
-                                    <p class="text-orange-800 text-sm mb-4">
-                                        You will be redirected to our secure payment page where <strong>3D Secure (3DS) authentication</strong> may be required for additional security.
-                                    </p>
-                                    
-                                    <div class="bg-white/60 rounded-lg p-4 mb-4">
-                                        <div class="flex items-center mb-3">
-                                            <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center mr-3">
-                                                <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                                                </svg>
-                                            </div>
-                                            <div>
-                                                <h5 class="font-semibold text-orange-900">3DS Authentication Process:</h5>
-                                                <p class="text-sm text-orange-700">Your bank may request additional verification</p>
-                                            </div>
-                                        </div>
-                                        <ul class="text-orange-700 text-sm space-y-2 ml-11">
-                                            <li class="flex items-center">
-                                                <svg class="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                                </svg>
-                                                SMS or mobile app verification
-                                            </li>
-                                            <li class="flex items-center">
-                                                <svg class="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                                </svg>
-                                                Secure PIN or biometric authentication
-                                            </li>
-                                            <li class="flex items-center">
-                                                <svg class="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                                </svg>
-                                                Automatic redirect back after verification
-                                            </li>
-                                        </ul>
-                                    </div>
-                                    
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                                        <div class="flex items-center text-orange-700">
-                                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                            </svg>
-                                            256-bit SSL encryption
-                                        </div>
-                                        <div class="flex items-center text-orange-700">
-                                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                            </svg>
-                                            PCI-DSS compliant
-                                        </div>
-                                        <div class="flex items-center text-orange-700">
-                                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                            </svg>
-                                            VISA, MasterCard, AMEX
-                                        </div>
+                            </div>
+
+                            <!-- Security Notice -->
+                            <div class="mt-4 p-3 bg-white/60 rounded-lg border border-orange-200">
+                                <div class="flex items-start">
+                                    <svg class="w-5 h-5 text-green-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <div class="text-sm text-orange-800">
+                                        <p class="font-semibold mb-1">🔒 Secure Payment</p>
+                                        <p>Your card information is encrypted with 256-bit SSL. 3D Secure authentication may be required for additional security.</p>
                                     </div>
                                 </div>
                             </div>
@@ -857,11 +898,508 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // LianLian Pay integration
     let isRedirecting3DS = false;
+    let lianLianCardInstance = null;
+    let iframeToken = null;
+    
+    // PayPal integration
+    let paypalButtonsInitialized = false;
+    let paypalSDKLoadAttempts = 0;
+    const MAX_PAYPAL_SDK_ATTEMPTS = 50; // 5 seconds max
+    
+    // Toast notification function
+    const showToast = (type, title, message) => {
+        Swal.fire({
+            icon: type,
+            title: title,
+            text: message,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 5000,
+            timerProgressBar: true
+        });
+    };
+    
+    // Loading state function
+    const showLoading = (loading) => {
+        if (loading) {
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
+            submitBtn.innerHTML = `
+                <span class="flex items-center justify-center">
+                    <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                </span>
+            `;
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+            submitBtn.innerHTML = `
+                <span class="flex items-center justify-center relative z-10">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                    Secure Checkout
+                    <svg class="w-6 h-6 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                    </svg>
+                </span>
+            `;
+        }
+    };
+    
+    // Initialize LianLian Pay iframe
+    const initializeLianLianIframe = async () => {
+        try {
+            console.log('🚀 Initializing LianLian Pay iframe...');
+            
+            // Get token first
+            const tokenUrl = new URL('/payment/lianlian/token', window.location.origin);
+            console.log('📡 Token URL:', tokenUrl.toString());
+            
+            const tokenResponse = await fetch(tokenUrl.toString(), {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}'
+                },
+                credentials: 'same-origin',
+                mode: 'same-origin'
+            });
+            
+            if (!tokenResponse.ok) {
+                throw new Error(`Token request failed: ${tokenResponse.status} ${tokenResponse.statusText}`);
+            }
+            
+            const tokenData = await tokenResponse.json();
+            console.log('🎫 Token response:', tokenData);
+            
+            if (!tokenData.success) {
+                throw new Error(tokenData.message || 'Failed to get payment token');
+            }
+            
+            iframeToken = tokenData.token;
+            console.log('✅ Token received:', iframeToken);
+            
+            // Load LianLian SDK
+            if (!window.LLP) {
+                const script = document.createElement('script');
+                script.src = 'https://secure-checkout.lianlianpay.com/v2/llpay.min.js';
+                script.async = true;
+                
+                await new Promise((resolve, reject) => {
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+                
+                if (!window.LLP) {
+                    throw new Error('LianLian Pay SDK failed to load');
+                }
+            }
+            
+            // Set language
+            window.LLP.setLanguage('en-US');
+            
+            // Create card element
+            const elements = window.LLP.elements();
+            lianLianCardInstance = elements.create('card', {
+                token: iframeToken,
+                style: {
+                    base: {
+                        backgroundColor: '#f8f8f8',
+                        borderColor: '#f1f1f1',
+                        color: '#bcbcbc',
+                        fontWeight: '400',
+                        fontFamily: 'Roboto, Open Sans, Segoe UI, sans-serif',
+                        fontSize: '14px',
+                        fontSmoothing: 'antialiased',
+                        floatLabelSize: '12px',
+                        floatLabelColor: '#333333',
+                        floatLabelWeight: '100',
+                    },
+                },
+                merchantUrl: window.location.origin,
+            });
+            
+            // Mount the card
+            lianLianCardInstance.mount('#llpay-card-element');
+            
+            // Hide loading placeholder after mount
+            setTimeout(() => {
+                const loadingPlaceholder = document.getElementById('lianlian-loading-placeholder');
+                if (loadingPlaceholder) {
+                    loadingPlaceholder.style.display = 'none';
+                }
+                console.log('✅ LianLian Pay iframe initialized successfully');
+            }, 2000);
+            
+        } catch (error) {
+            console.error('❌ LianLian Pay iframe initialization error:', error);
+            showToast('error', 'Payment Error', 'Failed to initialize payment form: ' + error.message);
+            
+            // Show error in iframe container
+            const iframeContainer = document.getElementById('llpay-card-element');
+            if (iframeContainer) {
+                iframeContainer.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-red-500">
+                        <div class="text-center">
+                            <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <p class="text-sm">Failed to load payment form</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    };
+    
+    // Initialize PayPal buttons
+    const initializePayPalButtons = async () => {
+        try {
+            console.log('🚀 Initializing PayPal buttons...');
+            
+            if (paypalButtonsInitialized) {
+                console.log('⚠️ PayPal buttons already initialized');
+                return;
+            }
+            
+            if (!window.paypal) {
+                console.error('❌ PayPal SDK not loaded. Cannot initialize buttons.');
+                showToast('error', 'PayPal Error', 'PayPal SDK is not loaded. Please refresh the page and try again.');
+                return;
+            }
+            
+            const paypalButtonContainer = document.getElementById('paypal-button');
+            if (!paypalButtonContainer) {
+                console.error('❌ PayPal button container not found');
+                return;
+            }
+            
+            // Clear any existing content
+            paypalButtonContainer.innerHTML = '';
+            
+            // Calculate total amount
+            const subtotal = parseFloat('{{ $subtotal }}');
+            const tax = parseFloat('{{ $taxAmount }}');
+            const shipping = parseFloat('{{ $shippingCost }}');
+            const total = subtotal + tax + shipping;
+            
+            // Get order data from form
+            const checkoutForm = document.getElementById('checkout-form');
+            const orderData = {
+                customer_name: checkoutForm.querySelector('[name="customer_name"]')?.value?.trim() || '',
+                customer_email: checkoutForm.querySelector('[name="customer_email"]')?.value?.trim() || '',
+                customer_phone: checkoutForm.querySelector('[name="customer_phone"]')?.value?.trim() || '',
+                shipping_address: checkoutForm.querySelector('[name="shipping_address"]')?.value?.trim() || '',
+                city: checkoutForm.querySelector('[name="city"]')?.value?.trim() || '',
+                state: checkoutForm.querySelector('[name="state"]')?.value?.trim() || '',
+                postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
+                country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
+                notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
+            };
+            
+            // Render PayPal buttons
+            window.paypal.Buttons({
+                style: {
+                    color: 'blue',
+                    shape: 'rect',
+                    label: 'paypal',
+                    height: 48
+                },
+                
+                // Set up the transaction
+                createOrder: async function(data, actions) {
+                    console.log('📝 Creating PayPal order for SDK...');
+                    
+                    try {
+                        // Validate form data before creating PayPal order
+                        const checkoutForm = document.getElementById('checkout-form');
+                        const requiredFields = {
+                            customer_name: checkoutForm.querySelector('[name="customer_name"]')?.value?.trim() || '',
+                            customer_email: checkoutForm.querySelector('[name="customer_email"]')?.value?.trim() || '',
+                            shipping_address: checkoutForm.querySelector('[name="shipping_address"]')?.value?.trim() || '',
+                            city: checkoutForm.querySelector('[name="city"]')?.value?.trim() || '',
+                            postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
+                            country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || ''
+                        };
+                        
+                        // Check for missing required fields
+                        const missingFields = [];
+                        Object.entries(requiredFields).forEach(([field, value]) => {
+                            if (!value) {
+                                missingFields.push(field.replace('_', ' '));
+                            }
+                        });
+                        
+                        if (missingFields.length > 0) {
+                            showToast('error', 'Thiếu thông tin', 'Vui lòng điền đầy đủ thông tin: ' + missingFields.join(', '));
+                            throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+                        }
+                        
+                        // Validate email format
+                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (!emailRegex.test(requiredFields.customer_email)) {
+                            showToast('error', 'Email không hợp lệ', 'Vui lòng nhập địa chỉ email hợp lệ');
+                            throw new Error('Invalid email format');
+                        }
+                        
+                        console.log('✅ Form validation passed, creating PayPal order...');
+                        
+                        // Calculate total amount for PayPal
+                        const subtotal = parseFloat('{{ $subtotal }}');
+                        const tax = parseFloat('{{ $taxAmount }}');
+                        const shipping = parseFloat('{{ $shippingCost }}');
+                        const total = subtotal + tax + shipping;
+                        
+                        // Create order on PayPal side using actions.order.create()
+                        return actions.order.create({
+                            purchase_units: [{
+                                amount: {
+                                    value: total.toFixed(2),
+                                    currency_code: 'USD'
+                                },
+                                description: 'Order from Bluprinter',
+                                custom_id: 'order-' + Date.now()
+                            }]
+                        });
+                        
+                    } catch (error) {
+                        console.error('❌ Error creating PayPal order:', error);
+                        if (!error.message.includes('Missing required fields') && !error.message.includes('Invalid email')) {
+                            showToast('error', 'PayPal Error', 'Failed to create PayPal order: ' + error.message);
+                        }
+                        throw error;
+                    }
+                },
+                
+                // Finalize the transaction
+                onApprove: async function(data, actions) {
+                    console.log('✅ PayPal payment approved:', data);
+                    
+                    try {
+                        showLoading(true);
+                        
+                        // Capture the payment details
+                        const details = await actions.order.capture();
+                        console.log('💰 Payment captured:', details);
+                        
+                        // Get fresh order data from form at the time of approval
+                        const checkoutForm = document.getElementById('checkout-form');
+                        const currentOrderData = {
+                            customer_name: checkoutForm.querySelector('[name="customer_name"]')?.value?.trim() || '',
+                            customer_email: checkoutForm.querySelector('[name="customer_email"]')?.value?.trim() || '',
+                            customer_phone: checkoutForm.querySelector('[name="customer_phone"]')?.value?.trim() || '',
+                            shipping_address: checkoutForm.querySelector('[name="shipping_address"]')?.value?.trim() || '',
+                            city: checkoutForm.querySelector('[name="city"]')?.value?.trim() || '',
+                            state: checkoutForm.querySelector('[name="state"]')?.value?.trim() || '',
+                            postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
+                            country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
+                            notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
+                        };
+                        
+                        console.log('📋 Sending order data:', currentOrderData);
+                        
+                        // Validate required fields before sending
+                        const requiredFields = ['customer_name', 'customer_email', 'shipping_address', 'city', 'postal_code', 'country'];
+                        const missingFields = requiredFields.filter(field => !currentOrderData[field]);
+                        
+                        if (missingFields.length > 0) {
+                            throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+                        }
+                        
+                        // Now create order on our server and process with PayPal order ID
+                        const response = await fetch('{{ route("checkout.process") }}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                ...currentOrderData,
+                                payment_method: 'paypal',
+                                paypal_order_id: data.orderID,
+                                paypal_payer_id: data.payerID
+                            }),
+                            credentials: 'same-origin',
+                            mode: 'same-origin'
+                        });
+                        
+                        if (!response.ok) {
+                            // Handle validation errors (422) specifically
+                            if (response.status === 422) {
+                                const errorData = await response.json();
+                                console.error('❌ Validation Error:', errorData);
+                                throw new Error(`Validation failed: ${errorData.message || Object.values(errorData.errors || {}).flat().join(', ')}`);
+                            } else {
+                                throw new Error(`Order processing failed: ${response.status} ${response.statusText}`);
+                            }
+                        }
+                        
+                        const responseData = await response.json();
+                        console.log('📋 Order processed:', responseData);
+                        
+                        if (responseData.success) {
+                            showToast('success', 'Payment successful!', 'Your payment has been processed successfully');
+                            
+                            // Redirect to success page
+                            setTimeout(() => {
+                                // Since the current flow redirects, we'll wait for redirect or handle success
+                                if (responseData.order_number) {
+                                    window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                                } else {
+                                    window.location.href = '{{ route("checkout.index") }}';
+                                }
+                            }, 2000);
+                        } else {
+                            throw new Error(responseData.message || 'Order processing failed');
+                        }
+                        
+                    } catch (error) {
+                        console.error('❌ Error processing payment:', error);
+                        showToast('error', 'Payment Error', 'Payment processing failed: ' + error.message);
+                    } finally {
+                        showLoading(false);
+                    }
+                },
+                
+                onError: function(err) {
+                    console.error('❌ PayPal error:', err);
+                    showToast('error', 'PayPal Error', 'An error occurred during payment: ' + (err.message || 'Unknown error'));
+                    showLoading(false);
+                },
+                
+                onCancel: function(data) {
+                    console.log('⚠️ PayPal payment cancelled:', data);
+                    showToast('info', 'Payment Cancelled', 'Payment was cancelled by user');
+                    showLoading(false);
+                }
+                
+            }).render('#paypal-button');
+            
+            paypalButtonsInitialized = true;
+            console.log('✅ PayPal buttons initialized successfully');
+            
+            // Update button state after rendering
+            setTimeout(() => updatePayPalButtonState(), 100);
+            
+        } catch (error) {
+            console.error('❌ PayPal buttons initialization error:', error);
+            showToast('error', 'PayPal Error', 'Failed to initialize PayPal: ' + error.message);
+            
+            const paypalButtonContainer = document.getElementById('paypal-button');
+            if (paypalButtonContainer) {
+                paypalButtonContainer.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-red-500">
+                        <div class="text-center">
+                            <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <p class="text-sm">Failed to load PayPal</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    };
+    
+    // Function to validate form fields
+    const validateCheckoutForm = function() {
+        const checkoutForm = document.getElementById('checkout-form');
+        if (!checkoutForm) return false;
+        
+        const requiredFields = {
+            customer_name: checkoutForm.querySelector('[name="customer_name"]')?.value?.trim() || '',
+            customer_email: checkoutForm.querySelector('[name="customer_email"]')?.value?.trim() || '',
+            shipping_address: checkoutForm.querySelector('[name="shipping_address"]')?.value?.trim() || '',
+            city: checkoutForm.querySelector('[name="city"]')?.value?.trim() || '',
+            postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
+            country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || ''
+        };
+        
+        // Check for missing required fields
+        const missingFields = [];
+        Object.entries(requiredFields).forEach(([field, value]) => {
+            if (!value) {
+                missingFields.push(field.replace('_', ' '));
+            }
+        });
+        
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const isEmailValid = emailRegex.test(requiredFields.customer_email);
+        
+        return {
+            isValid: missingFields.length === 0 && isEmailValid && requiredFields.customer_email,
+            missingFields: missingFields,
+            isEmailValid: isEmailValid
+        };
+    };
+    
+    // Function to update PayPal button state
+    const updatePayPalButtonState = function() {
+        const paypalContainer = document.getElementById('paypal-button-container');
+        const validation = validateCheckoutForm();
+        
+        if (paypalContainer) {
+            const paypalButtons = paypalContainer.querySelector('#paypal-button');
+            
+            if (!validation.isValid) {
+                // Add disabled styling
+                paypalContainer.classList.add('opacity-50', 'pointer-events-none');
+                
+                // Add warning message if not already present
+                let warningMsg = paypalContainer.querySelector('.validation-warning');
+                if (!warningMsg) {
+                    warningMsg = document.createElement('div');
+                    warningMsg.className = 'validation-warning mt-3 p-3 bg-yellow-100 border border-yellow-300 rounded-lg';
+                    
+                    if (validation.missingFields.length > 0) {
+                        warningMsg.innerHTML = `
+                            <div class="flex items-center text-yellow-800">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                                <span class="text-sm font-medium">Vui lòng điền đầy đủ thông tin: ${validation.missingFields.join(', ')}</span>
+                            </div>
+                        `;
+                    } else if (!validation.isEmailValid) {
+                        warningMsg.innerHTML = `
+                            <div class="flex items-center text-yellow-800">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                                <span class="text-sm font-medium">Vui lòng nhập địa chỉ email hợp lệ</span>
+                            </div>
+                        `;
+                    }
+                    
+                    paypalContainer.appendChild(warningMsg);
+                }
+            } else {
+                // Remove disabled styling
+                paypalContainer.classList.remove('opacity-50', 'pointer-events-none');
+                
+                // Remove warning message
+                const warningMsg = paypalContainer.querySelector('.validation-warning');
+                if (warningMsg) {
+                    warningMsg.remove();
+                }
+            }
+        }
+    };
     
     // Payment method change handler
     const handlePaymentMethodChange = function() {
         const selectedRadio = document.querySelector('input[name="payment_method"]:checked');
         const lianLianInfo = document.getElementById('lianlian-pay-info');
+        const paypalContainer = document.getElementById('paypal-button-container');
         
         // Remove selected class from all payment options
         paymentOptions.forEach(option => {
@@ -879,14 +1417,43 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('💳 Payment method changed:', selectedRadio ? selectedRadio.value : 'none');
         
         if (selectedRadio && selectedRadio.value === 'lianlian_pay') {
-            console.log('🔧 LianLian Pay selected - showing info');
+            console.log('🔧 LianLian Pay selected - initializing iframe');
+            // Hide PayPal container
+            if (paypalContainer) {
+                paypalContainer.classList.add('hidden');
+            }
+            // Show LianLian Pay
             if (lianLianInfo) {
                 lianLianInfo.classList.remove('hidden');
+                // Initialize iframe if not already done
+                if (!lianLianCardInstance && !iframeToken) {
+                    initializeLianLianIframe();
+                }
             }
-        } else {
-            console.log('🔧 Hiding LianLian Pay info...');
+        } else if (selectedRadio && selectedRadio.value === 'paypal') {
+            console.log('🔧 PayPal selected - initializing buttons');
+            // Hide LianLian Pay
             if (lianLianInfo) {
                 lianLianInfo.classList.add('hidden');
+            }
+            // Show PayPal container
+            if (paypalContainer) {
+                paypalContainer.classList.remove('hidden');
+                // Initialize PayPal buttons if not already done
+                if (!paypalButtonsInitialized && window.paypal) {
+                    initializePayPalButtons();
+                }
+                // Update PayPal button state based on form validation
+                setTimeout(() => updatePayPalButtonState(), 100);
+            }
+        } else {
+            console.log('🔧 Hiding payment methods...');
+            // Hide both containers
+            if (lianLianInfo) {
+                lianLianInfo.classList.add('hidden');
+            }
+            if (paypalContainer) {
+                paypalContainer.classList.add('hidden');
             }
         }
     };
@@ -912,6 +1479,39 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Default payment method set to LianLian Pay');
     }
     
+    // Initialize PayPal SDK when ready
+    const initializePayPalSDK = () => {
+        paypalSDKLoadAttempts++;
+        
+        if (window.paypal) {
+            console.log('✅ PayPal SDK loaded successfully');
+            return true;
+        } else if (paypalSDKLoadAttempts >= MAX_PAYPAL_SDK_ATTEMPTS) {
+            console.error('❌ PayPal SDK failed to load after', paypalSDKLoadAttempts, 'attempts');
+            console.log('🔍 Checking PayPal configuration...');
+            
+            // Check if client ID is configured
+            const paypalScript = document.querySelector('script[src*="paypal.com/sdk/js"]');
+            if (paypalScript && paypalScript.src.includes('client-id=')) {
+                const clientIdMatch = paypalScript.src.match(/client-id=([^&]+)/);
+                if (clientIdMatch && clientIdMatch[1] && !clientIdMatch[1].includes('null') && clientIdMatch[1] !== '') {
+                    console.log('⚠️ PayPal SDK script loaded but window.paypal not available. This might be a network issue.');
+                } else {
+                    console.error('❌ PayPal Client ID not configured properly');
+                }
+            } else {
+                console.error('❌ PayPal script not found or malformed');
+            }
+            return false;
+        } else {
+            console.log('⏳ Waiting for PayPal SDK to load...', `(${paypalSDKLoadAttempts}/${MAX_PAYPAL_SDK_ATTEMPTS})`);
+            setTimeout(initializePayPalSDK, 100);
+            return false;
+        }
+    };
+    
+    // Start checking for PayPal SDK
+    initializePayPalSDK();
     
     // Form submission handler
     form.addEventListener('submit', function(e) {
@@ -944,68 +1544,62 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (selectedPaymentMethod === 'lianlian_pay') {
-            handleLianLianRedirect();
+            handleLianLianPayment();
+        } else if (selectedPaymentMethod === 'paypal') {
+            // PayPal is handled by the SDK, just show info
+            showToast('info', 'PayPal Checkout', 'Please use the PayPal button below to complete your payment');
+            return;
         } else {
             handleRegularPayment();
         }
     });
     
-    // Handle LianLian Pay redirect to separate page
-    const handleLianLianRedirect = async () => {
+    // Handle LianLian Pay payment using iframe
+    const handleLianLianPayment = async () => {
         try {
-            console.log('🚀 Starting LianLian Pay redirect...');
+            console.log('🚀 Processing LianLian Pay payment via iframe...');
             showLoading(true);
             
-            // Get form element
-            console.log('🔍 Looking for checkout form...');
+            if (!lianLianCardInstance || !window.LLP) {
+                throw new Error('Payment form not initialized. Please refresh and try again.');
+            }
+            
+            // Validate card information using SDK
+            const validateResult = await window.LLP.getValidateResult();
+            if (!validateResult || !validateResult.validateResult) {
+                showToast('error', 'Payment Error', 'Please fill in all card information correctly.');
+                showLoading(false);
+                return;
+            }
+            
+            // Get card token from SDK
+            const paymentResult = await window.LLP.confirmPay();
+            console.log('Payment result:', paymentResult);
+            
+            if (!paymentResult || !paymentResult.data) {
+                throw new Error('Failed to process card. Please check your information and try again.');
+            }
+            
+            const cardToken = paymentResult.data;
+            console.log('✅ Card token generated:', cardToken);
+            
+            // Process payment with server
+            await processLianLianPayment(cardToken);
+            
+        } catch (error) {
+            console.error('❌ LianLian Pay payment error:', error);
+            showToast('error', 'Payment Error', error.message);
+            showLoading(false);
+        }
+    };
+    
+    // Process payment with server using card token
+    const processLianLianPayment = async (cardToken) => {
+        try {
+            console.log('📤 Processing payment with server...');
+            
+            // Get form data for order creation
             const checkoutForm = document.getElementById('checkout-form');
-            console.log('📋 Form element found:', checkoutForm);
-            
-            if (!checkoutForm) {
-                console.error('❌ Checkout form not found!');
-                throw new Error('Checkout form not found');
-            }
-            
-            console.log('✅ Form element is valid:', checkoutForm instanceof HTMLFormElement);
-            
-            // Get token first - ensure HTTPS protocol
-            console.log('📡 Fetching token for LianLian Pay...');
-            console.log('📡 Current location:', window.location.href);
-            
-            // Ensure we use the same protocol as current page
-            const tokenUrl = new URL('/payment/lianlian/token', window.location.origin);
-            console.log('📡 Token URL:', tokenUrl.toString());
-            
-            const tokenResponse = await fetch(tokenUrl.toString(), {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}'
-                },
-                credentials: 'same-origin',
-                mode: 'same-origin' // Explicitly set same-origin mode
-            });
-            console.log('📡 Token response status:', tokenResponse.status);
-            
-            if (!tokenResponse.ok) {
-                throw new Error(`Token request failed: ${tokenResponse.status} ${tokenResponse.statusText}`);
-            }
-            
-            const tokenData = await tokenResponse.json();
-            console.log('🎫 Token response:', tokenData);
-            
-            if (!tokenData.success) {
-                throw new Error(tokenData.message || 'Failed to get payment token');
-            }
-            
-            const token = tokenData.token;
-            console.log('✅ Token received:', token);
-            
-            // Get form data for order creation - improved for mobile compatibility
-            console.log('📝 Creating FormData from form...');
-            
-            // Create order data directly from form inputs for better mobile compatibility
             const orderData = {
                 customer_name: checkoutForm.querySelector('[name="customer_name"]')?.value?.trim() || '',
                 customer_email: checkoutForm.querySelector('[name="customer_email"]')?.value?.trim() || '',
@@ -1026,15 +1620,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (missingFields.length > 0) {
                 throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
             }
-                
-            console.log('📦 Order data to send:', orderData);
-                
+            
             // Create order first
             console.log('📦 Creating order...');
-            
-            // Send as JSON for better mobile compatibility - ensure HTTPS
             const checkoutUrl = new URL('/checkout/process', window.location.origin);
-            console.log('📦 Order URL:', checkoutUrl.toString());
             
             const orderResponse = await fetch(checkoutUrl.toString(), {
                 method: 'POST',
@@ -1046,14 +1635,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify(orderData),
                 credentials: 'same-origin',
-                mode: 'same-origin' // Explicitly set same-origin mode
+                mode: 'same-origin'
             });
-                
-            console.log('📦 Order response status:', orderResponse.status);
             
             if (!orderResponse.ok) {
                 const errorText = await orderResponse.text();
-                console.error('❌ Order creation failed:', errorText);
                 throw new Error(`Order creation failed: ${orderResponse.status} ${orderResponse.statusText}`);
             }
             
@@ -1064,40 +1650,71 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(orderResult.message || 'Failed to create order');
             }
             
-            // Redirect to LianLian Pay page - ensure HTTPS protocol
-            const paymentUrl = new URL('/payment/lianlian/payment', window.location.origin);
-            paymentUrl.searchParams.set('token', token);
-            paymentUrl.searchParams.set('order_id', orderResult.order_id);
-            paymentUrl.searchParams.set('amount', '{{ $total }}');
+            // Process payment with card token
+            const paymentData = {
+                card_token: cardToken,
+                payment_method: 'lianlian_pay',
+                order_id: orderResult.order_id,
+                amount: '{{ $total }}',
+            };
             
-            console.log('🔄 Current origin:', window.location.origin);
-            console.log('🔄 Payment URL will be:', paymentUrl.toString());
-            console.log('🔄 Protocol check - Current:', window.location.protocol, 'Payment URL:', paymentUrl.protocol);
+            console.log('📤 Sending payment data:', paymentData);
             
-            showToast('info', 'Redirecting to Payment...', 'Please complete your payment on the secure page');
-            
-            setTimeout(() => {
-                window.location.href = paymentUrl.toString();
-            }, 1500);
-            
-        } catch (error) {
-            console.error('❌ LianLian Pay redirect error:', error);
-            console.error('Error details:', {
-                message: error.message,
-                stack: error.stack,
-                userAgent: navigator.userAgent,
-                isNaN: navigator.userAgent.includes('Mobile') || navigator.userAgent.includes('Android') || navigator.userAgent.includes('iPhone')
+            const paymentResponse = await fetch('{{ route("payment.lianlian.process") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(paymentData)
             });
             
-            // Show more detailed error for mobile debugging
-            let errorMessage = 'Failed to initialize payment: ' + error.message;
-            if (error.message.includes('fetch')) {
-                errorMessage = 'Network error. Please check your connection and try again.';
-            } else if (error.message.includes('Failed to get payment token')) {
-                errorMessage = 'Payment service unavailable. Please try again later.';
+            const responseData = await paymentResponse.json();
+            console.log('📥 Payment response:', responseData);
+            
+            if (responseData.success) {
+                // Check if 3DS authentication is required
+                if (responseData.requires_3ds === true && responseData.redirect_url) {
+                    console.log('🔐 3DS Authentication Required');
+                    await handle3DSRedirect(responseData.redirect_url, responseData.transaction_id);
+                    return;
+                }
+                
+                // Check if payment is completed immediately
+                if (responseData.payment_completed === true || responseData.payment_status === 'paid') {
+                    console.log('✅ Payment Completed Immediately');
+                    showToast('success', 'Payment successful! Redirecting...', 'Payment completed successfully');
+                    setTimeout(() => {
+                        if (responseData.order_number) {
+                            window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                        } else {
+                            window.location.href = '{{ route("checkout.index") }}';
+                        }
+                    }, 2000);
+                } else {
+                    // Payment pending
+                    console.log('⏳ Payment Pending');
+                    showToast('info', 'Payment is processing...', 'Your payment is being processed');
+                    setTimeout(() => {
+                        if (responseData.order_number) {
+                            window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                        } else {
+                            window.location.href = '{{ route("checkout.index") }}';
+                        }
+                    }, 2000);
+                }
+            } else {
+                const errorMessage = responseData.message || 'Payment failed';
+                const errorCode = responseData.return_code || 'Unknown error';
+                showToast('error', 'Payment Error', `Payment failed (${errorCode}): ${errorMessage}`);
             }
             
-            showToast('error', 'Payment Error', errorMessage);
+        } catch (error) {
+            console.error('❌ Server payment error:', error);
+            showToast('error', 'Payment Error', 'Payment processing failed: ' + error.message);
+        } finally {
             showLoading(false);
         }
     };
@@ -1185,50 +1802,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
     
-    // Utility functions
-    const showLoading = (loading) => {
-        if (loading) {
-            submitBtn.disabled = true;
-            submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
-            submitBtn.innerHTML = `
-                <span class="flex items-center justify-center">
-                    <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Processing...
-                </span>
-            `;
-        } else {
-            submitBtn.disabled = false;
-            submitBtn.classList.remove('opacity-75', 'cursor-not-allowed');
-            submitBtn.innerHTML = `
-                <span class="flex items-center justify-center relative z-10">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                    </svg>
-                    Complete Order
-                    <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                    </svg>
-                </span>
-            `;
-        }
-    };
-    
-    const showToast = (type, title, message) => {
-        Swal.fire({
-            icon: type,
-            title: title,
-            text: message,
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 5000,
-            timerProgressBar: true
-        });
-    };
-    
     // Calculate shipping when country changes
     const countrySelect = document.getElementById('country');
     if (countrySelect) {
@@ -1310,6 +1883,37 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => console.log('Could not detect country'));
+    
+    // Add event listeners for form field changes to update PayPal button state
+    const formFieldsToWatch = [
+        'customer_name', 'customer_email', 'customer_phone',
+        'shipping_address', 'city', 'state', 'postal_code', 'country'
+    ];
+    
+    formFieldsToWatch.forEach(fieldName => {
+        const field = document.querySelector(`[name="${fieldName}"]`);
+        if (field) {
+            field.addEventListener('input', updatePayPalButtonState);
+            field.addEventListener('change', updatePayPalButtonState);
+            field.addEventListener('blur', updatePayPalButtonState);
+        }
+    });
+    
+    // Initial validation when page loads
+    setTimeout(() => {
+        updatePayPalButtonState();
+    }, 500);
+    
+    // Cleanup iframe on page unload
+    window.addEventListener('beforeunload', () => {
+        if (lianLianCardInstance) {
+            try {
+                lianLianCardInstance.unmount();
+            } catch (e) {
+                console.log('Error unmounting LianLian Pay:', e);
+            }
+        }
+    });
 });
 </script>
 @endsection

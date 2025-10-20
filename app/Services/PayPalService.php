@@ -160,4 +160,75 @@ class PayPalService
 
         return $response->json();
     }
+
+    /**
+     * Capture/Verify a PayPal order (for SDK payments)
+     */
+    public function capturePayment($orderId)
+    {
+        $accessToken = $this->getAccessToken();
+
+        // First, get order details to verify
+        $orderResponse = Http::withToken($accessToken)
+            ->get($this->baseUrl . "/v2/checkout/orders/{$orderId}");
+
+        if ($orderResponse->failed()) {
+            Log::error('PayPal Order Verification Failed', [
+                'order_id' => $orderId,
+                'response' => $orderResponse->json()
+            ]);
+            throw new \Exception('Failed to verify PayPal order');
+        }
+
+        $order = $orderResponse->json();
+
+        Log::info('PayPal Order Details', [
+            'order_id' => $orderId,
+            'status' => $order['status'] ?? 'unknown',
+            'order_data' => $order
+        ]);
+
+        // If order is already approved, capture it
+        if (isset($order['status']) && $order['status'] === 'APPROVED') {
+            $captureResponse = Http::withToken($accessToken)
+                ->post($this->baseUrl . "/v2/checkout/orders/{$orderId}/capture");
+
+            if ($captureResponse->failed()) {
+                Log::error('PayPal Order Capture Failed', [
+                    'order_id' => $orderId,
+                    'response' => $captureResponse->json()
+                ]);
+                throw new \Exception('Failed to capture PayPal order');
+            }
+
+            $capturedOrder = $captureResponse->json();
+
+            Log::info('PayPal Order Captured', [
+                'order_id' => $orderId,
+                'status' => $capturedOrder['status'] ?? 'unknown'
+            ]);
+
+            return (object)[
+                'status' => $capturedOrder['status'] ?? 'UNKNOWN',
+                'id' => $capturedOrder['id'] ?? $orderId,
+                'data' => $capturedOrder
+            ];
+        }
+
+        // If order is already completed, return it
+        if (isset($order['status']) && $order['status'] === 'COMPLETED') {
+            return (object)[
+                'status' => 'COMPLETED',
+                'id' => $order['id'] ?? $orderId,
+                'data' => $order
+            ];
+        }
+
+        // For other statuses, still return the order object but with actual status
+        return (object)[
+            'status' => $order['status'] ?? 'UNKNOWN',
+            'id' => $order['id'] ?? $orderId,
+            'data' => $order
+        ];
+    }
 }

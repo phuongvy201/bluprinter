@@ -94,7 +94,19 @@ class CheckoutController extends Controller
             'data' => $request->all()
         ]);
 
-        $request->validate([
+        // Add detailed validation logging for debugging
+        Log::info('🔍 VALIDATION DATA CHECK', [
+            'customer_name' => $request->input('customer_name'),
+            'customer_email' => $request->input('customer_email'),
+            'shipping_address' => $request->input('shipping_address'),
+            'city' => $request->input('city'),
+            'postal_code' => $request->input('postal_code'),
+            'country' => $request->input('country'),
+            'has_paypal_order_id' => $request->has('paypal_order_id'),
+            'paypal_order_id' => $request->input('paypal_order_id'),
+        ]);
+
+        $validationRules = [
             'customer_name' => 'required|string|max:255',
             'customer_email' => 'required|email|max:255',
             'customer_phone' => 'nullable|string|max:20',
@@ -104,7 +116,23 @@ class CheckoutController extends Controller
             'postal_code' => 'required|string|max:20',
             'country' => 'required|string|max:100',
             'payment_method' => 'required|in:paypal,lianlian_pay,stripe',
-        ]);
+        ];
+
+        // Add PayPal SDK specific validation if present
+        if ($request->has('paypal_order_id')) {
+            $validationRules['paypal_order_id'] = 'required|string|max:255';
+            $validationRules['paypal_payer_id'] = 'required|string|max:255';
+        }
+
+        try {
+            $request->validate($validationRules);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('🔍 VALIDATION FAILED', [
+                'errors' => $e->errors(),
+                'input_data' => $request->all()
+            ]);
+            throw $e;
+        }
 
         $sessionId = session()->getId();
         $userId = Auth::id();
@@ -168,7 +196,7 @@ class CheckoutController extends Controller
         // Create order
         $order = Order::create([
             'order_number' => Order::generateOrderNumber(),
-            'user_id' => auth()->id(),
+            'user_id' => Auth::id(),
             'customer_name' => $request->customer_name,
             'customer_email' => $request->customer_email,
             'customer_phone' => $request->customer_phone,
@@ -232,21 +260,119 @@ class CheckoutController extends Controller
 
         // Handle payment based on method
         if ($request->payment_method === 'paypal') {
-            try {
-                $paypalService = new PayPalService();
-                $payment = $paypalService->createPayment($order, $products);
+            Log::info('PayPal Payment Method Detected', [
+                'has_paypal_order_id' => $request->has('paypal_order_id'),
+                'has_paypal_payer_id' => $request->has('paypal_payer_id'),
+                'paypal_order_id' => $request->input('paypal_order_id'),
+                'paypal_payer_id' => $request->input('paypal_payer_id')
+            ]);
 
-                // Store order in session for PayPal callback
-                Session::put('pending_order', $order->id);
+            // Check if this is from PayPal SDK (has paypal_order_id)
+            if ($request->has('paypal_order_id') && $request->has('paypal_payer_id')) {
+                // This is from PayPal SDK - payment already completed on client side
+                try {
+                    Log::info('PayPal SDK Payment Processing', [
+                        'order_id' => $order->id,
+                        'paypal_order_id' => $request->paypal_order_id,
+                        'paypal_payer_id' => $request->paypal_payer_id
+                    ]);
 
-                // Redirect to PayPal approval URL
-                return redirect($payment->approval_url);
-            } catch (\Exception $e) {
-                Log::error('PayPal Initialization Error', [
-                    'order_id' => $order->id,
-                    'error' => $e->getMessage()
-                ]);
-                return redirect()->back()->with('error', 'Payment initialization failed: ' . $e->getMessage());
+                    // For PayPal SDK payments, the payment was already captured on the client side
+                    // We should update the order status immediately since we have valid order_id and payer_id
+
+                    Log::info('Updating order for PayPal SDK payment', [
+                        'order_id' => $order->id,
+                        'current_payment_status' => $order->payment_status,
+                        'current_status' => $order->status,
+                        'paypal_order_id' => $request->paypal_order_id
+                    ]);
+
+                    // Update order status to paid immediately (PayPal SDK confirmed the payment)
+                    $updateResult = $order->update([
+                        'payment_status' => 'paid',
+                        'status' => 'confirmed',
+                        'payment_id' => $request->paypal_order_id,
+                        'payment_transaction_id' => $request->paypal_payer_id,
+                        'paid_at' => now()
+                    ]);
+
+                    Log::info('PayPal SDK Order Update Result', [
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'update_result' => $updateResult,
+                        'original_payment_status' => $request->input('original_payment_status', 'unknown'),
+                        'new_payment_status' => $order->fresh()->payment_status,
+                        'new_status' => $order->fresh()->status,
+                        'paypal_payment_id' => $request->paypal_order_id
+                    ]);
+
+                    // Try to verify with PayPal API (optional, for logging)
+                    try {
+                        $paypalService = new PayPalService();
+                        $payment = $paypalService->capturePayment($request->paypal_order_id);
+
+                        Log::info('PayPal API Verification Result', [
+                            'order_id' => $order->id,
+                            'payment_status_from_api' => $payment ? $payment->status : 'null'
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::warning('PayPal API verification failed but continuing', [
+                            'order_id' => $order->id,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+
+                    // Clear cart after successful payment
+                    Cart::where('user_id', $userId)->orWhere('session_id', $sessionId)->delete();
+
+                    // Clear shipping session
+                    Session::forget('shipping_details');
+
+                    if ($request->wantsJson() || $request->ajax()) {
+                        return response()->json([
+                            'success' => true,
+                            'message' => 'Payment completed successfully',
+                            'order_number' => $order->order_number,
+                            'payment_completed' => true
+                        ]);
+                    }
+
+                    return redirect()->route('checkout.success', $order->order_number)
+                        ->with('success', 'Payment completed successfully!');
+                } catch (\Exception $e) {
+                    Log::error('PayPal SDK Payment Error', [
+                        'order_id' => $order->id,
+                        'error' => $e->getMessage(),
+                        'paypal_order_id' => $request->paypal_order_id
+                    ]);
+
+                    if ($request->wantsJson() || $request->ajax()) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Payment processing failed: ' . $e->getMessage()
+                        ], 400);
+                    }
+
+                    return redirect()->back()->with('error', 'Payment processing failed: ' . $e->getMessage());
+                }
+            } else {
+                // This is the old PayPal flow (redirect-based)
+                try {
+                    $paypalService = new PayPalService();
+                    $payment = $paypalService->createPayment($order, $products);
+
+                    // Store order in session for PayPal callback
+                    Session::put('pending_order', $order->id);
+
+                    // Redirect to PayPal approval URL
+                    return redirect($payment->approval_url);
+                } catch (\Exception $e) {
+                    Log::error('PayPal Initialization Error', [
+                        'order_id' => $order->id,
+                        'error' => $e->getMessage()
+                    ]);
+                    return redirect()->back()->with('error', 'Payment initialization failed: ' . $e->getMessage());
+                }
             }
         } elseif ($request->payment_method === 'lianlian_pay') {
             Log::info('🎯 LIANLIAN PAY SECTION ENTERED', [
