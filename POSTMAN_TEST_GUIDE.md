@@ -261,3 +261,4 @@ AWS_BUCKET=image.bluprinter
 5. **Error Handling:** Proper error messages for invalid requests
 
 
+

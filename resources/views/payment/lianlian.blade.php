@@ -412,7 +412,7 @@
                 // Load SDK
                 const script = document.createElement('script');
                 script.id = 'lianlian-sdk';
-                script.src = 'https://gacashier.lianlianpay-inc.com/sandbox2/llpay.min.js';
+                script.src = 'https://secure-checkout.lianlianpay.com/v2/llpay.min.js';
                 script.async = true;
                 
                 script.onload = () => {

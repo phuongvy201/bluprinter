@@ -487,7 +487,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </div>
                                 
                                 @if(isset($customization['description']) && !empty($customization['description']))
-                                    <p class="text-sm text-gray-600 mb-3">{{ $customization['description'] }}</p>
+                                    <p class="text-sm text-gray-600 mb-3">{{ strip_tags(html_entity_decode($customization['description'], ENT_QUOTES, 'UTF-8')) }}</p>
                                 @endif
                                 
                                 @if(isset($customization['instructions']) && !empty($customization['instructions']))
@@ -496,7 +496,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <svg class="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                             </svg>
-                                            <p class="text-xs text-blue-800">{{ $customization['instructions'] }}</p>
+                                            <p class="text-xs text-blue-800">{{ strip_tags(html_entity_decode($customization['instructions'], ENT_QUOTES, 'UTF-8')) }}</p>
                                         </div>
                                     </div>
                                 @endif
@@ -516,7 +516,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                                 <div class="flex-1">
                                                     <span class="text-sm text-gray-700 font-medium">{{ $option['label'] ?? $option['value'] ?? $option }}</span>
                                                     @if(isset($option['description']) && !empty($option['description']))
-                                                        <p class="text-xs text-gray-500 mt-1">{{ $option['description'] }}</p>
+                                                        <p class="text-xs text-gray-500 mt-1">{{ strip_tags(html_entity_decode($option['description'], ENT_QUOTES, 'UTF-8')) }}</p>
                                                     @endif
                                                 </div>
                                                 @if(isset($option['price']) && $option['price'] > 0)
@@ -915,12 +915,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     <h3 class="text-xl font-semibold text-gray-900 mb-3">Product Description</h3>
                     @php
                         $description = $product->description ?? 'No description available for this product.';
+                        
+                        // Convert HTML to text
+                        $description = strip_tags($description);
+                        
+                        // Decode HTML entities
+                        $description = html_entity_decode($description, ENT_QUOTES, 'UTF-8');
+                        
                         // Replace &nbsp; with regular spaces
                         $description = str_replace('&nbsp;', ' ', $description);
+                        
                         // Replace multiple hyphens with section breaks
                         $description = preg_replace('/-{3,}/', "\n\n", $description);
-                        // Clean up extra spaces
+                        
+                        // Clean up extra spaces and line breaks
                         $description = preg_replace('/\s+/', ' ', $description);
+                        $description = preg_replace('/\n\s*\n/', "\n\n", $description);
+                        $description = trim($description);
                         
                         // Calculate preview length (approximately 4 lines = ~300 characters)
                         $previewLength = 300;
@@ -2172,6 +2183,31 @@ function updateAllAttributeButtons() {
     });
 }
 
+// Helper function to convert HTML to text
+function htmlToText(html) {
+    if (!html) return '';
+    
+    // Create a temporary div element
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    
+    // Get text content (this automatically strips HTML tags)
+    let text = temp.textContent || temp.innerText || '';
+    
+    // Decode HTML entities
+    text = text.replace(/&nbsp;/g, ' ');
+    text = text.replace(/&amp;/g, '&');
+    text = text.replace(/&lt;/g, '<');
+    text = text.replace(/&gt;/g, '>');
+    text = text.replace(/&quot;/g, '"');
+    text = text.replace(/&#39;/g, "'");
+    
+    // Clean up extra spaces
+    text = text.replace(/\s+/g, ' ').trim();
+    
+    return text;
+}
+
 // Legacy functions for backward compatibility
 function updateColorButtons() {
     updateAllAttributeButtons();
@@ -2248,7 +2284,8 @@ function updateVariantSelection() {
         const descElement = document.getElementById('selected-variant-description');
         if (descElement) {
             if (matchingVariant.description) {
-                descElement.textContent = matchingVariant.description;
+                // Convert HTML to text before setting textContent
+                descElement.textContent = htmlToText(matchingVariant.description);
                 descElement.style.display = 'block';
             } else {
                 descElement.style.display = 'none';
