@@ -494,13 +494,7 @@
                                 <select id="country" name="country" class="form-input" required>
                                     <option value="">Select Country</option>
                                     <option value="US">🇺🇸 United States</option>
-                                    <option value="CA">🇨🇦 Canada</option>
                                     <option value="GB">🇬🇧 United Kingdom</option>
-                                    <option value="AU">🇦🇺 Australia</option>
-                                    <option value="DE">🇩🇪 Germany</option>
-                                    <option value="FR">🇫🇷 France</option>
-                                    <option value="JP">🇯🇵 Japan</option>
-                                    <option value="VN">🇻🇳 Vietnam</option>
                                 </select>
                                 @error('country')
                                     <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -927,7 +921,15 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get token first
             console.log('📡 Fetching token for LianLian Pay...');
-            const tokenResponse = await fetch('{{ route("payment.lianlian.token") }}');
+            // Use relative URL to avoid Mixed Content issues when running on HTTPS
+            const tokenResponse = await fetch('/payment/lianlian/token', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            });
             console.log('📡 Token response status:', tokenResponse.status);
             
             if (!tokenResponse.ok) {
@@ -991,14 +993,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             
-            const orderResponse = await fetch('{{ route("checkout.process") }}', {
+            const orderResponse = await fetch('/checkout/process', {
                     method: 'POST',
                     headers: {
                         'X-CSRF-TOKEN': '{{ csrf_token() }}',
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest'
                     },
-                    body: formDataToSend
+                    body: formDataToSend,
+                    credentials: 'same-origin'
                 });
                 
             console.log('📦 Order response status:', orderResponse.status);
@@ -1016,8 +1019,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(orderResult.message || 'Failed to create order');
             }
             
-            // Redirect to LianLian Pay page
-            const paymentUrl = new URL('{{ route("payment.lianlian.payment") }}', window.location.origin);
+            // Redirect to LianLian Pay page using relative URL to maintain HTTPS
+            const paymentUrl = new URL('/payment/lianlian/payment', window.location.href);
             paymentUrl.searchParams.set('token', token);
             paymentUrl.searchParams.set('order_id', orderResult.order_id);
             paymentUrl.searchParams.set('amount', '{{ $total }}');
@@ -1209,7 +1212,13 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.country_code) {
                 const countrySelect = document.getElementById('country');
-                const option = countrySelect.querySelector(`option[value="${data.country_code}"]`);
+                // Only allow US and GB, fallback to US if detected country is not available
+                let selectedCountry = data.country_code;
+                if (data.country_code !== 'US' && data.country_code !== 'GB') {
+                    selectedCountry = 'US'; // Default to US if country not available
+                }
+                
+                const option = countrySelect.querySelector(`option[value="${selectedCountry}"]`);
                 if (option) {
                     option.selected = true;
                     // Trigger shipping calculation for detected country

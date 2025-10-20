@@ -427,66 +427,167 @@ class ProductController extends Controller
      */
     public function bulkDelete(Request $request)
     {
-        $user = auth()->user();
+        try {
+            Log::info('Bulk delete started', [
+                'user_id' => auth()->id(),
+                'request_data' => $request->all()
+            ]);
 
-        $request->validate([
-            'product_ids' => 'required|array',
-            'product_ids.*' => 'exists:products,id',
-        ]);
+            $user = auth()->user();
 
-        $productIds = $request->product_ids;
-        $products = Product::with('shop')->whereIn('id', $productIds)->get();
+            // Validate request data
+            try {
+                $request->validate([
+                    'product_ids' => 'required|array',
+                    'product_ids.*' => 'exists:products,id',
+                ]);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                Log::error('Bulk delete validation failed', [
+                    'errors' => $e->errors()
+                ]);
 
-        // Check authorization for each product
-        $deletedCount = 0;
-        $shopProductCounts = [];
-
-        foreach ($products as $product) {
-            // Admin can delete all, Seller can only delete their own products
-            if ($user->hasRole('admin') || $product->user_id === $user->id) {
-                // Track shop product counts
-                if ($product->shop_id) {
-                    if (!isset($shopProductCounts[$product->shop_id])) {
-                        $shopProductCounts[$product->shop_id] = 0;
-                    }
-                    $shopProductCounts[$product->shop_id]++;
+                if ($request->expectsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Invalid product IDs provided.',
+                        'errors' => $e->errors()
+                    ], 422);
                 }
 
-                $product->delete();
-                $deletedCount++;
+                throw $e;
             }
-        }
 
-        // Update shop product counts
-        foreach ($shopProductCounts as $shopId => $count) {
-            $shop = \App\Models\Shop::find($shopId);
-            if ($shop) {
-                $shop->total_products = $shop->products()->count();
-                $shop->save();
-            }
-        }
-
-        $message = $deletedCount === 0
-            ? 'No products were deleted. You may not have permission to delete the selected products.'
-            : "{$deletedCount} product(s) deleted successfully! 🗑️";
-
-        $success = $deletedCount > 0;
-
-        // Return JSON response for AJAX requests
-        if ($request->expectsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => $success,
-                'message' => $message,
-                'deleted_count' => $deletedCount
+            $productIds = $request->product_ids;
+            Log::info('Attempting to delete products', [
+                'product_ids' => $productIds,
+                'count' => count($productIds)
             ]);
-        }
 
-        // Return redirect for form submissions
-        if ($deletedCount === 0) {
+            $products = Product::with('shop')->whereIn('id', $productIds)->get();
+
+            if ($products->isEmpty()) {
+                Log::warning('No products found for IDs', ['product_ids' => $productIds]);
+
+                if ($request->expectsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No products found with the provided IDs.'
+                    ], 404);
+                }
+
+                return back()->with('error', 'No products found with the provided IDs.');
+            }
+
+            // Check authorization for each product
+            $deletedCount = 0;
+            $shopProductCounts = [];
+            $errors = [];
+
+            foreach ($products as $product) {
+                try {
+                    // Admin can delete all, Seller can only delete their own products
+                    if ($user->hasRole('admin') || $product->user_id === $user->id) {
+                        // Track shop product counts
+                        if ($product->shop_id) {
+                            if (!isset($shopProductCounts[$product->shop_id])) {
+                                $shopProductCounts[$product->shop_id] = 0;
+                            }
+                            $shopProductCounts[$product->shop_id]++;
+                        }
+
+                        $product->delete();
+                        $deletedCount++;
+
+                        Log::info('Product deleted successfully', [
+                            'product_id' => $product->id,
+                            'product_name' => $product->name
+                        ]);
+                    } else {
+                        $errors[] = "No permission to delete product: {$product->name}";
+                        Log::warning('User lacks permission to delete product', [
+                            'product_id' => $product->id,
+                            'user_id' => $user->id,
+                            'product_user_id' => $product->user_id
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    $errors[] = "Failed to delete product: {$product->name} - " . $e->getMessage();
+                    Log::error('Failed to delete product', [
+                        'product_id' => $product->id,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                }
+            }
+
+            // Update shop product counts
+            foreach ($shopProductCounts as $shopId => $count) {
+                try {
+                    $shop = \App\Models\Shop::find($shopId);
+                    if ($shop) {
+                        $shop->total_products = $shop->products()->count();
+                        $shop->save();
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to update shop product count', [
+                        'shop_id' => $shopId,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            $message = $deletedCount === 0
+                ? 'No products were deleted. You may not have permission to delete the selected products.'
+                : "{$deletedCount} product(s) deleted successfully! 🗑️";
+
+            // Add error details to message if there were errors
+            if (!empty($errors)) {
+                $message .= "\nErrors: " . implode('; ', $errors);
+            }
+
+            $success = $deletedCount > 0;
+
+            Log::info('Bulk delete completed', [
+                'deleted_count' => $deletedCount,
+                'total_requested' => count($productIds),
+                'errors' => $errors
+            ]);
+
+            // Return JSON response for AJAX requests
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => $success,
+                    'message' => $message,
+                    'deleted_count' => $deletedCount,
+                    'errors' => $errors
+                ]);
+            }
+
+            // Return redirect for form submissions
+            if ($deletedCount === 0) {
+                return back()->with('error', $message);
+            }
+
+            return back()->with('success', $message);
+        } catch (\Exception $e) {
+            Log::error('Bulk delete failed with exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
+
+            $message = 'An unexpected error occurred while deleting products. Please try again.';
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+
             return back()->with('error', $message);
         }
-
-        return back()->with('success', $message);
     }
 
     /**

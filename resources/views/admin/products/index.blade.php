@@ -735,12 +735,21 @@ async function submitBulkDelete() {
     submitBtn.textContent = 'Deleting...';
     
     try {
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        
+        console.log('Sending bulk delete request:', {
+            url: '{{ route("admin.products.bulk-delete") }}',
+            productIds: productIds,
+            csrfToken: csrfToken ? 'present' : 'missing'
+        });
+        
         // Use fetch API instead of form submission to avoid browser security warning
         const response = await fetch('{{ route("admin.products.bulk-delete") }}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'X-CSRF-TOKEN': csrfToken,
                 'Accept': 'application/json'
             },
             body: JSON.stringify({
@@ -753,8 +762,11 @@ async function submitBulkDelete() {
             data = await response.json();
         } catch (parseError) {
             // If response is not JSON, handle as error
+            console.error('Failed to parse JSON response:', parseError);
             throw new Error('Invalid response from server');
         }
+        
+        console.log('Bulk delete response:', data);
         
         if (response.ok && data.success) {
             // Show success message
@@ -766,8 +778,26 @@ async function submitBulkDelete() {
             closeBulkDeleteModal();
             window.location.reload();
         } else {
-            // Show error message
-            alert(data.message || data.error || 'An error occurred while deleting products.');
+            // Show detailed error message
+            let errorMessage = data.message || data.error || 'An error occurred while deleting products.';
+            
+            // Add validation errors if present
+            if (data.errors) {
+                if (typeof data.errors === 'object') {
+                    const errorList = Object.values(data.errors).flat();
+                    errorMessage += '\n\nDetails:\n' + errorList.join('\n');
+                } else if (Array.isArray(data.errors)) {
+                    errorMessage += '\n\nErrors:\n' + data.errors.join('\n');
+                }
+            }
+            
+            console.error('Bulk delete failed:', {
+                status: response.status,
+                statusText: response.statusText,
+                data: data
+            });
+            
+            alert(errorMessage);
         }
     } catch (error) {
         console.error('Bulk delete error:', error);
