@@ -979,8 +979,72 @@ function showEmptyVariants() {
 }
 
 function removeVariant(button) {
-    button.closest('tr').remove();
+    const row = button.closest('tr');
+    
+    // Get variant info for logging
+    const variantName = row.querySelector('.text-sm.font-semibold.text-gray-900')?.textContent || 'Unknown';
+    
+    // Show confirmation dialog
+    if (!confirm(`Are you sure you want to permanently delete variant "${variantName}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    // Get variant index from data attribute or first input name for logging
+    let variantIndex = row.dataset.variantIndex;
+    if (!variantIndex) {
+        const firstInput = row.querySelector('input[name*="variants["]');
+        if (firstInput) {
+            const match = firstInput.name.match(/variants\[(\d+)\]/);
+            variantIndex = match ? match[1] : undefined;
+        }
+    }
+    
+    // Create hidden inputs to mark variant as removed for backend
+    const form = document.querySelector('form');
+    
+    // Main removed input - THIS IS CRITICAL
+    const removedInput = document.createElement('input');
+    removedInput.type = 'hidden';
+    removedInput.name = `variants[${variantIndex || 'deleted'}][removed]`;
+    removedInput.value = '1';
+    form.appendChild(removedInput);
+    
+    // Get attributes for backend to identify which variant to delete
+    const attributesInput = row.querySelector('input[name*="[attributes]"]');
+    if (attributesInput) {
+        const attrInput = document.createElement('input');
+        attrInput.type = 'hidden';
+        attrInput.name = `variants[${variantIndex || 'deleted'}][attributes]`;
+        attrInput.value = attributesInput.value;
+        form.appendChild(attrInput);
+    }
+    
+    // Get variant name for backend
+    const variantNameInput = row.querySelector('input[name*="[variant_name]"]');
+    if (variantNameInput) {
+        const nameInput = document.createElement('input');
+        nameInput.type = 'hidden';
+        nameInput.name = `variants[${variantIndex || 'deleted'}][variant_name]`;
+        nameInput.value = variantNameInput.value;
+        form.appendChild(nameInput);
+    }
+    
+    console.log(`✅ Added removed input: variants[${variantIndex}][removed] = 1`);
+    
+    // Add visual effect before removal
+    row.style.transition = 'all 0.3s ease';
+    row.style.opacity = '0';
+    row.style.maxHeight = '0';
+    row.style.padding = '0';
+    row.style.margin = '0';
+    
+    // Remove row completely after animation
+    setTimeout(() => {
+        row.remove();
+        console.log(`🗑️ PERMANENTLY DELETED variant ${variantIndex}: ${variantName}`);
+    }, 300);
 }
+
 
 // Highlight variant when user interacts with it
 function highlightVariant(input) {
@@ -2201,6 +2265,24 @@ document.addEventListener('DOMContentLoaded', function() {
 #description-editor::selection {
     background-color: #dbeafe;
     color: #1d4ed8;
+}
+
+/* Removed variant styling */
+.removed-variant {
+    opacity: 0.6;
+    background-color: #fef2f2;
+    border-left: 4px solid #ef4444;
+}
+
+.removed-variant td {
+    text-decoration: line-through;
+    color: #9ca3af;
+}
+
+.removed-variant input:not([type="hidden"]),
+.removed-variant button {
+    pointer-events: none;
+    opacity: 0.5;
 }
 </style>
 @endsection

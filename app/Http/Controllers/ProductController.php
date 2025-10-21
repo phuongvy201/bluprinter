@@ -118,7 +118,9 @@ class ProductController extends Controller
         // Get product and require all display conditions
         $product = Product::where('slug', $slug)
             ->availableForDisplay()
-            ->with(['shop', 'template.category', 'variants'])
+            ->with(['shop', 'template.category', 'variants', 'approvedReviews' => function ($query) {
+                $query->orderBy('created_at', 'desc')->limit(10);
+            }])
             ->firstOrFail();
 
         // Shop is available and active if we reach here

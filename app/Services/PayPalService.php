@@ -231,4 +231,26 @@ class PayPalService
             'data' => $order
         ];
     }
+
+    /**
+     * Verify PayPal order without throwing exceptions (safe verification)
+     */
+    public function verifyOrderSafely($orderId)
+    {
+        try {
+            return $this->capturePayment($orderId);
+        } catch (\Exception $e) {
+            Log::warning('PayPal Order Verification Failed (Safe Mode)', [
+                'order_id' => $orderId,
+                'error' => $e->getMessage()
+            ]);
+
+            // Return a generic response instead of throwing
+            return (object)[
+                'status' => 'VERIFICATION_FAILED',
+                'id' => $orderId,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
 }

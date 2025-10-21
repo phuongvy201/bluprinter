@@ -87,7 +87,7 @@
                 
                 <!-- Navigation -->
                 <nav class="flex-1 px-4 py-6 space-y-1">
-                    {{-- Dashboard link - Different for admin vs seller --}}
+                    {{-- Dashboard link - Different for admin vs seller vs ad-partner --}}
                     @if(auth()->user()->hasRole('admin'))
                         <a href="{{ route('admin.dashboard') }}" 
                            class="group flex items-center px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 {{ request()->routeIs('admin.dashboard') ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
@@ -97,7 +97,7 @@
                             </svg>
                             Dashboard
                         </a>
-                    @else
+                    @elseif(auth()->user()->hasRole('seller'))
                         <a href="{{ route('admin.seller.dashboard') }}" 
                            class="group flex items-center px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 {{ request()->routeIs('admin.seller.dashboard') ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                             <svg class="w-5 h-5 mr-3 flex-shrink-0 {{ request()->routeIs('admin.seller.dashboard') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,6 +106,7 @@
                             </svg>
                             Dashboard
                         </a>
+                   
                     @endif
                     
                     {{-- Admin Only Menu Items --}}
@@ -127,7 +128,8 @@
                         </a>
                     @endif
                     
-                    <!-- Product Management Section -->
+                    <!-- Product Management Section - Admin and Seller Only -->
+                    @if(auth()->user()->hasRole('admin') || auth()->user()->hasRole('seller'))
                     <div class="mt-6">
                         <h3 class="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                             {{ auth()->user()->hasRole('admin') ? 'Product Management' : 'My Products' }}
@@ -190,15 +192,22 @@
                             {{ auth()->user()->hasRole('admin') ? 'Collections' : 'My Collections' }}
                         </a>
                     </div>
+                    @endif
 
                     <!-- Orders Section -->
                     <div class="mt-6">
                         <h3 class="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                            {{ auth()->user()->hasRole('admin') ? 'Sales Management' : 'My Sales' }}
+                            @if(auth()->user()->hasRole('admin'))
+                                Sales Management
+                            @elseif(auth()->user()->hasRole('ad-partner'))
+                                Orders Management
+                            @else
+                                My Sales
+                            @endif
                         </h3>
                         
-                        {{-- Orders - Admin --}}
-                        @if(auth()->user()->hasRole('admin'))
+                        {{-- Orders - Admin + Ad-Partner --}}
+                        @if(auth()->user()->hasRole('admin') || auth()->user()->hasRole('ad-partner'))
                             <a href="{{ route('admin.orders.index') }}" 
                                class="group flex items-center px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 {{ request()->routeIs('admin.orders.*') ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <svg class="w-5 h-5 mr-3 flex-shrink-0 {{ request()->routeIs('admin.orders.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,7 +251,8 @@
                     </div>
                     @endif
 
-                    <!-- Content Management Section -->
+                    <!-- Content Management Section - Admin and Seller Only -->
+                    @if(auth()->user()->hasRole('admin') || auth()->user()->hasRole('seller'))
                     <div class="mt-6">
                         <h3 class="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                             Content Management
@@ -268,13 +278,15 @@
                         @endif
                         
                         {{-- Posts - Both Admin and Seller --}}
-                        <a href="{{ route('admin.posts.index') }}" 
-                           class="group flex items-center px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 {{ request()->routeIs('admin.posts.*') ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                            <svg class="w-5 h-5 mr-3 flex-shrink-0 {{ request()->routeIs('admin.posts.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                            </svg>
-                            {{ auth()->user()->hasRole('admin') ? 'Blog Posts' : 'My Posts' }}
-                        </a>
+                        @if(auth()->user()->hasRole('admin') || auth()->user()->hasRole('seller'))
+                            <a href="{{ route('admin.posts.index') }}" 
+                               class="group flex items-center px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 {{ request()->routeIs('admin.posts.*') ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                                <svg class="w-5 h-5 mr-3 flex-shrink-0 {{ request()->routeIs('admin.posts.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                                </svg>
+                                {{ auth()->user()->hasRole('admin') ? 'Blog Posts' : 'My Posts' }}
+                            </a>
+                        @endif
                         
                         {{-- Post Categories - Admin Only --}}
                         @if(auth()->user()->hasRole('admin'))
@@ -295,6 +307,7 @@
                             </a>
                         @endif
                     </div>
+                    @endif
                 </nav>
             </div>
         </div>
@@ -336,7 +349,7 @@
             </div>
             
             <nav class="px-4 py-6 space-y-2">
-                {{-- Dashboard link - Different for admin vs seller --}}
+                {{-- Dashboard link - Different for admin vs seller vs ad-partner --}}
                 @if(auth()->user()->hasRole('admin'))
                     <a href="{{ route('admin.dashboard') }}" 
                        class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 {{ request()->routeIs('admin.dashboard') ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700 hover:text-white' }}"
@@ -347,7 +360,7 @@
                         </svg>
                         Dashboard
                     </a>
-                @else
+                @elseif(auth()->user()->hasRole('seller'))
                     <a href="{{ route('admin.seller.dashboard') }}" 
                        class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 {{ request()->routeIs('admin.seller.dashboard') ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700 hover:text-white' }}"
                        @click="sidebarOpen = false">
@@ -451,14 +464,6 @@
                         Post Tags
                     </a>
                     
-                    <a href="{{ route('admin.orders.index') }}" 
-                       class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 {{ request()->routeIs('admin.orders.*') ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700 hover:text-white' }}"
-                       @click="sidebarOpen = false">
-                        <svg class="w-5 h-5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
-                        </svg>
-                        Orders
-                    </a>
                     
                     <a href="{{ route('admin.shipping-zones.index') }}" 
                        class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 {{ request()->routeIs('admin.shipping-zones.*') ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700 hover:text-white' }}"
@@ -518,6 +523,18 @@
                     </a>
                 @endif
                 
+                {{-- Orders - Admin + Ad-Partner (Mobile) --}}
+                @if(auth()->user()->hasRole('admin') || auth()->user()->hasRole('ad-partner'))
+                    <a href="{{ route('admin.orders.index') }}" 
+                       class="group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 {{ request()->routeIs('admin.orders.*') ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700 hover:text-white' }}"
+                       @click="sidebarOpen = false">
+                        <svg class="w-5 h-5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                        </svg>
+                        Orders
+                    </a>
+                @endif
+                
                 {{-- Post Management - Admin Only (Mobile) --}}
                 @if(auth()->user()->hasRole('admin'))
                     <a href="{{ route('admin.post-categories.index') }}" 
@@ -570,6 +587,10 @@
                                     @if(auth()->user()->hasRole('admin'))
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                             Admin
+                                        </span>
+                                    @elseif(auth()->user()->hasRole('ad-partner'))
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                            Ad Partner
                                         </span>
                                     @else
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

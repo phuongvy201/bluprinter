@@ -3951,114 +3951,68 @@ class PageSeeder extends Seeder
                             <!-- Shipping Costs -->
                             <div class="mb-12">
                                 <div class="bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-5 rounded-t-lg">
-                                    <h2 class="text-3xl font-bold text-center">Shipping Costs (Within USA)</h2>
+                                    <h2 class="text-3xl font-bold text-center">Shipping Costs</h2>
                                     <p class="text-center text-green-100 mt-2">Handling Fee: <strong>7%</strong> of order value</p>
                                 </div>
-                                <div class="bg-white border-2 border-green-300 border-t-0 rounded-b-lg overflow-x-auto">
-                                    <table class="w-full">
-                                        <thead class="bg-green-100">
-                                            <tr>
-                                                <th class="px-4 py-4 text-left font-bold text-gray-800 border-b-2 border-green-300">Product</th>
-                                                <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 border-green-300">Amount</th>
-                                                <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 border-green-300">Standard<br><span class="text-xs font-normal">(3-12 days)</span></th>
-                                                <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 border-green-300">Premium<br><span class="text-xs font-normal">(3-10 days)</span></th>
-                                                <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 border-green-300">Express<br><span class="text-xs font-normal">(3-7 days)</span></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-gray-200">
-                                            <tr class="hover:bg-green-50 transition">
-                                                <td class="px-4 py-3 font-semibold text-gray-800" rowspan="2">T-Shirts</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">1st item</td>
-                                                <td class="px-4 py-3 text-center text-green-700 font-bold">$4.90</td>
-                                                <td class="px-4 py-3 text-center text-blue-700 font-bold">$12.99</td>
-                                                <td class="px-4 py-3 text-center text-purple-700 font-bold">$28.99</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition bg-gray-50">
-                                                <td class="px-4 py-3 text-center text-gray-600 text-sm">Adding item</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$1</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$2</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$2</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition">
-                                                <td class="px-4 py-3 font-semibold text-gray-800" rowspan="2">Tank tops</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">1st item</td>
-                                                <td class="px-4 py-3 text-center text-green-700 font-bold">$5.99</td>
-                                                <td class="px-4 py-3 text-center text-blue-700 font-bold">$12.99</td>
-                                                <td class="px-4 py-3 text-center text-purple-700 font-bold">$28.99</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition bg-gray-50">
-                                                <td class="px-4 py-3 text-center text-gray-600 text-sm">Adding item</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$1</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$2</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$2</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition">
-                                                <td class="px-4 py-3 font-semibold text-gray-800" rowspan="2">Long sleeves</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">1st item</td>
-                                                <td class="px-4 py-3 text-center text-green-700 font-bold">$6.99</td>
-                                                <td class="px-4 py-3 text-center text-blue-700 font-bold">$13.99</td>
-                                                <td class="px-4 py-3 text-center text-purple-700 font-bold">$28.99</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition bg-gray-50">
-                                                <td class="px-4 py-3 text-center text-gray-600 text-sm">Adding item</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$1</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$2</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$2</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition">
-                                                <td class="px-4 py-3 font-semibold text-gray-800" rowspan="2">Hoodies</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">1st item</td>
-                                                <td class="px-4 py-3 text-center text-green-700 font-bold">$9.99</td>
-                                                <td class="px-4 py-3 text-center text-blue-700 font-bold">$13.99</td>
-                                                <td class="px-4 py-3 text-center text-purple-700 font-bold">$28.99</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition bg-gray-50">
-                                                <td class="px-4 py-3 text-center text-gray-600 text-sm">Adding item</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$1</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$2</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$2</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition">
-                                                <td class="px-4 py-3 font-semibold text-gray-800" rowspan="2">Mugs</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">1st item</td>
-                                                <td class="px-4 py-3 text-center text-green-700 font-bold">$6.99</td>
-                                                <td class="px-4 py-3 text-center text-blue-700 font-bold">$10.99</td>
-                                                <td class="px-4 py-3 text-center text-gray-400">-</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition bg-gray-50">
-                                                <td class="px-4 py-3 text-center text-gray-600 text-sm">Adding item</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$1</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$3</td>
-                                                <td class="px-4 py-3 text-center text-gray-400">-</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition">
-                                                <td class="px-4 py-3 font-semibold text-gray-800" rowspan="2">Hats</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">1st item</td>
-                                                <td class="px-4 py-3 text-center text-green-700 font-bold">$6.99</td>
-                                                <td class="px-4 py-3 text-center text-blue-700 font-bold">$10.99</td>
-                                                <td class="px-4 py-3 text-center text-gray-400">-</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition bg-gray-50">
-                                                <td class="px-4 py-3 text-center text-gray-600 text-sm">Adding item</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$1</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$2</td>
-                                                <td class="px-4 py-3 text-center text-gray-400">-</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition">
-                                                <td class="px-4 py-3 font-semibold text-gray-800" rowspan="2">Stickers</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">1st item</td>
-                                                <td class="px-4 py-3 text-center text-green-700 font-bold">$5.99</td>
-                                                <td class="px-4 py-3 text-center text-blue-700 font-bold">$8.99</td>
-                                                <td class="px-4 py-3 text-center text-purple-700 font-bold">$28.99</td>
-                                            </tr>
-                                            <tr class="hover:bg-green-50 transition bg-gray-50">
-                                                <td class="px-4 py-3 text-center text-gray-600 text-sm">Adding item</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$0</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$1</td>
-                                                <td class="px-4 py-3 text-center text-gray-700">$2</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                
+                                <!-- US Shipping Costs -->
+                                <div class="mb-8">
+                                    <div class="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-6 py-3 rounded-t-lg">
+                                        <h3 class="text-2xl font-bold text-center">United States Shipping</h3>
+                                    </div>
+                                    <div class="bg-white border-2 border-blue-300 border-t-0 rounded-b-lg overflow-x-auto">
+                                        <table class="w-full">
+                                            <thead class="bg-blue-100">
+                                                <tr>
+                                                    <th class="px-4 py-4 text-left font-bold text-gray-800 border-b-2 border-blue-300">Product Type</th>
+                                                    <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 border-blue-300">First Item</th>
+                                                    <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 border-blue-300">Additional Items</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-200">
+                                                <tr class="hover:bg-blue-50 transition">
+                                                    <td class="px-4 py-3 font-semibold text-gray-800">Clothing (T-shirts, Tank tops, Hoodies, etc.)</td>
+                                                    <td class="px-4 py-3 text-center text-blue-700 font-bold">$6.99</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">$4.99</td>
+                                                </tr>
+                                                <tr class="hover:bg-blue-50 transition bg-gray-50">
+                                                    <td class="px-4 py-3 font-semibold text-gray-800">Ornaments & Suncatchers</td>
+                                                    <td class="px-4 py-3 text-center text-blue-700 font-bold">$5.99</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">$3.99</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- UK Shipping Costs -->
+                                <div class="mb-8">
+                                    <div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-t-lg">
+                                        <h3 class="text-2xl font-bold text-center">United Kingdom Shipping</h3>
+                                    </div>
+                                    <div class="bg-white border-2 border-purple-300 border-t-0 rounded-b-lg overflow-x-auto">
+                                        <table class="w-full">
+                                            <thead class="bg-purple-100">
+                                                <tr>
+                                                    <th class="px-4 py-4 text-left font-bold text-gray-800 border-b-2 border-purple-300">Product Type</th>
+                                                    <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 border-purple-300">First Item</th>
+                                                    <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 border-purple-300">Additional Items</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-200">
+                                                <tr class="hover:bg-purple-50 transition">
+                                                    <td class="px-4 py-3 font-semibold text-gray-800">Clothing (T-shirts, Tank tops, Hoodies, etc.)</td>
+                                                    <td class="px-4 py-3 text-center text-purple-700 font-bold">$6.99</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">$4.99</td>
+                                                </tr>
+                                                <tr class="hover:bg-purple-50 transition bg-gray-50">
+                                                    <td class="px-4 py-3 font-semibold text-gray-800">Ornaments & Suncatchers</td>
+                                                    <td class="px-4 py-3 text-center text-purple-700 font-bold">$5.99</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">$3.99</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
 

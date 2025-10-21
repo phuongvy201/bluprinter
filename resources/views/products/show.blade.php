@@ -368,6 +368,193 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             @endif
+
+            <!-- Reviews Section -->
+            <div class="space-y-6">
+                <!-- Reviews Header -->
+                <div class="flex items-center justify-between">
+                    <h3 class="text-2xl font-bold text-gray-900">Reviews</h3>
+                </div>
+
+                <!-- Tabs -->
+                <div class="border-b border-gray-200">
+                    <nav class="-mb-px flex space-x-8">
+                        <button class="border-b-2 border-[#005366] py-2 px-1 text-sm font-medium text-[#005366]">
+                            Reviews for this item
+                        </button>
+                        <button class="border-b-2 border-transparent py-2 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                            Reviews for this shop
+                        </button>
+                    </nav>
+                </div>
+
+                @php
+                    $averageRating = $product->getAverageRating();
+                    $totalReviews = $product->getTotalReviews();
+                    $ratingBreakdown = $product->getRatingBreakdown();
+                @endphp
+
+                <!-- Overall Rating Summary -->
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                    <!-- Average Rating -->
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center">
+                            <svg class="w-8 h-8 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                            </svg>
+                            <span class="text-2xl font-bold text-gray-900 ml-2">{{ number_format($averageRating, 1) }} /5.0</span>
+                        </div>
+                        <div class="text-sm text-gray-600">
+                            <span class="underline">{{ $totalReviews }} Reviews</span>
+                        </div>
+                    </div>
+
+                    <!-- Star Rating Distribution -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2">
+                        <!-- Left Column -->
+                        <div class="space-y-2">
+                            @for($star = 5; $star >= 3; $star--)
+                                @php
+                                    $count = $ratingBreakdown[$star] ?? 0;
+                                    $percentage = $totalReviews > 0 ? round(($count / $totalReviews) * 100) : 0;
+                                @endphp
+                                <div class="flex items-center space-x-2">
+                                    <div class="flex items-center">
+                                        <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                        </svg>
+                                        <span class="text-sm font-medium text-gray-700 ml-1">{{ $star }}</span>
+                                    </div>
+                                    <div class="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
+                                        <div class="bg-gray-900 h-2 rounded-full" style="width: {{ $percentage }}%"></div>
+                                    </div>
+                                    <span class="text-xs text-gray-500 w-8">({{ $percentage }}%)</span>
+                                </div>
+                            @endfor
+                        </div>
+                        
+                        <!-- Right Column -->
+                        <div class="space-y-2">
+                            @for($star = 2; $star >= 1; $star--)
+                                @php
+                                    $count = $ratingBreakdown[$star] ?? 0;
+                                    $percentage = $totalReviews > 0 ? round(($count / $totalReviews) * 100) : 0;
+                                @endphp
+                                <div class="flex items-center space-x-2">
+                                    <div class="flex items-center">
+                                        <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                        </svg>
+                                        <span class="text-sm font-medium text-gray-700 ml-1">{{ $star }}</span>
+                                    </div>
+                                    <div class="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
+                                        <div class="bg-gray-900 h-2 rounded-full" style="width: {{ $percentage }}%"></div>
+                                    </div>
+                                    <span class="text-xs text-gray-500 w-8">({{ $percentage }}%)</span>
+                                </div>
+                            @endfor
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Individual Reviews -->
+                @if($product->approvedReviews->count() > 0)
+                    <div class="space-y-6">
+                        @foreach($product->approvedReviews->take(3) as $review)
+                            <div class="border-t border-dotted border-gray-300 pt-6">
+                                <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between space-y-4 lg:space-y-0">
+                                    <!-- Review Content -->
+                                    <div class="flex-1">
+                                        <!-- Rating -->
+                                        <div class="flex items-center mb-3">
+                                            @for($i = 1; $i <= 5; $i++)
+                                                @if($i <= floor($review->rating))
+                                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                    </svg>
+                                                @elseif($i - 0.5 <= $review->rating)
+                                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                                        <defs>
+                                                            <linearGradient id="half-star-{{ $review->id }}-{{ $i }}">
+                                                                <stop offset="50%" stop-color="currentColor"/>
+                                                                <stop offset="50%" stop-color="#E5E7EB"/>
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <path fill="url(#half-star-{{ $review->id }}-{{ $i }})" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                    </svg>
+                                                @else
+                                                    <svg class="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                    </svg>
+                                                @endif
+                                            @endfor
+                                        </div>
+
+                                        <!-- Review Title and Text -->
+                                        @if($review->review_text)
+                                            @php
+                                                $words = explode(' ', $review->review_text);
+                                                $title = count($words) > 8 ? implode(' ', array_slice($words, 0, 8)) . '...' : $review->review_text;
+                                            @endphp
+                                            <h4 class="font-semibold text-gray-900 mb-2">{{ $title }}</h4>
+                                            <p class="text-gray-700 text-sm leading-relaxed">{{ $review->review_text }}</p>
+                                        @endif
+                                    </div>
+
+                                    <!-- Reviewer Info -->
+                                    <div class="flex items-center space-x-3 lg:ml-6">
+                                        <div class="flex-shrink-0">
+                                            <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-medium text-sm">
+                                                {{ Str::upper(substr($review->display_name, 0, 2)) }}
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-sm font-medium text-gray-900">{{ $review->display_name }}</div>
+                                            <div class="text-xs text-gray-500">{{ $review->created_at->format('D M d Y') }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <div class="text-center py-12">
+                        <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                        </svg>
+                        <p class="text-gray-500 text-lg mb-2">No reviews yet</p>
+                        <p class="text-gray-400 text-sm">Be the first to review this product</p>
+                    </div>
+                @endif
+
+                <!-- Write Review and Pagination -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0 pt-6 border-t border-gray-200">
+                    <!-- Write Review Button -->
+                    <button class="inline-flex items-center px-4 py-2 border border-orange-500 text-orange-500 rounded-lg hover:bg-orange-50 transition-colors">
+                        <svg class="w-4 h-4 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
+                        </svg>
+                        Write your review
+                    </button>
+
+                    <!-- Pagination -->
+                    @if($product->approvedReviews->count() > 3)
+                        <div class="flex items-center space-x-2">
+                            <button class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
+                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                </svg>
+                            </button>
+                            <span class="text-sm text-gray-600 px-3">1/3</span>
+                            <button class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
+                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    @endif
+                </div>
+            </div>
         </div>
 
         <!-- Product Info -->
@@ -444,7 +631,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <p class="text-sm text-gray-700 mb-2">
                                     Free returns are available for the shipping address you chose. You can return the item for any reason in new and unused condition: no return shipping charges.
                                 </p>
-                                <a href="#" class="text-sm text-red-600 hover:underline">
+                                <a href="{{ route('page.show', 'returns-exchanges-policy') }}" class="text-sm text-red-600 hover:underline">
                                     Read the full returns policy
                                 </a>
                                 
@@ -803,9 +990,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     <button id="add-to-cart-btn" 
                             onclick="addToCart()"
                             class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 px-6 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <svg id="cart-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 11-4 0v-6m4 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01"></path>
-                        </svg>
+                            <svg id="cart-icon" class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                            </svg>
                         <span id="cart-text">Add to Cart</span>
                         <div id="cart-loading" class="hidden">
                             <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
@@ -867,12 +1054,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </svg>
                             </a>
                         </div>
-                        <button class="bg-[#005366] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#003d4d] transition-colors flex items-center space-x-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                            </svg>
-                            <span>Customize</span>
-                        </button>
                     </div>
 
                     <!-- Policies -->
@@ -885,7 +1066,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div>
                             <h4 class="font-semibold text-gray-900 mb-1">Policies</h4>
                             <p class="text-sm text-gray-600">
-                                Eligible for <span class="text-orange-600 font-medium">Refund</span> or <span class="text-orange-600 font-medium">Return and Replacement</span> within 30 days from the date of delivery
+                                Eligible for <a href="{{ route('page.show', 'returns-exchanges-policy') }}" class="text-orange-600 font-medium hover:underline">Refund</a> or <a href="{{ route('page.show', 'returns-exchanges-policy') }}" class="text-orange-600 font-medium hover:underline">Return and Replacement</a> within 30 days from the date of delivery
                             </p>
                         </div>
                     </div>
@@ -900,9 +1081,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div>
                             <h4 class="font-semibold text-gray-900 mb-2">Need Support?</h4>
                             <div class="flex items-center space-x-4">
-                                <a href="#" class="text-[#005366] hover:underline text-sm">Submit a ticket</a>
+                                <a href="{{ route('page.show', 'contact-us') }}" class="text-[#005366] hover:underline text-sm">Submit a ticket</a>
                                 <span class="text-gray-300">|</span>
-                                <a href="#" class="text-[#005366] hover:underline text-sm">Report Product</a>
+                                <a href="{{ route('page.show', 'contact-us') }}" class="text-[#005366] hover:underline text-sm">Report Product</a>
                             </div>
                         </div>
                     </div>
@@ -1066,6 +1247,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 @endif
+
 
 <!-- Recently Viewed Products -->
 <div class="bg-gray-50 py-8 border-t border-gray-200">
@@ -2280,6 +2462,21 @@ function updateVariantSelection() {
             }
         }
         
+        // Update Add to Cart button based on stock
+        const addToCartBtn = document.getElementById('add-to-cart-btn');
+        const cartText = document.getElementById('cart-text');
+        if (addToCartBtn && cartText) {
+            if (matchingVariant.quantity !== null && matchingVariant.quantity <= 0) {
+                addToCartBtn.disabled = true;
+                cartText.textContent = 'Out of stock';
+                addToCartBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                addToCartBtn.disabled = false;
+                cartText.textContent = 'Add to Cart';
+                addToCartBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+        
         // Update description
         const descElement = document.getElementById('selected-variant-description');
         if (descElement) {
@@ -2333,6 +2530,15 @@ function updateVariantSelection() {
         const mainPriceElement = document.querySelector('.text-4xl.font-bold.text-\\[\\#E2150C\\]');
         if (mainPriceElement) {
             mainPriceElement.textContent = `$${parseFloat(matchingVariant.price).toFixed(2)}`;
+        }
+    } else {
+        // No matching variant found, enable button and reset text
+        const addToCartBtn = document.getElementById('add-to-cart-btn');
+        const cartText = document.getElementById('cart-text');
+        if (addToCartBtn && cartText) {
+            addToCartBtn.disabled = false;
+            cartText.textContent = 'Add to Cart';
+            addToCartBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         }
     }
 }
@@ -2704,19 +2910,38 @@ function formatDate(date) {
 
 // Cart Functions
 function addToCart() {
+    console.log('addToCart function called');
     const btn = document.getElementById('add-to-cart-btn');
     const cartIcon = document.getElementById('cart-icon');
     const cartText = document.getElementById('cart-text');
     const cartLoading = document.getElementById('cart-loading');
     
+    // Check if required elements exist
+    if (!btn) {
+        console.error('Add to cart button not found');
+        return;
+    }
+    
+    console.log('Button found, checking variant...');
+    
+    // Get selected variant to check quantity first
+    const selectedVariant = getSelectedVariant();
+    console.log('Selected variant:', selectedVariant);
+    
+    // Check if variant is out of stock
+    if (selectedVariant && selectedVariant.quantity !== null && selectedVariant.quantity <= 0) {
+        alert('Out of stock');
+        return;
+    }
+    
+    console.log('Variant check passed, proceeding...');
+    
     // Disable button and show loading
     btn.disabled = true;
-    cartIcon.classList.add('hidden');
-    cartLoading.classList.remove('hidden');
-    cartText.textContent = 'Adding...';
+    if (cartIcon) cartIcon.classList.add('hidden');
+    if (cartLoading) cartLoading.classList.remove('hidden');
+    if (cartText) cartText.textContent = 'Adding...';
     
-    // Get selected variant to determine correct price
-    const selectedVariant = getSelectedVariant();
     const variantPrice = selectedVariant && selectedVariant.price ? selectedVariant.price : {{ $product->base_price }};
     
     // Get current product data
@@ -2773,13 +2998,15 @@ function addToCart() {
             showCartSuccess('Cart saved locally');
         })
         .finally(() => {
-            // Reset button
+            console.log('Finally block executed, showing popup...');
+            // Reset button safely
             btn.disabled = false;
-            cartIcon.classList.remove('hidden');
-            cartLoading.classList.add('hidden');
-            cartText.textContent = 'Add to Cart';
+            if (cartIcon) cartIcon.classList.remove('hidden');
+            if (cartLoading) cartLoading.classList.add('hidden');
+            if (cartText) cartText.textContent = 'Add to Cart';
             
             // Show cart popup
+            console.log('About to show cart popup with productData:', productData);
             showCartPopup(productData);
         });
 }
@@ -2962,10 +3189,20 @@ function showCartSuccess(message = 'Added to cart successfully!') {
 }
 
 function showCartPopup(addedProduct) {
+    console.log('showCartPopup called with:', addedProduct);
+    
+    // Remove any existing popup first
+    const existingPopup = document.getElementById('cart-popup-overlay');
+    if (existingPopup) {
+        existingPopup.remove();
+    }
+    
     // Create popup overlay
     const overlay = document.createElement('div');
     overlay.id = 'cart-popup-overlay';
     overlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+    
+    console.log('Created overlay element');
     
     // Create popup content
     const popup = document.createElement('div');
@@ -2980,6 +3217,8 @@ function showCartPopup(addedProduct) {
     
     overlay.appendChild(popup);
     document.body.appendChild(overlay);
+    
+    console.log('Overlay appended to body');
     
     // Fetch cart data from backend
     fetch('/api/cart/get', {
@@ -3046,7 +3285,21 @@ function showCartPopup(addedProduct) {
 
 function renderCartPopup(popup, cartItems, summary, shippingDetails) {
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-    const totalPrice = parseFloat(summary.total || cartItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0));
+    
+    // Calculate subtotal
+    const subtotal = parseFloat(summary.subtotal || cartItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0));
+    
+    // Check if order qualifies for free shipping (>= $100)
+    const qualifiesForFreeShipping = subtotal >= 100;
+    const shippingCost = qualifiesForFreeShipping ? 0 : (summary.shipping || 0);
+    const totalPrice = subtotal + shippingCost;
+    
+    console.log('Cart popup calculations:', {
+        subtotal: subtotal,
+        qualifiesForFreeShipping: qualifiesForFreeShipping,
+        shippingCost: shippingCost,
+        totalPrice: totalPrice
+    });
     
     popup.innerHTML = `
         <!-- Header -->
@@ -3071,32 +3324,44 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
             <div class="space-y-2 mb-4">
                 <div class="flex justify-between text-gray-600">
                     <span>Subtotal (${totalItems} items)</span>
-                    <span class="font-semibold">$${parseFloat(summary.subtotal || 0).toFixed(2)}</span>
+                    <span class="font-semibold">$${subtotal.toFixed(2)}</span>
                 </div>
-                <div class="flex justify-between items-center text-gray-600">
-                    <span>Shipping</span>
-                    <div class="flex items-center space-x-3">
-                        <div class="relative">
-                            <select id="popupShippingCountry" class="text-sm border-2 border-gray-200 rounded-lg px-3 py-2 appearance-none bg-white pr-8 cursor-pointer hover:border-gray-300 focus:border-[#005366] focus:outline-none transition-colors min-w-[80px] [&::-ms-expand]:hidden [&::-webkit-appearance]:none">
-                                <option value="US">🇺🇸 US</option>
-                                <option value="UK">🇺k UK</option>
-                            </select>
-                            <div class="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <span id="popupShippingCost" class="font-semibold text-right min-w-[5rem] text-lg">
-                            ${summary.shipping !== undefined ? 
-                                (summary.shipping == 0 ? 
-                                    '<span class="text-green-600">FREE</span>' : 
-                                    '$' + parseFloat(summary.shipping).toFixed(2)
-                                ) : 'Calculating...'
-                            }
-                        </span>
+                ${qualifiesForFreeShipping ? 
+                    `<div class="flex justify-between text-gray-600">
+                        <span>Shipping</span>
+                        <span class="font-semibold text-green-600">FREE</span>
                     </div>
-                </div>
+                    <div class="text-xs text-green-600 bg-green-50 p-2 rounded">
+                        🎉 You qualify for free shipping on orders $100+!
+                    </div>` :
+                    `<div class="flex justify-between items-center text-gray-600">
+                        <span>Shipping</span>
+                        <div class="flex items-center space-x-3">
+                            <div class="relative">
+                                <select id="popupShippingCountry" class="text-sm border-2 border-gray-200 rounded-lg px-3 py-2 appearance-none bg-white pr-8 cursor-pointer hover:border-gray-300 focus:border-[#005366] focus:outline-none transition-colors min-w-[80px] [&::-ms-expand]:hidden [&::-webkit-appearance]:none">
+                                    <option value="US">🇺🇸 US</option>
+                                    <option value="UK">🇺k UK</option>
+                                </select>
+                                <div class="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <span id="popupShippingCost" class="font-semibold text-right min-w-[5rem] text-lg">
+                                ${summary.shipping !== undefined ? 
+                                    (summary.shipping == 0 ? 
+                                        '<span class="text-green-600">FREE</span>' : 
+                                        '$' + parseFloat(summary.shipping).toFixed(2)
+                                    ) : 'Calculating...'
+                                }
+                            </span>
+                        </div>
+                    </div>
+                    <div class="text-xs text-blue-600">
+                        Add $${(100 - subtotal).toFixed(2)} more for free shipping!
+                    </div>`
+                }
                 <div class="text-xs text-gray-500">
                     <span>Zone: </span>
                     <span id="popupShippingZone">United States</span>
@@ -3112,7 +3377,7 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
         <div class="p-6 bg-white">
             <!-- Checkout Buttons -->
             <div class="flex space-x-3 mb-3">
-                <button onclick="closeCartPopup(); window.location.href='{{ route('cart.index') }}'" 
+                <button onclick="closeCartPopup(); window.location.href='{{ route('checkout.index') }}'" 
                         class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 px-6 rounded-xl transition-colors">
                     Checkout
                 </button>
@@ -3149,6 +3414,16 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
             const zoneElement = document.getElementById('popupShippingZone');
             if (zoneElement) {
                 zoneElement.textContent = shippingDetails.zone_name;
+            }
+        }
+        
+        // Check if qualifies for free shipping and update display accordingly
+        if (!qualifiesForFreeShipping) {
+            const popupShippingCost = document.getElementById('popupShippingCost');
+            if (popupShippingCost && summary.shipping !== undefined) {
+                popupShippingCost.innerHTML = summary.shipping == 0 ? 
+                    '<span class="text-green-600">FREE</span>' : 
+                    '$' + parseFloat(summary.shipping).toFixed(2);
             }
         }
     }, 100);
@@ -3416,16 +3691,40 @@ function refreshCartPopupContent() {
                 if (subtotalLabel) subtotalLabel.textContent = `Subtotal (${totalItems} items)`;
             }
             
-            // Update shipping
-            if (subtotalElements[1] && summary.shipping !== undefined) {
+            // Update shipping with freeship logic
+            const subtotal = parseFloat(summary.subtotal || 0);
+            const qualifiesForFreeShipping = subtotal >= 100;
+            const actualShipping = qualifiesForFreeShipping ? 0 : (summary.shipping || 0);
+            
+            console.log('Refresh popup freeship check:', {
+                subtotal: subtotal,
+                qualifiesForFreeShipping: qualifiesForFreeShipping,
+                originalShipping: summary.shipping,
+                actualShipping: actualShipping
+            });
+            
+            // Update shipping display
+            const popupShippingCost = document.getElementById('popupShippingCost');
+            if (popupShippingCost) {
+                if (qualifiesForFreeShipping) {
+                    popupShippingCost.innerHTML = '<span class="text-green-600">FREE</span>';
+                } else {
+                    popupShippingCost.innerHTML = actualShipping === 0 ? 
+                        '<span class="text-green-600">FREE</span>' : 
+                        '$' + parseFloat(actualShipping).toFixed(2);
+                }
+            }
+            
+            // Also update the shipping span in subtotal elements if it exists
+            if (subtotalElements[1]) {
                 const shippingSpan = subtotalElements[1].querySelector('span:last-child');
                 if (shippingSpan) {
-                    if (summary.shipping == 0) {
+                    if (qualifiesForFreeShipping) {
                         shippingSpan.className = 'text-green-600 font-semibold';
-                        shippingSpan.textContent = 'FREE';
+                        shippingSpan.innerHTML = '<span class="text-green-600">FREE</span>';
                     } else {
                         shippingSpan.className = 'font-semibold';
-                        shippingSpan.textContent = `$${parseFloat(summary.shipping).toFixed(2)}`;
+                        shippingSpan.textContent = `$${parseFloat(actualShipping).toFixed(2)}`;
                     }
                 }
             }
@@ -3438,10 +3737,53 @@ function refreshCartPopupContent() {
                 }
             }
             
-            // Update total
+            // Update freeship messages
+            const freeshipMessageContainer = document.querySelector('#cart-popup-overlay .text-xs.text-green-600.bg-green-50');
+            const progressMessageContainer = document.querySelector('#cart-popup-overlay .text-xs.text-blue-600');
+            
+            if (qualifiesForFreeShipping) {
+                // Show freeship success message
+                if (!freeshipMessageContainer) {
+                    const shippingRow = document.querySelector('#cart-popup-overlay .flex.justify-between.items-center.text-gray-600');
+                    if (shippingRow && shippingRow.parentNode) {
+                        const successMsg = document.createElement('div');
+                        successMsg.className = 'text-xs text-green-600 bg-green-50 p-2 rounded';
+                        successMsg.textContent = '🎉 You qualify for free shipping on orders $100+!';
+                        shippingRow.parentNode.insertBefore(successMsg, shippingRow.nextSibling);
+                    }
+                }
+                
+                // Remove progress message if exists
+                if (progressMessageContainer) {
+                    progressMessageContainer.remove();
+                }
+            } else {
+                // Remove freeship success message if exists
+                if (freeshipMessageContainer) {
+                    freeshipMessageContainer.remove();
+                }
+                
+                // Update or add progress message
+                const remainingAmount = (100 - subtotal).toFixed(2);
+                if (progressMessageContainer) {
+                    progressMessageContainer.textContent = `Add $${remainingAmount} more for free shipping!`;
+                } else {
+                    const shippingRow = document.querySelector('#cart-popup-overlay .flex.justify-between.items-center.text-gray-600');
+                    if (shippingRow && shippingRow.parentNode) {
+                        const progressMsg = document.createElement('div');
+                        progressMsg.className = 'text-xs text-blue-600';
+                        progressMsg.textContent = `Add $${remainingAmount} more for free shipping!`;
+                        shippingRow.parentNode.insertBefore(progressMsg, shippingRow.nextSibling);
+                    }
+                }
+            }
+            
+            // Update total with correct shipping cost (considering freeship)
             const totalElement = document.querySelector('#cart-popup-overlay .border-t.pt-3 span:last-child');
             if (totalElement) {
-                totalElement.textContent = `$${parseFloat(summary.total || 0).toFixed(2)}`;
+                const newTotal = subtotal + actualShipping;
+                totalElement.textContent = `$${newTotal.toFixed(2)}`;
+                console.log('Updated total with freeship:', newTotal);
             }
             
             // Update header cart count
@@ -4107,11 +4449,39 @@ async function handlePopupCountryChange() {
             const shipping = parseFloat(data.shipping.total_shipping || 0);
             console.log('New shipping cost:', shipping);
             
+            // Get current subtotal to check for freeship qualification
+            const subtotalElements = document.querySelectorAll('#cart-popup-overlay .space-y-2 .flex.justify-between');
+            let subtotal = 0;
+            
+            subtotalElements.forEach(element => {
+                const text = element.textContent;
+                if (text.includes('items')) {
+                    const subtotalSpan = element.querySelector('span:last-child');
+                    if (subtotalSpan) {
+                        subtotal = parseFloat(subtotalSpan.textContent.replace('$', '').replace(',', '')) || 0;
+                    }
+                }
+            });
+            
+            const qualifiesForFreeShipping = subtotal >= 100;
+            const displayShipping = qualifiesForFreeShipping ? 0 : shipping;
+            
+            console.log('Freeship check:', {
+                subtotal: subtotal,
+                qualifiesForFreeShipping: qualifiesForFreeShipping,
+                originalShipping: shipping,
+                displayShipping: displayShipping
+            });
+            
             // Update shipping cost display
             if (popupShippingCost) {
-                popupShippingCost.innerHTML = shipping === 0 ? 
-                    '<span class="text-green-600">FREE</span>' : 
-                    '$' + shipping.toFixed(2);
+                if (qualifiesForFreeShipping) {
+                    popupShippingCost.innerHTML = '<span class="text-green-600">FREE</span>';
+                } else {
+                    popupShippingCost.innerHTML = displayShipping === 0 ? 
+                        '<span class="text-green-600">FREE</span>' : 
+                        '$' + displayShipping.toFixed(2);
+                }
                 console.log('Updated shipping cost element');
             }
             
@@ -4121,8 +4491,8 @@ async function handlePopupCountryChange() {
                 console.log('Updated zone to:', data.shipping.zone_name);
             }
             
-            // Update total in popup - need to get current subtotal and add new shipping
-            updatePopupTotal(shipping);
+            // Update total in popup using the actual shipping cost (considering freeship)
+            updatePopupTotal(displayShipping);
             
             // Show success feedback
             console.log('Shipping updated successfully:', {
@@ -4163,9 +4533,30 @@ function updatePopupTotal(newShipping) {
         }
     });
     
-    // Calculate new total
-    const newTotal = subtotal + newShipping;
-    console.log('Calculating new total:', subtotal, '+', newShipping, '=', newTotal);
+    // Check if order qualifies for free shipping (>= $100)
+    const qualifiesForFreeShipping = subtotal >= 100;
+    const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
+    const newTotal = subtotal + actualShipping;
+    
+    console.log('Calculating new total with freeship logic:', {
+        subtotal: subtotal,
+        qualifiesForFreeShipping: qualifiesForFreeShipping,
+        originalShipping: newShipping,
+        actualShipping: actualShipping,
+        newTotal: newTotal
+    });
+    
+    // Update shipping cost display to show FREE if qualified
+    const popupShippingCost = document.getElementById('popupShippingCost');
+    if (popupShippingCost) {
+        if (qualifiesForFreeShipping) {
+            popupShippingCost.innerHTML = '<span class="text-green-600">FREE</span>';
+        } else {
+            popupShippingCost.innerHTML = actualShipping === 0 ? 
+                '<span class="text-green-600">FREE</span>' : 
+                '$' + actualShipping.toFixed(2);
+        }
+    }
     
     // Update total display
     const totalElement = document.querySelector('#cart-popup-overlay .border-t.pt-3 span:last-child');
@@ -4183,6 +4574,13 @@ function updatePopupTotal(newShipping) {
 function buyNow() {
     // Get selected variant and customizations
     const selectedVariant = getSelectedVariant();
+    
+    // Check if variant is out of stock
+    if (selectedVariant && selectedVariant.quantity !== null && selectedVariant.quantity <= 0) {
+        alert('Out of stock');
+        return;
+    }
+    
     const variantPrice = selectedVariant && selectedVariant.price ? selectedVariant.price : {{ $product->base_price }};
     
     // Get product data

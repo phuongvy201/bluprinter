@@ -126,7 +126,7 @@
                             </div>
                             <h3 class="text-lg font-bold mb-2">Worldwide Shipping</h3>
                             <p class="text-sm text-gray-300 mb-3">Available as Standard or Express delivery</p>
-                            <a href="#" class="text-blue-400 text-sm hover:text-blue-300 transition-colors">Learn more</a>
+                            <a href="{{ route('page.show', 'shipping-delivery') }}" class="text-blue-400 text-sm hover:text-blue-300 transition-colors">Learn more</a>
                         </div>
 
                         <!-- Secure Payments -->
@@ -138,7 +138,7 @@
                             </div>
                             <h3 class="text-lg font-bold mb-2">Secure Payments</h3>
                             <p class="text-sm text-gray-300 mb-3">100% Secure payment with 256-bit SSL Encryption</p>
-                            <a href="#" class="text-blue-400 text-sm hover:text-blue-300 transition-colors">Learn more</a>
+                            <a href="{{ route('page.show', 'privacy-policy') }}" class="text-blue-400 text-sm hover:text-blue-300 transition-colors">Learn more</a>
                         </div>
 
                         <!-- Free Return -->
@@ -150,7 +150,7 @@
                             </div>
                             <h3 class="text-lg font-bold mb-2">Free Return</h3>
                             <p class="text-sm text-gray-300 mb-3">Exchange or money back guarantee for all orders</p>
-                            <a href="#" class="text-blue-400 text-sm hover:text-blue-300 transition-colors">Learn more</a>
+                            <a href="{{ route('page.show', 'returns-exchanges-policy') }}" class="text-blue-400 text-sm hover:text-blue-300 transition-colors">Learn more</a>
                         </div>
 
                         <!-- Local Support -->
@@ -162,7 +162,7 @@
                             </div>
                             <h3 class="text-lg font-bold mb-2">Local Support</h3>
                             <p class="text-sm text-gray-300 mb-3">24/7 Dedicated support</p>
-                            <a href="#" class="text-blue-400 text-sm hover:text-blue-300 transition-colors">Submit a request</a>
+                            <a href="{{ route('page.show', 'contact-us') }}" class="text-blue-400 text-sm hover:text-blue-300 transition-colors">Submit a request</a>
                         </div>
                     </div>
                 </div>

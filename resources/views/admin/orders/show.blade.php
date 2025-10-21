@@ -224,6 +224,7 @@
                     </div>
                 </div>
 
+                @if(auth()->user()->hasRole('admin'))
                 <!-- Update Order Status -->
                 <div class="bg-white rounded-xl shadow-lg p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4">Update Order</h3>
@@ -266,6 +267,7 @@
                         </div>
                     </form>
                 </div>
+                @endif
 
                 <!-- Order Information -->
                 <div class="bg-white rounded-xl shadow-lg p-6">
@@ -292,6 +294,7 @@
                     </div>
                 </div>
 
+                @if(auth()->user()->hasRole('admin'))
                 <!-- Danger Zone -->
                 <div class="bg-red-50 border border-red-200 rounded-xl p-6">
                     <h3 class="text-lg font-semibold text-red-900 mb-4">Danger Zone</h3>
@@ -305,6 +308,7 @@
                         </button>
                     </form>
                 </div>
+                @endif
             </div>
         </div>
     </div>

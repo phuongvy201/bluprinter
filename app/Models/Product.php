@@ -59,6 +59,16 @@ class Product extends Model
             ->orderByPivot('sort_order');
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    public function approvedReviews(): HasMany
+    {
+        return $this->hasMany(Review::class)->approved();
+    }
+
     // Accessors
     public function getBasePriceAttribute(): float
     {
@@ -179,5 +189,33 @@ class Product extends Model
             && $this->shop->shop_status === 'active'
             && $this->hasStock()
             && $this->hasMedia();
+    }
+
+    /**
+     * Get average rating for this product
+     */
+    public function getAverageRating(): float
+    {
+        return $this->approvedReviews()->avg('rating') ?? 0;
+    }
+
+    /**
+     * Get total number of reviews
+     */
+    public function getTotalReviews(): int
+    {
+        return $this->approvedReviews()->count();
+    }
+
+    /**
+     * Get rating breakdown (1-5 stars count)
+     */
+    public function getRatingBreakdown(): array
+    {
+        $breakdown = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $breakdown[$i] = $this->approvedReviews()->where('rating', $i)->count();
+        }
+        return $breakdown;
     }
 }

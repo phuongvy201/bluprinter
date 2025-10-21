@@ -8,6 +8,7 @@ use App\Models\PostCategory;
 use App\Models\PostTag;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class PostController extends Controller
 {
@@ -74,66 +75,126 @@ class PostController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'content' => 'required|string',
-            'excerpt' => 'nullable|string',
-            'featured_image' => 'nullable|image|max:2048',
-            'gallery.*' => 'nullable|image|max:2048',
-            'post_category_id' => 'nullable|exists:post_categories,id',
-            'tags' => 'nullable|array',
-            'tags.*' => 'exists:post_tags,id',
-            'status' => 'required|in:published,draft,scheduled',
-            'published_at' => 'nullable|date',
-            'type' => 'required|in:article,video,gallery,product_review',
-            'featured' => 'boolean',
-            'allow_comments' => 'boolean',
-            'meta_title' => 'nullable|string|max:255',
-            'meta_description' => 'nullable|string',
-            'meta_keywords' => 'nullable|string',
-        ]);
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'content' => 'required|string',
+                'excerpt' => 'nullable|string',
+                'featured_image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+                'gallery.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+                'post_category_id' => 'nullable|exists:post_categories,id',
+                'tags' => 'nullable|array',
+                'tags.*' => 'exists:post_tags,id',
+                'status' => 'nullable|in:published,draft,scheduled',
+                'published_at' => 'nullable|date',
+                'type' => 'required|in:article,video,gallery,product_review',
+                'featured' => 'boolean',
+                'allow_comments' => 'boolean',
+                'meta_title' => 'nullable|string|max:255',
+                'meta_description' => 'nullable|string',
+                'meta_keywords' => 'nullable|string',
+            ]);
 
-        $validated['user_id'] = auth()->id();
-        $validated['shop_id'] = auth()->user()->shop?->id;
-        $validated['slug'] = Post::generateSlug($validated['title']);
-        $validated['featured'] = $request->has('featured');
-        $validated['allow_comments'] = $request->has('allow_comments');
-
-        // Set published_at to now if not provided and status is published
-        if (!isset($validated['published_at']) && $validated['status'] === 'published') {
-            $validated['published_at'] = now();
-        }
-
-        // Set status to pending if seller is publishing
-        if ($validated['status'] === 'published' && !auth()->user()->hasRole('admin')) {
-            $validated['status'] = 'pending';
-        }
-
-        if ($request->hasFile('featured_image')) {
-            $validated['featured_image'] = $request->file('featured_image')->store('posts', 'public');
-        }
-
-        // Handle gallery
-        if ($request->hasFile('gallery')) {
-            $galleryPaths = [];
-            foreach ($request->file('gallery') as $image) {
-                $galleryPaths[] = $image->store('posts/gallery', 'public');
+            // Check if user has shop (required for posts)
+            if (!auth()->user()->shop) {
+                return back()
+                    ->withInput($request->all())
+                    ->with('error', 'Bạn cần có shop để tạo bài viết. Vui lòng tạo shop trước.');
             }
-            $validated['gallery'] = $galleryPaths;
+
+            $validated['user_id'] = auth()->id();
+            $validated['shop_id'] = auth()->user()->shop->id;
+
+            try {
+                $validated['slug'] = Post::generateSlug($validated['title']);
+            } catch (\Exception $e) {
+                return back()
+                    ->withInput($request->all())
+                    ->with('error', 'Không thể tạo slug cho tiêu đề. Vui lòng thử lại với tiêu đề khác.');
+            }
+
+            $validated['featured'] = $request->has('featured');
+            $validated['allow_comments'] = $request->has('allow_comments');
+
+            // Set default status to published if not provided or empty
+            if (!$request->has('status') || empty($validated['status'])) {
+                $validated['status'] = 'published';
+            }
+
+            // Set published_at to now if not provided and status is published
+            if (!isset($validated['published_at']) && $validated['status'] === 'published') {
+                $validated['published_at'] = now();
+            }
+
+            // Handle featured image upload
+            if ($request->hasFile('featured_image')) {
+                try {
+                    $validated['featured_image'] = $request->file('featured_image')->store('posts', 'public');
+                } catch (\Exception $e) {
+                    return back()
+                        ->withInput($request->all())
+                        ->with('error', 'Không thể tải lên hình ảnh đại diện. Vui lòng thử lại.');
+                }
+            }
+
+            // Handle gallery upload
+            if ($request->hasFile('gallery')) {
+                try {
+                    $galleryPaths = [];
+                    foreach ($request->file('gallery') as $image) {
+                        $galleryPaths[] = $image->store('posts/gallery', 'public');
+                    }
+                    $validated['gallery'] = $galleryPaths;
+                } catch (\Exception $e) {
+                    return back()
+                        ->withInput($request->all())
+                        ->with('error', 'Không thể tải lên một số hình ảnh trong thư viện. Vui lòng thử lại.');
+                }
+            }
+
+            // Create post
+            try {
+                $post = Post::create($validated);
+            } catch (\Exception $e) {
+                return back()
+                    ->withInput($request->all())
+                    ->with('error', 'Không thể tạo bài viết. Vui lòng kiểm tra lại thông tin và thử lại.');
+            }
+
+            // Attach tags
+            try {
+                if ($request->has('tags')) {
+                    $post->tags()->attach($request->tags);
+                }
+            } catch (\Exception $e) {
+                // Tags attachment failed but post was created, log error but don't fail
+                Log::warning('Failed to attach tags to post: ' . $e->getMessage());
+            }
+
+            // Calculate reading time
+            try {
+                $post->updateReadingTime();
+            } catch (\Exception $e) {
+                // Reading time calculation failed but post was created, log error but don't fail
+                Log::warning('Failed to calculate reading time for post: ' . $e->getMessage());
+            }
+
+            return redirect()->route('admin.posts.index')
+                ->with('success', 'Bài viết đã được tạo thành công!');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Laravel validation errors are automatically handled
+            throw $e;
+        } catch (\Exception $e) {
+            // Log the error for debugging
+            Log::error('Error creating post: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'request_data' => $request->except(['_token'])
+            ]);
+
+            return back()
+                ->withInput($request->all())
+                ->with('error', 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau.');
         }
-
-        $post = Post::create($validated);
-
-        // Attach tags
-        if ($request->has('tags')) {
-            $post->tags()->attach($request->tags);
-        }
-
-        // Calculate reading time
-        $post->updateReadingTime();
-
-        return redirect()->route('admin.posts.index')
-            ->with('success', 'Post created successfully!' . ($validated['status'] === 'pending' ? ' (Pending admin approval)' : ''));
     }
 
     public function edit(Post $post)

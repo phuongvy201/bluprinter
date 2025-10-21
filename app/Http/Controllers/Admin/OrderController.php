@@ -7,9 +7,25 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class OrderController extends Controller
 {
+    public function __construct()
+    {
+        // Only admin can update and destroy orders
+        $this->middleware('role:admin')->only(['update', 'destroy']);
+
+        // Admin and ad-partner can access index, show, and export
+        $this->middleware(function ($request, $next) {
+            $user = Auth::user();
+            if (!$user || (!$user->hasRole('admin') && !$user->hasRole('ad-partner'))) {
+                abort(403, 'Unauthorized');
+            }
+            return $next($request);
+        })->only(['index', 'show', 'export']);
+    }
+
     public function index(Request $request)
     {
         $query = Order::with(['user', 'items.product'])
@@ -98,7 +114,7 @@ class OrderController extends Controller
 
     public function export(Request $request)
     {
-        $query = Order::with(['user', 'items.product']);
+        $query = Order::with(['user', 'items.product.shop']);
 
         // Apply same filters as index
         if ($request->has('search') && $request->search) {
@@ -114,6 +130,11 @@ class OrderController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Add payment status filter
+        if ($request->has('payment_status') && $request->payment_status) {
+            $query->where('payment_status', $request->payment_status);
+        }
+
         if ($request->has('date_from') && $request->date_from) {
             $query->whereDate('created_at', '>=', $request->date_from);
         }
@@ -122,18 +143,25 @@ class OrderController extends Controller
             $query->whereDate('created_at', '<=', $request->date_to);
         }
 
-        $orders = $query->get();
+        $orders = $query->orderBy('created_at', 'desc')->get();
 
-        // Generate CSV
-        $filename = 'orders_' . now()->format('Y-m-d_H-i-s') . '.csv';
+        // Generate CSV filename with timestamp
+        $timestamp = now()->format('Y-m-d_H-i-s');
+        $filename = 'orders_export_' . $timestamp . '.csv';
 
         $headers = [
-            'Content-Type' => 'text/csv',
+            'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
         ];
 
         $callback = function () use ($orders) {
             $file = fopen('php://output', 'w');
+
+            // Add BOM for UTF-8 compatibility with Excel
+            fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
             // CSV headers
             fputcsv($file, [
@@ -143,21 +171,53 @@ class OrderController extends Controller
                 'Customer Phone',
                 'Status',
                 'Payment Status',
-                'Total Amount',
-                'Created At'
+                'Total Amount (USD)',
+                'Tax Amount (USD)',
+                'Shipping Amount (USD)',
+                'Order Date',
+                'Updated Date',
+                'Total Items',
+                'Product Details',
+                'Shop Name',
+                'Notes'
             ]);
 
             // CSV data
             foreach ($orders as $order) {
+                // Prepare product details
+                $productDetails = [];
+                $totalItems = 0;
+                $shopNames = [];
+
+                foreach ($order->items as $item) {
+                    $totalItems += $item->quantity;
+                    $productName = $item->product->name ?? 'Product not found';
+                    $productDetails[] = "{$item->quantity}x {$productName} @ $" . number_format($item->price, 2);
+
+                    if ($item->product && $item->product->shop) {
+                        $shopNames[] = $item->product->shop->name;
+                    }
+                }
+
+                $productDetailsString = implode('; ', $productDetails);
+                $shopNamesString = implode(', ', array_unique($shopNames));
+
                 fputcsv($file, [
-                    $order->order_number,
-                    $order->customer_name,
-                    $order->customer_email,
-                    $order->customer_phone,
-                    $order->status,
-                    $order->payment_status,
-                    $order->total_amount,
-                    $order->created_at->format('Y-m-d H:i:s')
+                    $order->order_number ?? '',
+                    $order->customer_name ?? '',
+                    $order->customer_email ?? '',
+                    $order->customer_phone ?? '',
+                    ucfirst($order->status ?? ''),
+                    ucfirst($order->payment_status ?? ''),
+                    number_format($order->total_amount ?? 0, 2),
+                    number_format($order->tax_amount ?? 0, 2),
+                    number_format($order->shipping_amount ?? 0, 2),
+                    $order->created_at ? $order->created_at->format('Y-m-d H:i:s') : '',
+                    $order->updated_at ? $order->updated_at->format('Y-m-d H:i:s') : '',
+                    $totalItems,
+                    $productDetailsString,
+                    $shopNamesString,
+                    $order->notes ?? ''
                 ]);
             }
 

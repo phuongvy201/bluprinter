@@ -174,10 +174,14 @@
                                             </div>
                                         </div>
                                         <span id="shippingCost" class="font-semibold text-right min-w-[5rem] text-lg">
-                                            @if($shipping == 0)
+                                            @php
+                                                $qualifiesForFreeShipping = $subtotal >= 100;
+                                                $actualShipping = $qualifiesForFreeShipping ? 0 : $shipping;
+                                            @endphp
+                                            @if($actualShipping == 0)
                                                 <span class="text-green-600">FREE</span>
                                             @else
-                                                ${{ number_format($shipping, 2) }}
+                                                ${{ number_format($actualShipping, 2) }}
                                             @endif
                                         </span>
                                     </div>
@@ -193,10 +197,26 @@
                                 @endif
                             </div>
                             
+                            @php
+                                $qualifiesForFreeShipping = $subtotal >= 100;
+                                $actualShipping = $qualifiesForFreeShipping ? 0 : $shipping;
+                                $actualTotal = $subtotal + $actualShipping;
+                            @endphp
                             <div class="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
                                 <span>Total</span>
-                                <span class="text-[#005366]">${{ number_format($total, 2) }}</span>
+                                <span class="text-[#005366]">${{ number_format($actualTotal, 2) }}</span>
                             </div>
+                            
+                            {{-- Freeship Messages --}}
+                            @if($qualifiesForFreeShipping)
+                                <div class="text-xs text-green-600 bg-green-50 p-2 rounded mt-2">
+                                    🎉 You qualify for free shipping on orders $100+!
+                                </div>
+                            @else
+                                <div class="text-xs text-blue-600 mt-2">
+                                    Add ${{ number_format(100 - $subtotal, 2) }} more for free shipping!
+                                </div>
+                            @endif
                         </div>
 
                         <a href="{{ route('checkout.index') }}" 
@@ -501,11 +521,56 @@ function trackInitiateCheckout(event) {
 document.addEventListener('DOMContentLoaded', function() {
     loadRecentlyViewed();
     
-    // Shipping calculation
+    // Shipping calculation with freeship logic
     const shippingCountrySelect = document.getElementById('shippingCountry');
     const shippingCostElement = document.getElementById('shippingCost');
     const totalElement = document.querySelector('.text-\\[\\#005366\\]');
     const subtotal = {{ $subtotal }};
+    
+    // Function to apply freeship logic
+    function applyFreeshipLogic(currentSubtotal, shippingCost) {
+        const qualifiesForFreeShipping = currentSubtotal >= 100;
+        return qualifiesForFreeShipping ? 0 : shippingCost;
+    }
+    
+    // Function to update shipping display with freeship messages
+    function updateShippingDisplay(actualShipping, originalShipping, qualifiesForFreeShipping) {
+        if (shippingCostElement) {
+            if (qualifiesForFreeShipping) {
+                shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+            } else {
+                shippingCostElement.innerHTML = actualShipping === 0 ? 
+                    '<span class="text-green-600">FREE</span>' : 
+                    '$' + actualShipping.toFixed(2);
+            }
+        }
+        
+        // Add or update freeship messages
+        const shippingSection = document.querySelector('.border-t.pt-3');
+        if (shippingSection) {
+            // Remove existing freeship messages
+            const existingFreeshipMsg = shippingSection.querySelector('.freeship-message');
+            const existingProgressMsg = shippingSection.querySelector('.freeship-progress');
+            
+            if (existingFreeshipMsg) existingFreeshipMsg.remove();
+            if (existingProgressMsg) existingProgressMsg.remove();
+            
+            if (qualifiesForFreeShipping) {
+                // Add success message
+                const successMsg = document.createElement('div');
+                successMsg.className = 'freeship-message text-xs text-green-600 bg-green-50 p-2 rounded mt-2';
+                successMsg.innerHTML = '🎉 You qualify for free shipping on orders $100+!';
+                shippingSection.insertBefore(successMsg, shippingSection.querySelector('.border-t.pt-3'));
+            } else {
+                // Add progress message
+                const remainingAmount = (100 - subtotal).toFixed(2);
+                const progressMsg = document.createElement('div');
+                progressMsg.className = 'freeship-progress text-xs text-blue-600 mt-2';
+                progressMsg.textContent = `Add $${remainingAmount} more for free shipping!`;
+                shippingSection.insertBefore(progressMsg, shippingSection.querySelector('.border-t.pt-3'));
+            }
+        }
+    }
     
     if (shippingCountrySelect) {
         shippingCountrySelect.addEventListener('change', async function() {
@@ -526,14 +591,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (data.success && data.shipping) {
                     const newShipping = parseFloat(data.shipping.total_shipping);
-                    const newTotal = subtotal + newShipping;
+                    const qualifiesForFreeShipping = subtotal >= 100;
+                    const actualShipping = applyFreeshipLogic(subtotal, newShipping);
+                    const newTotal = subtotal + actualShipping;
                     
-                    // Update shipping cost display
-                    if (shippingCostElement) {
-                        shippingCostElement.innerHTML = newShipping === 0 ? 
-                            '<span class="text-green-600">FREE</span>' : 
-                            '$' + newShipping.toFixed(2);
-                    }
+                    console.log('Cart shipping update:', {
+                        subtotal: subtotal,
+                        originalShipping: newShipping,
+                        actualShipping: actualShipping,
+                        qualifiesForFreeShipping: qualifiesForFreeShipping
+                    });
+                    
+                    // Update shipping cost display with freeship logic
+                    updateShippingDisplay(actualShipping, newShipping, qualifiesForFreeShipping);
                     
                     // Update zone
                     const zoneElement = document.querySelector('.text-xs.text-gray-500 span:last-child');
@@ -551,6 +621,32 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // Initialize freeship check on page load
+    function initializeFreeshipCheck() {
+        const qualifiesForFreeShipping = subtotal >= 100;
+        const currentShippingElement = document.getElementById('shippingCost');
+        const currentShippingText = currentShippingElement ? currentShippingElement.textContent : '';
+        const currentShipping = currentShippingText.includes('FREE') ? 0 : parseFloat(currentShippingText.replace(/\$/g, '')) || 0;
+        
+        if (qualifiesForFreeShipping) {
+            updateShippingDisplay(0, currentShipping, true);
+            // Update total if needed
+            if (totalElement) {
+                const newTotal = subtotal;
+                totalElement.textContent = '$' + newTotal.toFixed(2);
+            }
+        }
+        
+        console.log('Cart freeship initialization:', {
+            subtotal: subtotal,
+            qualifiesForFreeShipping: qualifiesForFreeShipping,
+            currentShipping: currentShipping
+        });
+    }
+    
+    // Run initialization
+    initializeFreeshipCheck();
 });
 </script>
 

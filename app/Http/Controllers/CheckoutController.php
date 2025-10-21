@@ -79,6 +79,11 @@ class CheckoutController extends Controller
             $shippingCost = $shippingDetails['total_shipping'] ?? 0;
         }
 
+        // Apply freeship logic in checkout index view as well
+        $originalShippingCost = $shippingCost;
+        $qualifiesForFreeShipping = $subtotal >= 100;
+        $shippingCost = $qualifiesForFreeShipping ? 0 : $originalShippingCost;
+
         $taxAmount = 0; // No tax
         $total = $subtotal + $shippingCost;
 
@@ -176,7 +181,7 @@ class CheckoutController extends Controller
 
         // Calculate totals
         $subtotal = 0;
-        $shippingCost = $shippingDetails['total_shipping'];
+        $originalShippingCost = $shippingDetails['total_shipping'];
         $products = [];
 
         foreach ($cartItems as $item) {
@@ -190,8 +195,21 @@ class CheckoutController extends Controller
             ];
         }
 
+        // Apply freeship logic: if subtotal >= $100, shipping is free
+        $qualifiesForFreeShipping = $subtotal >= 100;
+        $shippingCost = $qualifiesForFreeShipping ? 0 : $originalShippingCost;
+
         $taxAmount = 0; // No tax
         $total = $subtotal + $shippingCost;
+
+        // Log freeship application for debugging
+        Log::info('🚚 FREESHIP LOGIC APPLIED', [
+            'subtotal' => $subtotal,
+            'original_shipping_cost' => $originalShippingCost,
+            'qualifies_for_free_shipping' => $qualifiesForFreeShipping,
+            'final_shipping_cost' => $shippingCost,
+            'total_amount' => $total
+        ]);
 
         // Create order
         $order = Order::create([
@@ -221,6 +239,15 @@ class CheckoutController extends Controller
             // Find shipping details for this product
             $itemShipping = collect($shippingDetails['items'])->firstWhere('product_id', $item['product']->id);
 
+            // Apply freeship logic to individual item shipping cost
+            $itemShippingCost = $qualifiesForFreeShipping ? 0 : ($itemShipping['shipping_cost'] ?? 0);
+            $shippingNotes = $itemShipping ? "Rate: {$itemShipping['shipping_rate_name']}" : null;
+
+            // Add freeship note if applicable
+            if ($qualifiesForFreeShipping) {
+                $shippingNotes = $shippingNotes ? $shippingNotes . " (FREESHIP Applied)" : "FREESHIP Applied";
+            }
+
             OrderItem::create([
                 'order_id' => $order->id,
                 'product_id' => $item['product']->id,
@@ -229,9 +256,9 @@ class CheckoutController extends Controller
                 'unit_price' => $item['product']->base_price,
                 'quantity' => $item['quantity'],
                 'total_price' => $item['total'],
-                'shipping_cost' => $itemShipping['shipping_cost'] ?? 0,
+                'shipping_cost' => $itemShippingCost,
                 'is_first_item' => $itemShipping['is_first_item'] ?? false,
-                'shipping_notes' => $itemShipping ? "Rate: {$itemShipping['shipping_rate_name']}" : null,
+                'shipping_notes' => $shippingNotes,
             ]);
         }
 
@@ -246,19 +273,7 @@ class CheckoutController extends Controller
             'session_id' => $sessionId
         ]);
 
-        // Check if this is an AJAX request (for LianLian Pay redirect)
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Order created successfully',
-                'order_id' => $order->id,
-                'order_number' => $order->order_number,
-                'total_amount' => $order->total_amount,
-                'payment_method' => $order->payment_method
-            ]);
-        }
-
-        // Handle payment based on method
+        // Handle payment based on method first, then check AJAX for non-PayPal SDK requests
         if ($request->payment_method === 'paypal') {
             Log::info('PayPal Payment Method Detected', [
                 'has_paypal_order_id' => $request->has('paypal_order_id'),
@@ -287,55 +302,111 @@ class CheckoutController extends Controller
                         'paypal_order_id' => $request->paypal_order_id
                     ]);
 
-                    // Update order status to paid immediately (PayPal SDK confirmed the payment)
-                    $updateResult = $order->update([
+                    // Update order status - follow LianLian Pay pattern (simple and direct)
+                    $order->update([
                         'payment_status' => 'paid',
-                        'status' => 'confirmed',
+                        'status' => 'processing',
                         'payment_id' => $request->paypal_order_id,
                         'payment_transaction_id' => $request->paypal_payer_id,
                         'paid_at' => now()
                     ]);
 
-                    Log::info('PayPal SDK Order Update Result', [
+                    Log::info('✅ PayPal Order Status Updated (following LianLian Pay pattern)', [
                         'order_id' => $order->id,
                         'order_number' => $order->order_number,
-                        'update_result' => $updateResult,
-                        'original_payment_status' => $request->input('original_payment_status', 'unknown'),
-                        'new_payment_status' => $order->fresh()->payment_status,
-                        'new_status' => $order->fresh()->status,
-                        'paypal_payment_id' => $request->paypal_order_id
+                        'payment_status' => 'paid',
+                        'status' => 'processing',
+                        'paypal_order_id' => $request->paypal_order_id,
+                        'paypal_payer_id' => $request->paypal_payer_id
                     ]);
 
-                    // Try to verify with PayPal API (optional, for logging)
-                    try {
-                        $paypalService = new PayPalService();
-                        $payment = $paypalService->capturePayment($request->paypal_order_id);
+                    // Clear cart after successful order status update (CRITICAL)
+                    Log::info('🛒 Clearing cart after PayPal payment status update', [
+                        'user_id' => $userId,
+                        'session_id' => $sessionId
+                    ]);
 
-                        Log::info('PayPal API Verification Result', [
-                            'order_id' => $order->id,
-                            'payment_status_from_api' => $payment ? $payment->status : 'null'
-                        ]);
-                    } catch (\Exception $e) {
-                        Log::warning('PayPal API verification failed but continuing', [
-                            'order_id' => $order->id,
-                            'error' => $e->getMessage()
-                        ]);
-                    }
+                    $deletedCartCount = Cart::where(function ($query) use ($sessionId, $userId) {
+                        if ($userId) {
+                            $query->where('user_id', $userId);
+                        } else {
+                            $query->where('session_id', $sessionId);
+                        }
+                    })->delete();
 
-                    // Clear cart after successful payment
-                    Cart::where('user_id', $userId)->orWhere('session_id', $sessionId)->delete();
+                    Log::info('🛒 Cart deletion result', [
+                        'deleted_cart_items' => $deletedCartCount,
+                        'user_id' => $userId,
+                        'session_id' => $sessionId,
+                        'order_id' => $order->id
+                    ]);
+
+                    // Verify cart is actually empty
+                    $remainingCartItems = Cart::where(function ($query) use ($sessionId, $userId) {
+                        if ($userId) {
+                            $query->where('user_id', $userId);
+                        } else {
+                            $query->where('session_id', $sessionId);
+                        }
+                    })->count();
+
+                    Log::info('🛒 Cart verification after deletion', [
+                        'remaining_cart_items' => $remainingCartItems,
+                        'user_id' => $userId,
+                        'session_id' => $sessionId
+                    ]);
 
                     // Clear shipping session
                     Session::forget('shipping_details');
 
+                    // Try to verify with PayPal API (optional, for logging - AFTER cart clearing)
+                    try {
+                        $paypalService = new PayPalService();
+                        $payment = $paypalService->verifyOrderSafely($request->paypal_order_id);
+
+                        Log::info('PayPal API Verification Result', [
+                            'order_id' => $order->id,
+                            'payment_status_from_api' => $payment ? $payment->status : 'null',
+                            'verification_safe' => true
+                        ]);
+                    } catch (\Exception $verifyException) {
+                        Log::warning('PayPal API verification failed but continuing', [
+                            'order_id' => $order->id,
+                            'error' => $verifyException->getMessage()
+                        ]);
+                    }
+
                     if ($request->wantsJson() || $request->ajax()) {
-                        return response()->json([
+                        Log::info('💳 PayPal SDK AJAX Response - SENDING TO FRONTEND', [
+                            'order_id' => $order->id,
+                            'order_number' => $order->order_number,
+                            'wants_json' => $request->wantsJson(),
+                            'ajax' => $request->ajax(),
+                            'response_type' => 'json',
+                            'cart_cleared' => true,
+                            'order_status_updated' => true
+                        ]);
+
+                        $response = response()->json([
                             'success' => true,
                             'message' => 'Payment completed successfully',
                             'order_number' => $order->order_number,
                             'payment_completed' => true
                         ]);
+
+                        Log::info('💳 PayPal Response Being Sent', [
+                            'response_content' => $response->getContent(),
+                            'order_number' => $order->order_number
+                        ]);
+
+                        return $response;
                     }
+
+                    Log::info('💳 PayPal SDK Redirect Response', [
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'response_type' => 'redirect'
+                    ]);
 
                     return redirect()->route('checkout.success', $order->order_number)
                         ->with('success', 'Payment completed successfully!');
@@ -532,6 +603,19 @@ class CheckoutController extends Controller
 
         // For other payment methods (should not reach here normally)
         // Cart will be cleared in respective success callbacks
+
+        // Handle AJAX requests for non-PayPal SDK requests (like LianLian Pay redirect)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Order created successfully',
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'total_amount' => $order->total_amount,
+                'payment_method' => $order->payment_method
+            ]);
+        }
+
         return redirect()->route('checkout.success', $order->order_number);
     }
 
@@ -736,5 +820,126 @@ class CheckoutController extends Controller
             'success' => true,
             'shipping' => $shippingResult
         ]);
+    }
+
+    /**
+     * Safely update order status with multiple fallback methods
+     */
+    private function updateOrderStatusSafely($order, $paymentStatus, $status, $paymentId = null, $paymentTransactionId = null, $paidAt = null)
+    {
+        $orderId = $order->id;
+        $now = $paidAt ?? now();
+        $updateSuccess = false;
+        $attempts = [];
+
+        // Method 1: Eloquent update
+        try {
+            $result1 = $order->update([
+                'payment_status' => $paymentStatus,
+                'status' => $status,
+                'payment_id' => $paymentId,
+                'payment_transaction_id' => $paymentTransactionId,
+                'paid_at' => $now
+            ]);
+
+            $attempts['eloquent'] = $result1;
+
+            if ($result1) {
+                $order->refresh();
+                $updateSuccess = ($order->payment_status === $paymentStatus && $order->status === $status);
+
+                Log::info('✅ Order status updated via Eloquent', [
+                    'order_id' => $orderId,
+                    'payment_status' => $order->payment_status,
+                    'status' => $order->status,
+                    'success' => $updateSuccess
+                ]);
+            }
+        } catch (\Exception $e) {
+            $attempts['eloquent_error'] = $e->getMessage();
+            Log::warning('⚠️ Eloquent update failed', [
+                'order_id' => $orderId,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        // Method 2: Direct DB update if Eloquent failed
+        if (!$updateSuccess) {
+            try {
+                $result2 = DB::table('orders')
+                    ->where('id', $orderId)
+                    ->update([
+                        'payment_status' => $paymentStatus,
+                        'status' => $status,
+                        'payment_id' => $paymentId,
+                        'payment_transaction_id' => $paymentTransactionId,
+                        'paid_at' => $now,
+                        'updated_at' => $now
+                    ]);
+
+                $attempts['db_manual'] = $result2;
+
+                if ($result2) {
+                    $order->refresh();
+                    $updateSuccess = ($order->payment_status === $paymentStatus && $order->status === $status);
+
+                    Log::info('✅ Order status updated via DB', [
+                        'order_id' => $orderId,
+                        'payment_status' => $order->payment_status,
+                        'status' => $order->status,
+                        'success' => $updateSuccess
+                    ]);
+                }
+            } catch (\Exception $e) {
+                $attempts['db_manual_error'] = $e->getMessage();
+                Log::warning('⚠️ DB update failed', [
+                    'order_id' => $orderId,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        // Method 3: Direct assignment and save if still failed
+        if (!$updateSuccess) {
+            try {
+                $order->payment_status = $paymentStatus;
+                $order->status = $status;
+                $order->payment_id = $paymentId;
+                $order->payment_transaction_id = $paymentTransactionId;
+                $order->paid_at = $now;
+
+                $result3 = $order->save();
+                $attempts['direct_save'] = $result3;
+
+                if ($result3) {
+                    $order->refresh();
+                    $updateSuccess = ($order->payment_status === $paymentStatus && $order->status === $status);
+
+                    Log::info('✅ Order status updated via direct save', [
+                        'order_id' => $orderId,
+                        'payment_status' => $order->payment_status,
+                        'status' => $order->status,
+                        'success' => $updateSuccess
+                    ]);
+                }
+            } catch (\Exception $e) {
+                $attempts['direct_save_error'] = $e->getMessage();
+                Log::warning('⚠️ Direct save failed', [
+                    'order_id' => $orderId,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        // Final log
+        Log::info('🔄 Order Status Update Summary', [
+            'order_id' => $orderId,
+            'final_success' => $updateSuccess,
+            'attempts' => $attempts,
+            'final_payment_status' => $order->payment_status ?? 'unknown',
+            'final_status' => $order->status ?? 'unknown'
+        ]);
+
+        return $updateSuccess;
     }
 }

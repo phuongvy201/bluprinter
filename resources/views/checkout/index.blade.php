@@ -286,13 +286,287 @@
         border-radius: 8px !important;
         min-height: 48px !important;
     }
+
+    /* Mobile Responsive Styles */
+    @media (max-width: 768px) {
+        .min-h-screen {
+            padding: 1rem 0.5rem;
+        }
+        
+        .max-w-6xl {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+        
+        /* Progress Steps - Mobile */
+        .progress-steps-mobile {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .progress-steps-mobile .step-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 0.75rem;
+        }
+        
+        .progress-steps-mobile .step-indicator {
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+        
+        /* Hide horizontal progress on mobile */
+        .progress-steps-desktop {
+            display: none;
+        }
+        
+        /* Header adjustments */
+        .checkout-header h1 {
+            font-size: 1.875rem !important;
+            line-height: 2.25rem !important;
+        }
+        
+        .checkout-header p {
+            font-size: 0.875rem !important;
+        }
+        
+        /* Form container adjustments */
+        .checkout-container {
+            border-radius: 1rem;
+            margin: 0 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .checkout-container .p-4,
+        .checkout-container .p-8 {
+            padding: 2rem !important;
+        }
+        
+        /* Form header adjustments */
+        .form-header-mobile {
+            padding: 1rem !important;
+        }
+        
+        .form-header-mobile h2 {
+            font-size: 1.25rem !important;
+        }
+        
+        .form-header-mobile p {
+            font-size: 0.75rem !important;
+            margin-top: 0.25rem;
+        }
+        
+        /* Input spacing */
+        .form-input {
+            padding: 0.875rem !important;
+            font-size: 16px; /* Prevents zoom on iOS */
+        }
+        
+        /* Grid adjustments */
+        .grid.md\\:grid-cols-2 {
+            grid-template-columns: 1fr !important;
+        }
+        
+        .grid.md\\:grid-cols-3 {
+            grid-template-columns: 1fr !important;
+        }
+        
+        /* Payment options */
+        .payment-option {
+            padding: 1rem !important;
+            margin-bottom: 0.75rem;
+        }
+        
+        .payment-option .flex {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .payment-option .flex-1 {
+            margin-top: 0.75rem;
+            margin-left: 0 !important;
+        }
+        
+        /* Order summary adjustments */
+        .order-summary-container {
+            margin: 0 0.25rem;
+            padding: 1.5rem !important;
+        }
+        
+        .order-summary-container h2 {
+            font-size: 1.125rem !important;
+        }
+        
+        /* Product items in summary */
+        .product-item {
+            padding: 0.75rem !important;
+        }
+        
+        .product-item img,
+        .product-item .w-12 {
+            width: 2.5rem !important;
+            height: 2.5rem !important;
+        }
+        
+        .product-item h3 {
+            font-size: 0.8125rem !important;
+        }
+        
+        /* Button adjustments */
+        .checkout-btn {
+            padding: 1rem !important;
+            font-size: 1rem !important;
+        }
+        
+        .checkout-btn svg {
+            width: 1.25rem !important;
+            height: 1.25rem !important;
+        }
+        
+        /* LianLian Pay iframe mobile */
+        #llpay-card-element {
+            min-height: 320px !important;
+        }
+        
+        #llpay-card-element iframe {
+            height: 320px !important;
+        }
+        
+        /* PayPal button container */
+        #paypal-button-container {
+            min-height: 160px !important;
+            padding: 1rem !important;
+        }
+        
+        /* Security badge */
+        .security-badge {
+            padding: 1rem !important;
+        }
+        
+        .security-badge span {
+            font-size: 0.875rem !important;
+        }
+        
+        /* Space adjustments */
+        .space-y-8 > * + * {
+            margin-top: 2.5rem !important;
+        }
+        
+        .space-y-5 > * + * {
+            margin-top: 1.5rem !important;
+        }
+        
+        /* Section spacing */
+        .section-header {
+            margin-bottom: 1.5rem !important;
+            padding: 1rem 0;
+        }
+        
+        
+        /* Section headers */
+        .section-header h3 {
+            font-size: 1rem !important;
+        }
+        
+        /* Labels */
+        .form-label {
+            font-size: 0.875rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+        
+        /* Error messages */
+        .text-red-500.text-xs {
+            font-size: 0.75rem !important;
+        }
+        
+        /* Icon adjustments */
+        .section-header svg {
+            width: 1rem !important;
+            height: 1rem !important;
+        }
+        
+        /* Reduce margins on small screens */
+        .mb-8 {
+            margin-bottom: 1.5rem !important;
+        }
+        
+        .mb-10 {
+            margin-bottom: 2rem !important;
+        }
+        
+        .mb-6 {
+            margin-bottom: 1rem !important;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .min-h-screen {
+            padding: 0.5rem 0.25rem;
+        }
+        
+        .max-w-6xl {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        
+        .checkout-container,
+        .order-summary-container {
+            margin: 0 0.5rem;
+            border-radius: 0.75rem;
+        }
+        
+        .checkout-header h1 {
+            font-size: 1.5rem !important;
+            line-height: 2rem !important;
+        }
+        
+        .checkout-container .p-4,
+        .checkout-container .p-8 {
+            padding: 1.5rem 1rem !important;
+        }
+        
+        .order-summary-container {
+            padding: 1.5rem 1rem !important;
+        }
+        
+        .form-input {
+            padding: 0.875rem 1rem !important;
+            text-align: center;
+        }
+        
+        .progress-steps-mobile {
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .progress-steps-mobile .step-item {
+            padding: 0.875rem 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .payment-option {
+            padding: 0.75rem !important;
+        }
+        
+        .checkout-btn {
+            padding: 0.875rem !important;
+            font-size: 0.875rem !important;
+        }
+    }
 </style>
 
 <div class="min-h-screen bg-gray-50 py-8">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Progress Steps -->
         <div class="mb-8 animate-fadeInUp">
-            <div class="flex items-center justify-center space-x-8">
+            <!-- Desktop Progress Steps -->
+            <div class="hidden md:flex items-center justify-center space-x-8 progress-steps-desktop">
                 <div class="flex items-center">
                     <div class="step-indicator completed">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -312,54 +586,74 @@
                     <span class="ml-3 font-medium text-gray-500">Complete</span>
                 </div>
             </div>
+            
+            <!-- Mobile Progress Steps -->
+            <div class="block md:hidden progress-steps-mobile">
+                <div class="step-item">
+                    <div class="step-indicator completed">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <span class="font-medium text-gray-700">Cart</span>
+                </div>
+                <div class="step-item">
+                    <div class="step-indicator active">2</div>
+                    <span class="font-semibold text-gray-900">Checkout</span>
+                </div>
+                <div class="step-item">
+                    <div class="w-8 h-8 rounded-full bg-gray-300 text-white font-semibold text-sm flex items-center justify-center">3</div>
+                    <span class="font-medium text-gray-500">Complete</span>
+                </div>
+            </div>
         </div>
 
         <!-- Header -->
-        <div class="text-center mb-10 animate-fadeInUp">
-            <h1 class="text-4xl font-bold text-gray-900 mb-3">
+        <div class="text-center mb-6 md:mb-10 animate-fadeInUp checkout-header">
+            <h1 class="text-2xl md:text-4xl font-bold text-gray-900 mb-2 md:mb-3">
                 Complete Your 
                 <span class="gradient-text">Order</span>
             </h1>
-            <p class="text-lg text-gray-600">Secure checkout with multiple payment options</p>
+            <p class="text-sm md:text-lg text-gray-600">Secure checkout with multiple payment options</p>
         </div>
 
-        <div class="flex flex-col lg:grid lg:grid-cols-3 gap-8">
+        <div class="flex flex-col lg:grid lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
             <!-- Checkout Form -->
             <div class="order-2 lg:order-1 lg:col-span-2 animate-slideInLeft">
                 <div class="bg-white rounded-2xl shadow-lg overflow-hidden checkout-container">
                     <!-- Modern Header with Gradient -->
-                    <div class="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 p-6">
+                    <div class="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 p-4 md:p-6 form-header-mobile">
                         <div class="flex items-center text-white">
-                            <div class="w-12 h-12 rounded-xl bg-white bg-opacity-20 backdrop-blur-sm flex items-center justify-center mr-4">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-8 h-8 md:w-12 md:h-12 rounded-xl bg-white bg-opacity-20 backdrop-blur-sm flex items-center justify-center mr-3 md:mr-4 flex-shrink-0">
+                                <svg class="w-4 h-4 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
                                 </svg>
                             </div>
-                            <div>
-                                <h2 class="text-2xl font-bold">Shipping Information</h2>
-                                <p class="text-blue-100 text-sm">Please provide your delivery details</p>
+                            <div class="min-w-0 flex-1">
+                                <h2 class="text-lg md:text-2xl font-bold">Shipping Information</h2>
+                                <p class="text-blue-100 text-xs md:text-sm">Please provide your delivery details</p>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="p-8">
+                    <div class="p-4 md:p-8">
                     
                     <form id="checkout-form" method="POST" action="{{ route('checkout.process') }}" class="space-y-8">
                         @csrf
                         
                         <!-- Contact Information -->
                         <div class="space-y-5">
-                            <div class="flex items-center space-x-3 pb-3 border-b-2 border-gray-100">
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="flex items-center space-x-3 pb-3 border-b-2 border-gray-100 section-header">
+                                <div class="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-3 h-3 md:w-4 md:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                     </svg>
                                 </div>
-                                <h3 class="text-lg font-bold text-gray-800">Contact Details</h3>
+                                <h3 class="text-base md:text-lg font-bold text-gray-800">Contact Details</h3>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <div class="relative">
-                                    <label for="customer_name" class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label for="customer_name" class="block text-sm font-semibold text-gray-700 mb-2 form-label">
                                         <span class="flex items-center">
                                             <svg class="w-4 h-4 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
@@ -382,7 +676,7 @@
                                 </div>
                                 
                                 <div class="relative">
-                                    <label for="customer_email" class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label for="customer_email" class="block text-sm font-semibold text-gray-700 mb-2 form-label">
                                         <span class="flex items-center">
                                             <svg class="w-4 h-4 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
@@ -406,7 +700,7 @@
                             </div>
 
                             <div class="relative">
-                                <label for="customer_phone" class="block text-sm font-semibold text-gray-700 mb-2">
+                                <label for="customer_phone" class="block text-sm font-semibold text-gray-700 mb-2 form-label">
                                     <span class="flex items-center">
                                         <svg class="w-4 h-4 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
@@ -568,7 +862,7 @@
                             <div class="space-y-4">
                                 <!-- LianLian Pay -->
                                 <div class="relative">
-                                    <label for="payment_lianlian" class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all duration-300 payment-option">
+                                    <label for="payment_lianlian" class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all duration-300 payment-option" data-payment-method="lianlian_pay">
                                         <input type="radio" id="payment_lianlian" name="payment_method" value="lianlian_pay" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mr-4" checked>
                                         <div class="flex items-center flex-1">
                                             <div class="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-3 mr-4 shadow-md">
@@ -591,11 +885,31 @@
                                             </div>
                                         </div>
                                     </label>
+                                    
+                                    <!-- LianLian Pay iframe Integration - Now positioned right below the option -->
+                                    <div id="lianlian-pay-info" class="hidden mt-4 p-6 border-2 border-orange-200 rounded-xl bg-gradient-to-r from-orange-50 to-red-50 payment-details-container">
+                                        <div class="flex items-center mb-4">
+                                            <div class="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center mr-3">
+                                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                                </svg>
+                                            </div>
+                                            <h4 class="font-bold text-orange-900 text-lg">🔒 LianLian Pay Secure Checkout</h4>
+                                        </div>
+                                        <div id="lianlian-iframe-container" class="min-h-[400px] border rounded-lg bg-white">
+                                            <div class="flex items-center justify-center h-full text-center p-8">
+                                                <div>
+                                                    <div class="animate-spin w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full mx-auto mb-3"></div>
+                                                    <p class="text-orange-600 text-sm">Loading secure payment form...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- PayPal -->
                                 <div class="relative">
-                                    <label for="payment_paypal" class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all duration-300 payment-option">
+                                    <label for="payment_paypal" class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all duration-300 payment-option" data-payment-method="paypal">
                                         <input type="radio" id="payment_paypal" name="payment_method" value="paypal" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mr-4">
                                         <div class="flex items-center flex-1">
                                             <div class="bg-blue-600 rounded-xl p-3 mr-4 shadow-md">
@@ -614,22 +928,22 @@
                                             </div>
                                         </div>
                                     </label>
-                                </div>
-                                
-                                <!-- PayPal Button Container -->
-                                <div id="paypal-button-container" class="hidden mt-4 p-6 border-2 border-blue-200 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50">
-                                    <div class="flex items-center mb-4">
-                                        <div class="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white mr-3">
-                                            <img src="https://www.paypalobjects.com/webstatic/icon/pp258.png" 
-                                                 alt="PayPal" class="h-6 w-6">
+                                    
+                                    <!-- PayPal Button Container - Now positioned right below the option -->
+                                    <div id="paypal-button-container" class="hidden mt-4 p-6 border-2 border-blue-200 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 payment-details-container">
+                                        <div class="flex items-center mb-4">
+                                            <div class="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white mr-3">
+                                                <img src="https://www.paypalobjects.com/webstatic/icon/pp258.png" 
+                                                     alt="PayPal" class="h-6 w-6">
+                                            </div>
+                                            <h4 class="font-bold text-blue-900 text-lg">💳 PayPal Checkout</h4>
                                         </div>
-                                        <h4 class="font-bold text-blue-900 text-lg">💳 PayPal Checkout</h4>
-                                    </div>
-                                    <!-- PayPal button will be rendered here -->
-                                    <div id="paypal-button" class="min-h-[120px] flex items-center justify-center">
-                                        <div class="text-center">
-                                            <div class="animate-spin w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full mx-auto mb-3"></div>
-                                            <p class="text-blue-600 text-sm">Loading PayPal...</p>
+                                        <!-- PayPal button will be rendered here -->
+                                        <div id="paypal-button" class="min-h-[120px] flex items-center justify-center">
+                                            <div class="text-center">
+                                                <div class="animate-spin w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full mx-auto mb-3"></div>
+                                                <p class="text-blue-600 text-sm">Loading PayPal...</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -728,21 +1042,21 @@
                         </div>
 
                         <!-- Submit Button -->
-                        <div class="mt-8 pt-6 border-t-2 border-gray-100">
+                        <div class="mt-6 md:mt-8 pt-4 md:pt-6 border-t-2 border-gray-100">
                             <button type="submit" 
-                                    class="checkout-btn w-full py-5 px-6 text-white rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all duration-300">
+                                    class="checkout-btn w-full py-4 md:py-5 px-4 md:px-6 text-white rounded-xl font-bold text-base md:text-lg shadow-xl hover:shadow-2xl transition-all duration-300">
                                 <span class="flex items-center justify-center relative z-10">
-                                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-5 h-5 md:w-6 md:h-6 mr-2 md:mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                                     </svg>
                                     Secure Checkout
-                                    <svg class="w-6 h-6 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-5 h-5 md:w-6 md:h-6 ml-2 md:ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
                                     </svg>
                                 </span>
                             </button>
-                            <p class="text-center text-sm text-gray-500 mt-4">
-                                <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <p class="text-center text-xs md:text-sm text-gray-500 mt-3 md:mt-4">
+                                <svg class="w-3 h-3 md:w-4 md:h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
                                 </svg>
                                 Your information is protected with 256-bit SSL encryption
@@ -755,14 +1069,14 @@
 
             <!-- Order Summary -->
             <div class="order-1 lg:order-2 animate-slideInRight">
-                <div class="bg-white rounded-2xl shadow-lg p-6 lg:sticky lg:top-8 order-summary-container">
-                    <div class="flex items-center mb-6">
-                        <div class="w-8 h-8 rounded-lg bg-purple-500 flex items-center justify-center text-white mr-3">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="bg-white rounded-2xl shadow-lg p-4 md:p-6 lg:sticky lg:top-8 order-summary-container">
+                    <div class="flex items-center mb-4 md:mb-6">
+                        <div class="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-purple-500 flex items-center justify-center text-white mr-2 md:mr-3 flex-shrink-0">
+                            <svg class="w-3 h-3 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
                             </svg>
                         </div>
-                        <h2 class="text-xl font-bold text-gray-900">Order Summary</h2>
+                        <h2 class="text-lg md:text-xl font-bold text-gray-900">Order Summary</h2>
                     </div>
                     
                     <!-- Products -->
@@ -811,24 +1125,46 @@
                             <span>${{ number_format($subtotal, 2) }}</span>
                         </div>
                         
+                        @php
+                            $qualifiesForFreeShipping = $subtotal >= 100;
+                            $actualShipping = $qualifiesForFreeShipping ? 0 : $shippingCost;
+                            $actualTotal = $subtotal + $taxAmount + $actualShipping;
+                        @endphp
                         <div class="flex justify-between text-gray-600">
                             <span>Shipping</span>
-                            <span class="shipping-cost-display">${{ number_format($shippingCost, 2) }}</span>
+                            <span class="shipping-cost-display">
+                                @if($actualShipping == 0)
+                                    <span class="text-green-600">FREE</span>
+                                @else
+                                    ${{ number_format($actualShipping, 2) }}
+                                @endif
+                            </span>
                         </div>
+                        
+                        {{-- Freeship Messages --}}
+                        @if($qualifiesForFreeShipping)
+                            <div class="text-xs text-green-600 bg-green-50 p-2 rounded mt-2">
+                                🎉 You qualify for free shipping on orders $100+!
+                            </div>
+                        @else
+                            <div class="text-xs text-blue-600 mt-2">
+                                Add ${{ number_format(100 - $subtotal, 2) }} more for free shipping!
+                            </div>
+                        @endif
                         
                         <div class="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-3 mt-3">
                             <span>Total</span>
-                            <span class="text-blue-600 total-display">${{ number_format($total, 2) }}</span>
+                            <span class="text-blue-600 total-display">${{ number_format($actualTotal, 2) }}</span>
                         </div>
                     </div>
 
                     <!-- Security Badge -->
-                    <div class="mt-6 p-4 security-badge rounded-lg text-white">
+                    <div class="mt-4 md:mt-6 p-3 md:p-4 security-badge rounded-lg text-white">
                         <div class="flex items-center justify-center">
-                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                             </svg>
-                            <span class="font-semibold">100% Secure Checkout</span>
+                            <span class="font-semibold text-sm md:text-base">100% Secure Checkout</span>
                         </div>
                     </div>
                 </div>
@@ -998,7 +1334,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 
                 if (!window.LLP) {
-                    throw new Error('LianLian Pay SDK failed to load');
+                    throw new Error('LianLian Pay SDK Failed to load');
                 }
             }
             
@@ -1138,14 +1474,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         if (missingFields.length > 0) {
-                            showToast('error', 'Thiếu thông tin', 'Vui lòng điền đầy đủ thông tin: ' + missingFields.join(', '));
+                            showToast('error', 'Missing Information', 'Please fill in all required fields: ' + missingFields.join(', '));
                             throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
                         }
                         
                         // Validate email format
                         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                         if (!emailRegex.test(requiredFields.customer_email)) {
-                            showToast('error', 'Email không hợp lệ', 'Vui lòng nhập địa chỉ email hợp lệ');
+                            showToast('error', 'Invalid Email', 'Please enter a valid email address');
                             throw new Error('Invalid email format');
                         }
                         
@@ -1214,6 +1550,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         // Now create order on our server and process with PayPal order ID
+                        const requestData = {
+                            ...currentOrderData,
+                            payment_method: 'paypal',
+                            paypal_order_id: data.orderID,
+                            paypal_payer_id: data.payerID
+                        };
+                        
+                        console.log('🚀 Sending PayPal payment data to backend:', requestData);
+                        
                         const response = await fetch('{{ route("checkout.process") }}', {
                             method: 'POST',
                             headers: {
@@ -1221,14 +1566,15 @@ document.addEventListener('DOMContentLoaded', function() {
                                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
                                 'Accept': 'application/json'
                             },
-                            body: JSON.stringify({
-                                ...currentOrderData,
-                                payment_method: 'paypal',
-                                paypal_order_id: data.orderID,
-                                paypal_payer_id: data.payerID
-                            }),
+                            body: JSON.stringify(requestData),
                             credentials: 'same-origin',
                             mode: 'same-origin'
+                        });
+                        
+                        console.log('📡 PayPal response received:', {
+                            status: response.status,
+                            statusText: response.statusText,
+                            ok: response.ok
                         });
                         
                         if (!response.ok) {
@@ -1243,9 +1589,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         const responseData = await response.json();
-                        console.log('📋 Order processed:', responseData);
+                        console.log('📋 Order processed response:', responseData);
+                        console.log('📋 Response success status:', responseData.success);
                         
                         if (responseData.success) {
+                            console.log('✅ Payment successful, redirecting to order success page');
+                            
+                            // Clear frontend cart/localStorage immediately
+                            try {
+                                localStorage.removeItem('cart');
+                                localStorage.removeItem('cartItems');
+                                console.log('🛒 Frontend cart cleared from localStorage');
+                            } catch (e) {
+                                console.warn('Could not clear localStorage:', e);
+                            }
+                            
                             showToast('success', 'Payment successful!', 'Your payment has been processed successfully');
                             
                             // Redirect to success page
@@ -1366,7 +1724,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                                 </svg>
-                                <span class="text-sm font-medium">Vui lòng điền đầy đủ thông tin: ${validation.missingFields.join(', ')}</span>
+                                <span class="text-sm font-medium">Please fill in all required fields: ${validation.missingFields.join(', ')}</span>
                             </div>
                         `;
                     } else if (!validation.isEmailValid) {
@@ -1375,7 +1733,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                                 </svg>
-                                <span class="text-sm font-medium">Vui lòng nhập địa chỉ email hợp lệ</span>
+                                <span class="text-sm font-medium">Please enter a valid email address</span>
                             </div>
                         `;
                     }
@@ -1832,26 +2190,46 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success && data.shipping) {
-                    // Update shipping cost display
+                    // Update shipping cost display with freeship logic
                     const shippingCostElement = document.querySelector('.shipping-cost-display');
                     const totalElement = document.querySelector('.total-display');
                     
                     if (shippingCostElement) {
                         const newShipping = parseFloat(data.shipping.total_shipping);
-                        shippingCostElement.textContent = '$' + newShipping.toFixed(2);
-                        
-                        // Recalculate total
                         const subtotal = parseFloat('{{ $subtotal }}');
                         const tax = parseFloat('{{ $taxAmount }}');
-                        const newTotal = subtotal + tax + newShipping;
                         
+                        // Apply freeship logic
+                        const qualifiesForFreeShipping = subtotal >= 100;
+                        const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
+                        const newTotal = subtotal + tax + actualShipping;
+                        
+                        console.log('Checkout shipping update:', {
+                            subtotal: subtotal,
+                            originalShipping: newShipping,
+                            actualShipping: actualShipping,
+                            qualifiesForFreeShipping: qualifiesForFreeShipping,
+                            newTotal: newTotal
+                        });
+                        
+                        // Update shipping display
+                        if (qualifiesForFreeShipping) {
+                            shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+                        } else {
+                            shippingCostElement.textContent = '$' + actualShipping.toFixed(2);
+                        }
+                        
+                        // Update total
                         if (totalElement) {
                             totalElement.textContent = '$' + newTotal.toFixed(2);
                         }
                         
-                        // showToast('success', 'Shipping Updated', 
-                        //     `Shipping to ${data.shipping.zone_name}: $${newShipping.toFixed(2)}`);
+                        // Update freeship messages
+                        updateCheckoutFreeshipMessages(qualifiesForFreeShipping, subtotal);
                     }
+                    
+                    // showToast('success', 'Shipping Updated', 
+                    //     `Shipping to ${data.shipping.zone_name}: $${actualShipping.toFixed(2)}`);
                 } else {
                     // showToast('error', 'Shipping Error', data.message || 'Could not calculate shipping');
                 }
@@ -1860,6 +2238,41 @@ document.addEventListener('DOMContentLoaded', function() {
                 // showToast('error', 'Error', 'Could not calculate shipping cost');
             }
         });
+    }
+    
+    // Function to update freeship messages in checkout
+    function updateCheckoutFreeshipMessages(qualifiesForFreeShipping, subtotal) {
+        const orderSummary = document.querySelector('.order-summary-container');
+        if (!orderSummary) return;
+        
+        // Remove existing messages
+        const existingFreeshipMsg = orderSummary.querySelector('.checkout-freeship-message');
+        const existingProgressMsg = orderSummary.querySelector('.checkout-freeship-progress');
+        
+        if (existingFreeshipMsg) existingFreeshipMsg.remove();
+        if (existingProgressMsg) existingProgressMsg.remove();
+        
+        // Add new message
+        if (qualifiesForFreeShipping) {
+            // Find the total section and add success message before it
+            const totalSection = orderSummary.querySelector('.border-t.border-gray-200.pt-3');
+            if (totalSection) {
+                const successMsg = document.createElement('div');
+                successMsg.className = 'checkout-freeship-message text-xs text-green-600 bg-green-50 p-2 rounded mt-2';
+                successMsg.innerHTML = '🎉 You qualify for free shipping on orders $100+!';
+                totalSection.parentNode.insertBefore(successMsg, totalSection);
+            }
+        } else {
+            // Find the total section and add progress message before it
+            const totalSection = orderSummary.querySelector('.border-t.border-gray-200.pt-3');
+            if (totalSection) {
+                const remainingAmount = (100 - subtotal).toFixed(2);
+                const progressMsg = document.createElement('div');
+                progressMsg.className = 'checkout-freeship-progress text-xs text-blue-600 mt-2';
+                progressMsg.textContent = `Add $${remainingAmount} more for free shipping!`;
+                totalSection.parentNode.insertBefore(progressMsg, totalSection);
+            }
+        }
     }
     
     // Auto-detect country
@@ -1902,6 +2315,40 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial validation when page loads
     setTimeout(() => {
         updatePayPalButtonState();
+        
+        // Initialize freeship check
+        const subtotal = parseFloat('{{ $subtotal }}');
+        const qualifiesForFreeShipping = subtotal >= 100;
+        
+        if (qualifiesForFreeShipping) {
+            // Update shipping display to show FREE if qualifying
+            const shippingCostElement = document.querySelector('.shipping-cost-display');
+            const totalElement = document.querySelector('.total-display');
+            
+            if (shippingCostElement) {
+                shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+            }
+            
+            // Recalculate total with free shipping
+            const tax = parseFloat('{{ $taxAmount }}');
+            const newTotal = subtotal + tax;
+            
+            if (totalElement) {
+                totalElement.textContent = '$' + newTotal.toFixed(2);
+            }
+            
+            // Update freeship messages
+            updateCheckoutFreeshipMessages(true, subtotal);
+            
+            console.log('Checkout freeship initialization:', {
+                subtotal: subtotal,
+                qualifiesForFreeShipping: qualifiesForFreeShipping,
+                newTotal: newTotal
+            });
+        } else {
+            // Just update the progress message
+            updateCheckoutFreeshipMessages(false, subtotal);
+        }
     }, 500);
     
     // Cleanup iframe on page unload

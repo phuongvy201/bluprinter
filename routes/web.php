@@ -447,6 +447,8 @@ Route::get('/dashboard', function () {
     // Redirect based on role
     if ($user->hasRole('admin')) {
         return redirect()->route('admin.dashboard');
+    } elseif ($user->hasRole('ad-partner')) {
+        return redirect()->route('admin.orders.index');
     } elseif ($user->hasRole('seller')) {
         return redirect()->route('admin.seller.dashboard');
     }
@@ -473,16 +475,18 @@ Route::middleware('auth')->group(function () {
         Route::post('pages/upload-image', [AdminPageController::class, 'uploadImage'])->name('pages.upload-image');
         Route::resource('pages', AdminPageController::class);
 
-        // Orders management (Admin only)
-        Route::resource('orders', App\Http\Controllers\Admin\OrderController::class);
-        Route::get('orders/export', [App\Http\Controllers\Admin\OrderController::class, 'export'])->name('orders.export');
-
         // Shipping Management (Admin only)
         Route::resource('shipping-zones', ShippingZoneController::class);
         Route::resource('shipping-rates', ShippingRateController::class);
 
         // API Token (Admin only)
         Route::get('/api-token', [App\Http\Controllers\ApiDocController::class, 'tokenDashboard'])->name('api-token');
+    });
+
+    // Orders management (Admin + Ad-Partner) - using controller middleware
+    Route::prefix('admin')->name('admin.')->group(function () {
+        Route::get('orders/export', [App\Http\Controllers\Admin\OrderController::class, 'export'])->name('orders.export');
+        Route::resource('orders', App\Http\Controllers\Admin\OrderController::class)->only(['index', 'show']);
     });
 
     // Seller routes (Seller + Admin)
@@ -564,6 +568,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/shops/{shop}/verify', [AdminShopController::class, 'verify'])->name('shops.verify');
         Route::post('/shops/{shop}/suspend', [AdminShopController::class, 'suspend'])->name('shops.suspend');
         Route::post('/shops/{shop}/activate', [AdminShopController::class, 'activate'])->name('shops.activate');
+
+        // Orders management - Admin only actions (update, destroy)
+        Route::put('orders/{order}', [App\Http\Controllers\Admin\OrderController::class, 'update'])->name('orders.update');
+        Route::delete('orders/{order}', [App\Http\Controllers\Admin\OrderController::class, 'destroy'])->name('orders.destroy');
     });
 });
 
@@ -574,6 +582,15 @@ Route::get('/test-zoom-effect', function () {
 Route::get('/test-cart', function () {
     return view('test-cart');
 })->name('test.cart');
+
+// Test route for variant removal logic
+Route::get('/test-remove-variant', [ProductTemplateController::class, 'testRemoveVariant'])
+    ->name('test.remove.variant');
+
+// Test page for variant removal
+Route::get('/test-variant-removal-page', function () {
+    return view('test-variant-removal');
+})->name('test.variant.removal.page');
 
 // Page routes - Must be at the end to avoid conflicts
 Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller).*$');
