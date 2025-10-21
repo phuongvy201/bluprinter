@@ -109,6 +109,8 @@ class CheckoutController extends Controller
             'country' => $request->input('country'),
             'has_paypal_order_id' => $request->has('paypal_order_id'),
             'paypal_order_id' => $request->input('paypal_order_id'),
+            'has_card_token' => $request->has('card_token'),
+            'card_token_length' => $request->has('card_token') ? strlen($request->input('card_token')) : 0,
         ]);
 
         $validationRules = [
@@ -127,6 +129,11 @@ class CheckoutController extends Controller
         if ($request->has('paypal_order_id')) {
             $validationRules['paypal_order_id'] = 'required|string|max:255';
             $validationRules['paypal_payer_id'] = 'required|string|max:255';
+        }
+
+        // Add LianLian Pay specific validation if present
+        if ($request->has('card_token')) {
+            $validationRules['card_token'] = 'required|string|max:255';
         }
 
         try {
@@ -535,7 +542,7 @@ class CheckoutController extends Controller
                         'return_code' => $paymentResponse['return_code']
                     ]);
 
-                    // Nếu payment_status = "PS" (Payment Success), mark order as paid ngay
+                    // Nếu payment_status = "PS" (Payment Success), mark order as paid ngay và xóa cart
                     if ($paymentStatus === 'PS') {
                         $order->update([
                             'payment_method' => 'lianlian_pay',
@@ -550,8 +557,61 @@ class CheckoutController extends Controller
                             'order_number' => $order->order_number,
                             'transaction_id' => $transactionId
                         ]);
+
+                        // Xóa cart ngay khi payment thành công - theo pattern từ PayPal
+                        Log::info('🛒 Clearing cart after LianLian Pay immediate success', [
+                            'user_id' => $userId,
+                            'session_id' => $sessionId,
+                            'order_id' => $order->id
+                        ]);
+
+                        $deletedCartCount = Cart::where(function ($query) use ($sessionId, $userId) {
+                            if ($userId) {
+                                $query->where('user_id', $userId);
+                            } else {
+                                $query->where('session_id', $sessionId);
+                            }
+                        })->delete();
+
+                        Log::info('🛒 LianLian Pay cart deletion result', [
+                            'deleted_cart_items' => $deletedCartCount,
+                            'user_id' => $userId,
+                            'session_id' => $sessionId,
+                            'order_id' => $order->id
+                        ]);
+
+                        // Clear shipping session
+                        Session::forget('shipping_details');
+
+                        // Send order confirmation email
+                        try {
+                            Mail::to($order->customer_email)->send(new OrderConfirmation($order));
+                            Log::info('📧 Order confirmation email sent for immediate LianLian payment', [
+                                'order_number' => $order->order_number,
+                                'email' => $order->customer_email
+                            ]);
+                        } catch (\Exception $e) {
+                            Log::error('❌ Failed to send order confirmation email for LianLian payment', [
+                                'order_number' => $order->order_number,
+                                'email' => $order->customer_email,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+
+                        // Return success with payment_completed flag
+                        return response()->json([
+                            'success' => true,
+                            'requires_3ds' => $requires3DS,
+                            'redirect_url' => $threeDSecureUrl,
+                            'transaction_id' => $paymentResponse['merchant_transaction_id'] ?? null,
+                            'order_id' => $order->id,
+                            'order_number' => $order->order_number,
+                            'payment_completed' => true, // Flag để frontend biết payment đã thành công
+                            'payment_status' => 'paid',
+                            'data' => $paymentResponse
+                        ]);
                     } else {
-                        // Nếu chưa paid, set pending
+                        // Nếu chưa paid, set pending - theo cách cũ
                         $order->update([
                             'payment_method' => 'lianlian_pay',
                             'payment_transaction_id' => $transactionId,
@@ -566,10 +626,7 @@ class CheckoutController extends Controller
                         ]);
                     }
 
-                    // NOTE: Không xóa cart ở đây, chờ đến khi payment thành công
-                    // Cart sẽ được xóa trong lianlianSuccess() sau khi verify payment
-
-                    // Return JSON response for frontend
+                    // Return JSON response for frontend cho trường hợp payment chưa thành công ngay
                     return response()->json([
                         'success' => true,
                         'requires_3ds' => $requires3DS,
@@ -577,6 +634,8 @@ class CheckoutController extends Controller
                         'transaction_id' => $paymentResponse['merchant_transaction_id'] ?? null,
                         'order_id' => $order->id,
                         'order_number' => $order->order_number,
+                        'payment_completed' => false, // Payment chưa thành công
+                        'payment_status' => 'pending',
                         'data' => $paymentResponse
                     ]);
                 } catch (\Exception $e) {

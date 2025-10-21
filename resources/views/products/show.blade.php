@@ -369,8 +369,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             @endif
 
-            <!-- Reviews Section -->
-            <div class="space-y-6">
+            <!-- Reviews Section (Desktop Only) -->
+            <div class="space-y-6 hidden lg:block">
                 <!-- Reviews Header -->
                 <div class="flex items-center justify-between">
                     <h3 class="text-2xl font-bold text-gray-900">Reviews</h3>
@@ -1248,6 +1248,196 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 @endif
 
+<!-- Reviews Section (Mobile & Tablet Only) -->
+<div class="lg:hidden bg-white py-8 border-t border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="space-y-6">
+            <!-- Reviews Header -->
+            <div class="flex items-center justify-between">
+                <h3 class="text-2xl font-bold text-gray-900">Reviews</h3>
+            </div>
+
+            <!-- Tabs -->
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8">
+                    <button class="border-b-2 border-[#005366] py-2 px-1 text-sm font-medium text-[#005366]">
+                        Reviews for this item
+                    </button>
+                    <button class="border-b-2 border-transparent py-2 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        Reviews for this shop
+                    </button>
+                </nav>
+            </div>
+
+            @php
+                $averageRating = $product->getAverageRating();
+                $totalReviews = $product->getTotalReviews();
+                $ratingBreakdown = $product->getRatingBreakdown();
+            @endphp
+
+            <!-- Overall Rating Summary -->
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                <!-- Average Rating -->
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center">
+                        <svg class="w-8 h-8 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                        </svg>
+                        <span class="text-2xl font-bold text-gray-900 ml-2">{{ number_format($averageRating, 1) }} /5.0</span>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        <span class="underline">{{ $totalReviews }} Reviews</span>
+                    </div>
+                </div>
+
+                <!-- Star Rating Distribution -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2">
+                    <!-- Left Column -->
+                    <div class="space-y-2">
+                        @for($star = 5; $star >= 3; $star--)
+                            @php
+                                $count = $ratingBreakdown[$star] ?? 0;
+                                $percentage = $totalReviews > 0 ? round(($count / $totalReviews) * 100) : 0;
+                            @endphp
+                            <div class="flex items-center space-x-2">
+                                <div class="flex items-center">
+                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium text-gray-700 ml-1">{{ $star }}</span>
+                                </div>
+                                <div class="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
+                                    <div class="bg-gray-900 h-2 rounded-full" style="width: {{ $percentage }}%"></div>
+                                </div>
+                                <span class="text-xs text-gray-500 w-8">({{ $percentage }}%)</span>
+                            </div>
+                        @endfor
+                    </div>
+                    
+                    <!-- Right Column -->
+                    <div class="space-y-2">
+                        @for($star = 2; $star >= 1; $star--)
+                            @php
+                                $count = $ratingBreakdown[$star] ?? 0;
+                                $percentage = $totalReviews > 0 ? round(($count / $totalReviews) * 100) : 0;
+                            @endphp
+                            <div class="flex items-center space-x-2">
+                                <div class="flex items-center">
+                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium text-gray-700 ml-1">{{ $star }}</span>
+                                </div>
+                                <div class="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
+                                    <div class="bg-gray-900 h-2 rounded-full" style="width: {{ $percentage }}%"></div>
+                                </div>
+                                <span class="text-xs text-gray-500 w-8">({{ $percentage }}%)</span>
+                            </div>
+                        @endfor
+                    </div>
+                </div>
+            </div>
+
+            <!-- Individual Reviews -->
+            @if($product->approvedReviews->count() > 0)
+                <div class="space-y-6">
+                    @foreach($product->approvedReviews->take(3) as $review)
+                        <div class="border-t border-dotted border-gray-300 pt-6">
+                            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between space-y-4 lg:space-y-0">
+                                <!-- Review Content -->
+                                <div class="flex-1">
+                                    <!-- Rating -->
+                                    <div class="flex items-center mb-3">
+                                        @for($i = 1; $i <= 5; $i++)
+                                            @if($i <= floor($review->rating))
+                                                <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                </svg>
+                                            @elseif($i - 0.5 <= $review->rating)
+                                                <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                                    <defs>
+                                                        <linearGradient id="half-star-mobile-{{ $review->id }}-{{ $i }}">
+                                                            <stop offset="50%" stop-color="currentColor"/>
+                                                            <stop offset="50%" stop-color="#E5E7EB"/>
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <path fill="url(#half-star-mobile-{{ $review->id }}-{{ $i }})" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                </svg>
+                                            @else
+                                                <svg class="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                </svg>
+                                            @endif
+                                        @endfor
+                                    </div>
+
+                                    <!-- Review Title and Text -->
+                                    @if($review->review_text)
+                                        @php
+                                            $words = explode(' ', $review->review_text);
+                                            $title = count($words) > 8 ? implode(' ', array_slice($words, 0, 8)) . '...' : $review->review_text;
+                                        @endphp
+                                        <h4 class="font-semibold text-gray-900 mb-2">{{ $title }}</h4>
+                                        <p class="text-gray-700 text-sm leading-relaxed">{{ $review->review_text }}</p>
+                                    @endif
+                                </div>
+
+                                <!-- Reviewer Info -->
+                                <div class="flex items-center space-x-3 lg:ml-6">
+                                    <div class="flex-shrink-0">
+                                        <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-medium text-sm">
+                                            {{ Str::upper(substr($review->display_name, 0, 2)) }}
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-sm font-medium text-gray-900">{{ $review->display_name }}</div>
+                                        <div class="text-xs text-gray-500">{{ $review->created_at->format('D M d Y') }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="text-center py-12">
+                    <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                    </svg>
+                    <p class="text-gray-500 text-lg mb-2">No reviews yet</p>
+                    <p class="text-gray-400 text-sm">Be the first to review this product</p>
+                </div>
+            @endif
+
+            <!-- Write Review and Pagination -->
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0 pt-6 border-t border-gray-200">
+                <!-- Write Review Button -->
+                <button class="inline-flex items-center px-4 py-2 border border-orange-500 text-orange-500 rounded-lg hover:bg-orange-50 transition-colors">
+                    <svg class="w-4 h-4 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
+                    </svg>
+                    Write your review
+                </button>
+
+                <!-- Pagination -->
+                @if($product->approvedReviews->count() > 3)
+                    <div class="flex items-center space-x-2">
+                        <button class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
+                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                            </svg>
+                        </button>
+                        <span class="text-sm text-gray-600 px-3">1/3</span>
+                        <button class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
+                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Recently Viewed Products -->
 <div class="bg-gray-50 py-8 border-t border-gray-200">
@@ -2924,6 +3114,19 @@ function addToCart() {
     
     console.log('Button found, checking variant...');
     
+    // Validate required customizations first
+    const validation = validateRequiredCustomizations();
+    if (!validation.isValid) {
+        alert('Please enter required information for personalization options:\n• ' + validation.missingFields.join('\n• '));
+        
+        // Scroll to customization section
+        const customizationContainer = document.getElementById('customization-container');
+        if (customizationContainer) {
+            customizationContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+    }
+    
     // Get selected variant to check quantity first
     const selectedVariant = getSelectedVariant();
     console.log('Selected variant:', selectedVariant);
@@ -3152,6 +3355,67 @@ function getSelectedCustomizations() {
     });
     
     return customizations;
+}
+
+// Kiểm tra required customizations
+function validateRequiredCustomizations() {
+    // Kiểm tra xem có bật customization không
+    const enableCustomizationCheckbox = document.getElementById('enable-customization');
+    const customizationContainer = document.getElementById('customization-container');
+    
+    if (!enableCustomizationCheckbox || !enableCustomizationCheckbox.checked || 
+        !customizationContainer || customizationContainer.classList.contains('hidden')) {
+        return { isValid: true, missingFields: [] };
+    }
+    
+    const missingFields = [];
+    
+    // Tìm tất cả các customization containers
+    const customizationBoxes = customizationContainer.querySelectorAll('.border.border-gray-200.rounded-lg.p-4.bg-white');
+    
+    customizationBoxes.forEach(box => {
+        const titleElement = box.querySelector('h4');
+        const requiredBadge = box.querySelector('.bg-red-100.text-red-800');
+        
+        // Chỉ kiểm tra nếu có required badge
+        if (requiredBadge && titleElement) {
+            const customizationLabel = titleElement.textContent.trim();
+            let hasValidInput = false;
+            
+            // Tìm các input trong box này
+            const inputs = box.querySelectorAll('.customization-input');
+            
+            inputs.forEach(input => {
+                if (input.type === 'radio' || input.type === 'checkbox') {
+                    if (input.checked) {
+                        hasValidInput = true;
+                    }
+                } else if (input.type === 'text' || input.type === 'textarea') {
+                    if (input.value.trim() !== '') {
+                        hasValidInput = true;
+                    }
+                }
+            });
+            
+            // Nếu là radio button, kiểm tra xem có input nào trong group được checked không
+            if (!hasValidInput && inputs.length > 0) {
+                if (inputs[0].type === 'radio') {
+                    const inputName = inputs[0].name;
+                    const radioInputs = customizationContainer.querySelectorAll(`input[name="${inputName}"]`);
+                    hasValidInput = Array.from(radioInputs).some(radio => radio.checked);
+                }
+            }
+            
+            if (!hasValidInput) {
+                missingFields.push(customizationLabel);
+            }
+        }
+    });
+    
+    return {
+        isValid: missingFields.length === 0,
+        missingFields: missingFields
+    };
 }
 
 function updateCartCount() {
@@ -4572,6 +4836,19 @@ function updatePopupTotal(newShipping) {
 
 // Buy Now Function - Add to cart and go to checkout
 function buyNow() {
+    // Validate required customizations first
+    const validation = validateRequiredCustomizations();
+    if (!validation.isValid) {
+        alert('Please enter required information for personalization options:\n• ' + validation.missingFields.join('\n• '));
+        
+        // Scroll to customization section
+        const customizationContainer = document.getElementById('customization-container');
+        if (customizationContainer) {
+            customizationContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+    }
+    
     // Get selected variant and customizations
     const selectedVariant = getSelectedVariant();
     
