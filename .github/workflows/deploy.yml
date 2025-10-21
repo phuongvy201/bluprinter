@@ -3,7 +3,7 @@ name: Deploy to AWS EC2
 on:
   push:
     branches:
-      - main 
+      - main
 
 jobs:
   deploy:
@@ -23,7 +23,30 @@ jobs:
       - name: Deploy to EC2
         run: |
           ssh -i ~/.ssh/id_ed25519 ec2-user@3.107.252.204 << 'EOF'
+            set -e
             cd /var/www/html
-            sudo git pull origin main
+
+            echo "🔄 Pulling latest code..."
+            sudo git fetch origin main
+            sudo git reset --hard origin/main
+
+            echo "📦 Installing composer dependencies..."
+            sudo composer install --no-dev --optimize-autoloader
+
+            echo "🧹 Clearing Laravel cache..."
+            php artisan config:clear
+            php artisan cache:clear
+            php artisan route:clear
+            php artisan view:clear
+
+            echo "⚙️ Optimizing Laravel..."
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+
+            echo "🚀 Restarting PHP-FPM and Nginx..."
+            sudo systemctl restart php-fpm
             sudo systemctl restart nginx
+
+            echo "✅ Deployment completed successfully!"
           EOF
