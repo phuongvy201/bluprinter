@@ -1,52 +1,67 @@
 name: Deploy to AWS EC2
-
 on:
   push:
     branches:
       - main
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
-
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 3.107.252.204 >> ~/.ssh/known_hosts
-
       - name: Deploy to EC2
         run: |
           ssh -i ~/.ssh/id_ed25519 ec2-user@3.107.252.204 << 'EOF'
             set -e
             cd /var/www/html
-
             echo "🔄 Pulling latest code..."
             sudo git fetch origin main
             sudo git reset --hard origin/main
-
+            echo "🔐 Fixing permissions..."
+            sudo chown -R ec2-user:nginx /var/www/html/storage
+            sudo chown -R ec2-user:nginx /var/www/html/bootstrap/cache
+            sudo chmod -R 775 /var/www/html/storage
+            sudo chmod -R 775 /var/www/html/bootstrap/cache
             echo "📦 Installing composer dependencies..."
             sudo composer install --no-dev --optimize-autoloader
-
             echo "🧹 Clearing Laravel cache..."
-            php artisan config:clear
-            php artisan cache:clear
-            php artisan route:clear
-            php artisan view:clear
-
+            if ! php artisan config:clear; then
+              echo "❌ Failed to clear config cache"
+              exit 1
+            fi
+            if ! php artisan cache:clear; then
+              echo "❌ Failed to clear application cache"
+              exit 1
+            fi
+            if ! php artisan route:clear; then
+              echo "❌ Failed to clear route cache"
+              exit 1
+            fi
+            if ! php artisan view:clear; then
+              echo "❌ Failed to clear view cache"
+              exit 1
+            fi
             echo "⚙️ Optimizing Laravel..."
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
-
+            if ! php artisan config:cache; then
+              echo "❌ Failed to cache config"
+              exit 1
+            fi
+            if ! php artisan route:cache; then
+              echo "❌ Failed to cache routes"
+              exit 1
+            fi
+            if ! php artisan view:cache; then
+              echo "❌ Failed to cache views"
+              exit 1
+            fi
             echo "🚀 Restarting PHP-FPM and Nginx..."
             sudo systemctl restart php-fpm
             sudo systemctl restart nginx
-
             echo "✅ Deployment completed successfully!"
           EOF
