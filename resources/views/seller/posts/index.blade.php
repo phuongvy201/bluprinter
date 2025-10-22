@@ -88,7 +88,7 @@
                         <td class="px-6 py-4">
                             <div class="flex items-center">
                                 @if($post->featured_image)
-                                    <img src="{{ Storage::url($post->featured_image) }}" alt="" class="w-12 h-12 object-cover rounded mr-3">
+                                    <img src="{{ $post->featured_image_url }}" alt="" class="w-12 h-12 object-cover rounded mr-3">
                                 @endif
                                 <div>
                                     <a href="{{ route('blog.show', $post->slug) }}" target="_blank" class="font-medium text-gray-900 hover:text-[#005366]">

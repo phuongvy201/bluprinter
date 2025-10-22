@@ -8,6 +8,9 @@
 <!-- PayPal SDK -->
 <script src="https://www.paypal.com/sdk/js?client-id={{ config('services.paypal.client_id') }}&currency=USD&intent=capture&components=buttons"></script>
 
+<!-- Stripe JS SDK -->
+<script src="https://js.stripe.com/v3/"></script>
+
 @section('content')
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -286,6 +289,34 @@
         border-radius: 8px !important;
         min-height: 48px !important;
     }
+    
+    /* Stripe card element styles */
+    #stripe-card-container {
+        min-height: 200px;
+        border-radius: 12px;
+        position: relative;
+    }
+    
+    #stripe-card-element {
+        min-height: 50px;
+        padding: 12px;
+    }
+    
+    .StripeElement {
+        background-color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+    }
+    
+    .StripeElement--focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .StripeElement--invalid {
+        border-color: #f87171;
+    }
 </style>
 
 <div class="min-h-screen bg-gray-50 py-8">
@@ -555,6 +586,31 @@
                             </div>
                         </div>
 
+                        <!-- Notes -->
+                        <div class="space-y-5">
+                            <div class="flex items-center space-x-3 pb-3 border-b-2 border-gray-100">
+                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-bold text-gray-800">Additional Notes</h3>
+                            </div>
+                            <div class="relative">
+                                <label for="notes" class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <span class="flex items-center">
+                                        <svg class="w-4 h-4 mr-1.5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                                        </svg>
+                                        Order Notes (Optional)
+                                    </span>
+                                </label>
+                                <textarea id="notes" name="notes" 
+                                          class="form-input" rows="3"
+                                          placeholder="Any special instructions for your order..."></textarea>
+                            </div>
+                        </div>
+
                         <!-- Payment Method -->
                         <div class="space-y-5">
                             <div class="flex items-center space-x-3 pb-3 border-b-2 border-gray-100">
@@ -591,6 +647,48 @@
                                             </div>
                                         </div>
                                     </label>
+                                    
+                                    <!-- LianLian Pay Form -->
+                                    <div id="lianlian-pay-info" class="hidden mt-4 p-6 border-2 border-orange-200 rounded-xl bg-gradient-to-r from-orange-50 to-red-50">
+                                        <div class="flex items-center mb-4">
+                                            <div class="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center mr-3">
+                                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                                </svg>
+                                            </div>
+                                            <h4 class="font-bold text-orange-900 text-lg">💳 LianLian Pay Secure Checkout</h4>
+                                        </div>
+                                        
+                                        <!-- Card Type Logos -->
+                                        <div class="flex gap-3 mb-4 justify-center">
+                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded text-white text-xs font-bold flex items-center justify-center">VISA</div>
+                                            <div class="w-12 h-8 bg-gradient-to-r from-red-500 to-red-700 rounded text-white text-xs font-bold flex items-center justify-center">MC</div>
+                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-400 to-blue-600 rounded text-white text-xs font-bold flex items-center justify-center">AMEX</div>
+                                        </div>
+
+                                        <!-- LianLian Pay iframe Container -->
+                                        <div id="llpay-card-element" class="min-h-[280px] border-2 border-gray-200 rounded-xl bg-white relative overflow-hidden">
+                                            <div id="lianlian-loading-placeholder" class="absolute inset-0 flex items-center justify-center bg-gray-50">
+                                                <div class="text-center">
+                                                    <div class="animate-spin w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full mx-auto mb-3"></div>
+                                                    <p class="text-gray-600 text-sm">Loading secure payment form...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Security Notice -->
+                                        <div class="mt-4 p-3 bg-white/60 rounded-lg border border-orange-200">
+                                            <div class="flex items-start">
+                                                <svg class="w-5 h-5 text-green-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                <div class="text-sm text-orange-800">
+                                                    <p class="font-semibold mb-1">🔒 Secure Payment</p>
+                                                    <p>Your card information is encrypted with 256-bit SSL. 3D Secure authentication may be required for additional security.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- PayPal -->
@@ -634,10 +732,10 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Stripe - Disabled -->
-                                <div class="relative opacity-50">
-                                    <label class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-not-allowed payment-option">
-                                        <input type="radio" name="payment_method" value="stripe" class="w-5 h-5 text-gray-400 border-gray-300 mr-4" disabled>
+                                <!-- Stripe -->
+                                <div class="relative">
+                                    <label for="payment_stripe" class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all duration-300 payment-option">
+                                        <input type="radio" id="payment_stripe" name="payment_method" value="stripe" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mr-4">
                                         <div class="flex items-center flex-1">
                                             <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-3 mr-4 shadow-md">
                                                 <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -647,84 +745,62 @@
                                             <div class="flex-1">
                                                 <div class="flex items-center space-x-2">
                                                     <span class="font-bold text-gray-900 text-lg">Credit Card (Stripe)</span>
-                                                    <span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">COMING SOON</span>
+                                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">SECURE</span>
                                                 </div>
                                                 <p class="text-sm text-gray-600 mt-1">Direct credit card processing</p>
+                                                <div class="flex items-center mt-2 text-xs text-green-600">
+                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                    <span>PCI-DSS compliant & 3D Secure</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </label>
+                                    
+                                    <!-- Stripe Card Element -->
+                                    <div id="stripe-card-container" class="hidden mt-4 p-6 border-2 border-purple-200 rounded-xl bg-gradient-to-r from-purple-50 to-blue-50">
+                                        <div class="flex items-center mb-4">
+                                            <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mr-3">
+                                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                                                </svg>
+                                            </div>
+                                            <h4 class="font-bold text-purple-900 text-lg">💳 Credit Card Details</h4>
+                                        </div>
+                                        
+                                        <!-- Card Type Logos -->
+                                        <div class="flex gap-3 mb-4 justify-center">
+                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded text-white text-xs font-bold flex items-center justify-center">VISA</div>
+                                            <div class="w-12 h-8 bg-gradient-to-r from-red-500 to-red-700 rounded text-white text-xs font-bold flex items-center justify-center">MC</div>
+                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-400 to-blue-600 rounded text-white text-xs font-bold flex items-center justify-center">AMEX</div>
+                                            <div class="w-12 h-8 bg-gradient-to-r from-orange-400 to-orange-600 rounded text-white text-xs font-bold flex items-center justify-center">DISC</div>
+                                        </div>
+
+                                        <!-- Stripe Card Element Container -->
+                                        <div id="stripe-card-element" class="p-4 border-2 border-gray-200 rounded-xl bg-white">
+                                            <!-- Stripe Elements will be inserted here -->
+                                        </div>
+                                        <div id="stripe-card-errors" class="text-red-500 text-sm mt-2" role="alert"></div>
+
+                                        <!-- Security Notice -->
+                                        <div class="mt-4 p-3 bg-white/60 rounded-lg border border-purple-200">
+                                            <div class="flex items-start">
+                                                <svg class="w-5 h-5 text-green-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                <div class="text-sm text-purple-800">
+                                                    <p class="font-semibold mb-1">🔒 100% Secure Payment</p>
+                                                    <p>Your payment information is encrypted and processed securely by Stripe. We never store your card details.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             @error('payment_method')
                                 <p class="text-red-500 text-sm mt-2">{{ $message }}</p>
                             @enderror
-                        </div>
-
-                        <!-- Notes -->
-                        <div class="space-y-5">
-                            <div class="flex items-center space-x-3 pb-3 border-b-2 border-gray-100">
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                    </svg>
-                                </div>
-                                <h3 class="text-lg font-bold text-gray-800">Additional Notes</h3>
-                            </div>
-                            <div class="relative">
-                                <label for="notes" class="block text-sm font-semibold text-gray-700 mb-2">
-                                    <span class="flex items-center">
-                                        <svg class="w-4 h-4 mr-1.5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
-                                        </svg>
-                                        Order Notes (Optional)
-                                    </span>
-                                </label>
-                                <textarea id="notes" name="notes" 
-                                          class="form-input" rows="3"
-                                          placeholder="Any special instructions for your order..."></textarea>
-                            </div>
-                        </div>
-
-                        <!-- LianLian Pay iframe Integration -->
-                        <div id="lianlian-pay-info" class="hidden mt-6 p-6 border-2 border-orange-200 rounded-xl bg-gradient-to-r from-orange-50 to-red-50">
-                            <div class="flex items-center mb-4">
-                                <div class="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center mr-3">
-                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                                    </svg>
-                                </div>
-                                <h4 class="font-bold text-orange-900 text-lg">💳 LianLian Pay Secure Checkout</h4>
-                            </div>
-                            
-                            <!-- Card Type Logos -->
-                            <div class="flex gap-3 mb-4 justify-center">
-                                <div class="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded text-white text-xs font-bold flex items-center justify-center">VISA</div>
-                                <div class="w-12 h-8 bg-gradient-to-r from-red-500 to-red-700 rounded text-white text-xs font-bold flex items-center justify-center">MC</div>
-                                <div class="w-12 h-8 bg-gradient-to-r from-blue-400 to-blue-600 rounded text-white text-xs font-bold flex items-center justify-center">AMEX</div>
-                            </div>
-
-                            <!-- LianLian Pay iframe Container -->
-                            <div id="llpay-card-element" class="min-h-[280px] border-2 border-gray-200 rounded-xl bg-white relative overflow-hidden">
-                                <div id="lianlian-loading-placeholder" class="absolute inset-0 flex items-center justify-center bg-gray-50">
-                                    <div class="text-center">
-                                        <div class="animate-spin w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full mx-auto mb-3"></div>
-                                        <p class="text-gray-600 text-sm">Loading secure payment form...</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Security Notice -->
-                            <div class="mt-4 p-3 bg-white/60 rounded-lg border border-orange-200">
-                                <div class="flex items-start">
-                                    <svg class="w-5 h-5 text-green-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                    </svg>
-                                    <div class="text-sm text-orange-800">
-                                        <p class="font-semibold mb-1">🔒 Secure Payment</p>
-                                        <p>Your card information is encrypted with 256-bit SSL. 3D Secure authentication may be required for additional security.</p>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
 
                         <!-- Submit Button -->
@@ -1138,14 +1214,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         if (missingFields.length > 0) {
-                            showToast('error', 'Thiếu thông tin', 'Vui lòng điền đầy đủ thông tin: ' + missingFields.join(', '));
+                            showToast('error', 'Missing information', 'Please fill in all information: ' + missingFields.join(', '));
                             throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
                         }
                         
                         // Validate email format
                         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                         if (!emailRegex.test(requiredFields.customer_email)) {
-                            showToast('error', 'Email không hợp lệ', 'Vui lòng nhập địa chỉ email hợp lệ');
+                            showToast('error', 'Invalid Email', 'Please enter a valid email address');
                             throw new Error('Invalid email format');
                         }
                         
@@ -1366,7 +1442,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                                 </svg>
-                                <span class="text-sm font-medium">Vui lòng điền đầy đủ thông tin: ${validation.missingFields.join(', ')}</span>
+                                <span class="text-sm font-medium">Please fill in all required fields: ${validation.missingFields.join(', ')}</span>
                             </div>
                         `;
                     } else if (!validation.isEmailValid) {
@@ -1375,7 +1451,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                                 </svg>
-                                <span class="text-sm font-medium">Vui lòng nhập địa chỉ email hợp lệ</span>
+                                <span class="text-sm font-medium">Please enter a valid email address</span>
                             </div>
                         `;
                     }
@@ -1395,11 +1471,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
     
+    // Stripe integration
+    let stripeInstance = null;
+    let stripeCardElement = null;
+    let stripePaymentIntent = null;
+    
     // Payment method change handler
     const handlePaymentMethodChange = function() {
         const selectedRadio = document.querySelector('input[name="payment_method"]:checked');
         const lianLianInfo = document.getElementById('lianlian-pay-info');
         const paypalContainer = document.getElementById('paypal-button-container');
+        const stripeContainer = document.getElementById('stripe-card-container');
         
         // Remove selected class from all payment options
         paymentOptions.forEach(option => {
@@ -1417,24 +1499,30 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('💳 Payment method changed:', selectedRadio ? selectedRadio.value : 'none');
         
         if (selectedRadio && selectedRadio.value === 'lianlian_pay') {
-            console.log('🔧 LianLian Pay selected - initializing iframe');
-            // Hide PayPal container
+            console.log('🔧 LianLian Pay selected');
+            // Show LianLian Pay form
+            if (lianLianInfo) {
+                lianLianInfo.classList.remove('hidden');
+            }
+            // Hide others
             if (paypalContainer) {
                 paypalContainer.classList.add('hidden');
             }
-            // Show LianLian Pay
-            if (lianLianInfo) {
-                lianLianInfo.classList.remove('hidden');
-                // Initialize iframe if not already done
-                if (!lianLianCardInstance && !iframeToken) {
-                    initializeLianLianIframe();
-                }
+            if (stripeContainer) {
+                stripeContainer.classList.add('hidden');
+            }
+            // Initialize LianLian iframe if not already done
+            if (!lianLianCardInstance && !iframeToken) {
+                initializeLianLianIframe();
             }
         } else if (selectedRadio && selectedRadio.value === 'paypal') {
             console.log('🔧 PayPal selected - initializing buttons');
-            // Hide LianLian Pay
+            // Hide others
             if (lianLianInfo) {
                 lianLianInfo.classList.add('hidden');
+            }
+            if (stripeContainer) {
+                stripeContainer.classList.add('hidden');
             }
             // Show PayPal container
             if (paypalContainer) {
@@ -1446,14 +1534,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Update PayPal button state based on form validation
                 setTimeout(() => updatePayPalButtonState(), 100);
             }
-        } else {
-            console.log('🔧 Hiding payment methods...');
-            // Hide both containers
+        } else if (selectedRadio && selectedRadio.value === 'stripe') {
+            console.log('🔧 Stripe selected - initializing card element');
+            // Hide others
             if (lianLianInfo) {
                 lianLianInfo.classList.add('hidden');
             }
             if (paypalContainer) {
                 paypalContainer.classList.add('hidden');
+            }
+            // Show Stripe container
+            if (stripeContainer) {
+                stripeContainer.classList.remove('hidden');
+                // Initialize Stripe Elements if not already done
+                if (!stripeCardElement) {
+                    initializeStripeElements();
+                }
+            }
+        } else {
+            console.log('🔧 Hiding all payment methods...');
+            // Hide all containers
+            if (lianLianInfo) {
+                lianLianInfo.classList.add('hidden');
+            }
+            if (paypalContainer) {
+                paypalContainer.classList.add('hidden');
+            }
+            if (stripeContainer) {
+                stripeContainer.classList.add('hidden');
             }
         }
     };
@@ -1473,7 +1581,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Ensure it's checked
         defaultPaymentRadio.checked = true;
         
-        // Show LianLian Pay info since it's the default
+        // Handle payment method change (will show LianLian form and initialize)
         handlePaymentMethodChange();
         
         console.log('✅ Default payment method set to LianLian Pay');
@@ -1507,6 +1615,207 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('⏳ Waiting for PayPal SDK to load...', `(${paypalSDKLoadAttempts}/${MAX_PAYPAL_SDK_ATTEMPTS})`);
             setTimeout(initializePayPalSDK, 100);
             return false;
+        }
+    };
+    
+    // Initialize Stripe Elements
+    const initializeStripeElements = async () => {
+        try {
+            console.log('🚀 Initializing Stripe Elements...');
+            
+            if (!window.Stripe) {
+                throw new Error('Stripe.js not loaded');
+            }
+            
+            // Initialize Stripe with publishable key
+            const stripeKey = '{{ config("services.stripe.key") }}';
+            if (!stripeKey) {
+                throw new Error('Stripe publishable key not configured');
+            }
+            
+            stripeInstance = window.Stripe(stripeKey);
+            
+            // Create Elements instance
+            const elements = stripeInstance.elements();
+            
+            // Create card element with styling
+            stripeCardElement = elements.create('card', {
+                style: {
+                    base: {
+                        fontSize: '16px',
+                        color: '#32325d',
+                        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                        '::placeholder': {
+                            color: '#aab7c4',
+                        },
+                        iconColor: '#666EE8',
+                    },
+                    invalid: {
+                        color: '#fa755a',
+                        iconColor: '#fa755a',
+                    },
+                },
+                hidePostalCode: true,
+            });
+            
+            // Mount the card element
+            stripeCardElement.mount('#stripe-card-element');
+            
+            // Handle real-time validation errors
+            stripeCardElement.on('change', function(event) {
+                const displayError = document.getElementById('stripe-card-errors');
+                if (event.error) {
+                    displayError.textContent = event.error.message;
+                } else {
+                    displayError.textContent = '';
+                }
+            });
+            
+            console.log('✅ Stripe Elements initialized successfully');
+            
+        } catch (error) {
+            console.error('❌ Stripe Elements initialization error:', error);
+            showToast('error', 'Payment Error', 'Failed to initialize Stripe: ' + error.message);
+        }
+    };
+    
+    // Handle Stripe Payment
+    const handleStripePayment = async () => {
+        try {
+            console.log('🚀 Processing Stripe payment...');
+            showLoading(true);
+            
+            if (!stripeInstance || !stripeCardElement) {
+                throw new Error('Stripe not initialized. Please refresh and try again.');
+            }
+            
+            // Calculate total amount
+            const subtotal = parseFloat('{{ $subtotal }}');
+            const tax = parseFloat('{{ $taxAmount }}');
+            const shipping = parseFloat('{{ $shippingCost }}');
+            const total = subtotal + tax + shipping;
+            
+            // Create Payment Intent on server
+            console.log('📝 Creating Payment Intent...');
+            const intentResponse = await fetch('{{ route("payment.stripe.create-intent") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    amount: total,
+                    currency: 'usd',
+                }),
+            });
+            
+            const intentData = await intentResponse.json();
+            
+            if (!intentData.success) {
+                throw new Error(intentData.message || 'Failed to create payment intent');
+            }
+            
+            const clientSecret = intentData.clientSecret;
+            console.log('✅ Payment Intent created');
+            
+            // Get billing details from form
+            const checkoutForm = document.getElementById('checkout-form');
+            const billingDetails = {
+                name: checkoutForm.querySelector('[name="customer_name"]')?.value?.trim() || '',
+                email: checkoutForm.querySelector('[name="customer_email"]')?.value?.trim() || '',
+                phone: checkoutForm.querySelector('[name="customer_phone"]')?.value?.trim() || '',
+                address: {
+                    line1: checkoutForm.querySelector('[name="shipping_address"]')?.value?.trim() || '',
+                    city: checkoutForm.querySelector('[name="city"]')?.value?.trim() || '',
+                    state: checkoutForm.querySelector('[name="state"]')?.value?.trim() || '',
+                    postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
+                    country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
+                },
+            };
+            
+            // Confirm the payment with Stripe
+            console.log('💳 Confirming payment with Stripe...');
+            const { error, paymentIntent } = await stripeInstance.confirmCardPayment(clientSecret, {
+                payment_method: {
+                    card: stripeCardElement,
+                    billing_details: billingDetails,
+                },
+            });
+            
+            if (error) {
+                throw new Error(error.message);
+            }
+            
+            if (paymentIntent.status === 'succeeded') {
+                console.log('✅ Payment succeeded:', paymentIntent.id);
+                
+                // Process order on server
+                await processStripeOrder(paymentIntent.id);
+            } else {
+                throw new Error('Payment was not successful. Status: ' + paymentIntent.status);
+            }
+            
+        } catch (error) {
+            console.error('❌ Stripe payment error:', error);
+            showToast('error', 'Payment Error', error.message);
+            showLoading(false);
+        }
+    };
+    
+    // Process Stripe Order
+    const processStripeOrder = async (paymentIntentId) => {
+        try {
+            console.log('📦 Creating order with payment intent:', paymentIntentId);
+            
+            const checkoutForm = document.getElementById('checkout-form');
+            const orderData = {
+                payment_intent_id: paymentIntentId,
+                customer_name: checkoutForm.querySelector('[name="customer_name"]')?.value?.trim() || '',
+                customer_email: checkoutForm.querySelector('[name="customer_email"]')?.value?.trim() || '',
+                customer_phone: checkoutForm.querySelector('[name="customer_phone"]')?.value?.trim() || '',
+                shipping_address: checkoutForm.querySelector('[name="shipping_address"]')?.value?.trim() || '',
+                city: checkoutForm.querySelector('[name="city"]')?.value?.trim() || '',
+                state: checkoutForm.querySelector('[name="state"]')?.value?.trim() || '',
+                postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
+                country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
+                notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
+            };
+            
+            const response = await fetch('{{ route("payment.stripe.process") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(orderData),
+            });
+            
+            const responseData = await response.json();
+            
+            if (responseData.success) {
+                showToast('success', 'Payment Successful!', 'Your order has been placed successfully');
+                
+                // Clear cart from localStorage
+                localStorage.removeItem('cart');
+                
+                // Redirect to success page
+                setTimeout(() => {
+                    if (responseData.order_number) {
+                        window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                    } else {
+                        window.location.href = '{{ route("home") }}';
+                    }
+                }, 2000);
+            } else {
+                throw new Error(responseData.message || 'Order creation failed');
+            }
+            
+        } catch (error) {
+            console.error('❌ Order processing error:', error);
+            showToast('error', 'Order Error', error.message);
+            showLoading(false);
         }
     };
     
@@ -1549,6 +1858,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // PayPal is handled by the SDK, just show info
             showToast('info', 'PayPal Checkout', 'Please use the PayPal button below to complete your payment');
             return;
+        } else if (selectedPaymentMethod === 'stripe') {
+            handleStripePayment();
         } else {
             handleRegularPayment();
         }

@@ -74,6 +74,12 @@ Route::prefix('payment/lianlian')->name('payment.lianlian.')->group(function () 
     Route::post('/process', [App\Http\Controllers\Payment\LianLianPayController::class, 'processPayment'])->name('process');
 });
 
+// Stripe Payment routes
+Route::prefix('payment/stripe')->name('payment.stripe.')->group(function () {
+    Route::post('/create-payment-intent', [App\Http\Controllers\Payment\StripePaymentController::class, 'createPaymentIntent'])->name('create-intent');
+    Route::post('/process', [App\Http\Controllers\Payment\StripePaymentController::class, 'processPayment'])->name('process');
+    Route::post('/webhook', [App\Http\Controllers\Payment\StripePaymentController::class, 'webhook'])->name('webhook');
+});
 
 // Wishlist routes
 Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist.index');

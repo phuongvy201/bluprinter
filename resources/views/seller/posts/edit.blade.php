@@ -127,7 +127,7 @@
                 <div class="bg-white rounded-lg shadow p-6">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Featured Image</label>
                     @if($post->featured_image)
-                        <img src="{{ Storage::url($post->featured_image) }}" alt="" class="w-full h-32 object-cover rounded mb-2">
+                        <img src="{{ $post->featured_image_url }}" alt="" class="w-full h-32 object-cover rounded mb-2">
                     @endif
                     <input type="file" name="featured_image" accept="image/*" class="w-full text-sm">
                 </div>
@@ -137,8 +137,8 @@
                     <label class="block text-sm font-medium text-gray-700 mb-2">Gallery</label>
                     @if($post->gallery && count($post->gallery) > 0)
                         <div class="grid grid-cols-2 gap-2 mb-2">
-                            @foreach($post->gallery as $image)
-                                <img src="{{ Storage::url($image) }}" alt="" class="w-full h-20 object-cover rounded">
+                            @foreach($post->gallery_urls as $imageUrl)
+                                <img src="{{ $imageUrl }}" alt="" class="w-full h-20 object-cover rounded">
                             @endforeach
                         </div>
                     @endif

@@ -10,14 +10,15 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "darkaonline/l5-swagger": "*",
+        "darkaonline/l5-swagger": "^9.0",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
         "league/flysystem-aws-s3-v3": "^3.29",
         "lianlian_acquiring/sdkv3": "^1.0",
         "maatwebsite/excel": "^3.1",
         "paypal/rest-api-sdk-php": "^1.6",
-        "spatie/laravel-permission": "^6.21"
+        "spatie/laravel-permission": "^6.21",
+        "stripe/stripe-php": "^18.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

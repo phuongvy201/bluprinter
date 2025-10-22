@@ -21,7 +21,7 @@
                     <a href="{{ route('blog.show', $post->slug) }}">
                         @if($post->featured_image)
                             <div class="aspect-video overflow-hidden bg-gray-100">
-                                <img src="{{ Storage::url($post->featured_image) }}" 
+                                <img src="{{ $post->featured_image_url }}" 
                                      alt="{{ $post->title }}"
                                      class="w-full h-full object-cover group-hover:scale-110 transition-transform">
                             </div>

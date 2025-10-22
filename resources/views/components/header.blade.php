@@ -27,7 +27,7 @@
                         <a href="{{ route('register') }}" class="text-gray-600 hover:text-[#005366] transition font-medium">Register</a>
                     @else
                         <span class="text-sm text-gray-600">Welcome, {{ auth()->user()->name }}!</span>
-                        @if(auth()->user()->hasRole('admin'))
+                        @if(auth()->user()->hasAnyRole(['admin', 'seller', 'ad-partner']))
                             <a href="{{ route('dashboard') }}" class="text-gray-600 hover:text-[#005366] transition font-medium">Dashboard</a>
                         @endif
                         @if(!auth()->user()->hasVerifiedEmail())
@@ -240,14 +240,14 @@
                                         <p class="text-sm font-semibold text-gray-900">{{ auth()->user()->name }}</p>
                                         <p class="text-xs text-gray-500">{{ auth()->user()->email }}</p>
                                     </div>
-                                    @if(auth()->user()->hasRole('admin'))
-                                        <a href="{{ route('dashboard') }}" class="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition">
-                                            <svg class="w-4 h-4 mr-3 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
-                                            </svg>
-                                            Dashboard
-                                        </a>
-                                    @endif
+                    @if(auth()->user()->hasAnyRole(['admin', 'seller', 'ad-partner']))
+                        <a href="{{ route('dashboard') }}" class="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition">
+                            <svg class="w-4 h-4 mr-3 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                            </svg>
+                            Dashboard
+                        </a>
+                    @endif
                                     @if(!auth()->user()->hasVerifiedEmail())
                                         <a href="{{ route('verification.notice') }}" class="flex items-center px-4 py-3 text-sm text-orange-600 hover:bg-orange-50 transition">
                                             <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

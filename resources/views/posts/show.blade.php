@@ -7,7 +7,7 @@
 <!-- Post Header -->
 @if($post->featured_image)
     <div class="relative h-96 bg-gray-900">
-        <img src="{{ Storage::url($post->featured_image) }}" 
+        <img src="{{ $post->featured_image_url }}" 
              alt="{{ $post->title }}"
              class="w-full h-full object-cover opacity-60">
         <div class="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent"></div>
@@ -88,9 +88,9 @@
                 <div class="mb-8">
                     <h3 class="text-xl font-bold text-gray-900 mb-4">Gallery</h3>
                     <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        @foreach($post->gallery as $image)
+                        @foreach($post->gallery_urls as $imageUrl)
                             <div class="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                                <img src="{{ Storage::url($image) }}" alt="Gallery image" class="w-full h-full object-cover">
+                                <img src="{{ $imageUrl }}" alt="Gallery image" class="w-full h-full object-cover">
                             </div>
                         @endforeach
                     </div>

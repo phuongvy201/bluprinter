@@ -9,6 +9,7 @@ use App\Models\PostTag;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class PostController extends Controller
 {
@@ -126,10 +127,14 @@ class PostController extends Controller
                 $validated['published_at'] = now();
             }
 
-            // Handle featured image upload
+            // Handle featured image upload to S3
             if ($request->hasFile('featured_image')) {
                 try {
-                    $validated['featured_image'] = $request->file('featured_image')->store('posts', 'public');
+                    $imageFile = $request->file('featured_image');
+                    $imageName = 'post_featured_' . time() . '_' . Str::random(10) . '.' . $imageFile->getClientOriginalExtension();
+                    $imagePath = 'posts/featured/' . $imageName;
+                    Storage::disk('s3')->put($imagePath, file_get_contents($imageFile));
+                    $validated['featured_image'] = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $imagePath;
                 } catch (\Exception $e) {
                     return back()
                         ->withInput($request->all())
@@ -137,12 +142,15 @@ class PostController extends Controller
                 }
             }
 
-            // Handle gallery upload
+            // Handle gallery upload to S3
             if ($request->hasFile('gallery')) {
                 try {
                     $galleryPaths = [];
                     foreach ($request->file('gallery') as $image) {
-                        $galleryPaths[] = $image->store('posts/gallery', 'public');
+                        $imageName = 'post_gallery_' . time() . '_' . Str::random(10) . '.' . $image->getClientOriginalExtension();
+                        $imagePath = 'posts/gallery/' . $imageName;
+                        Storage::disk('s3')->put($imagePath, file_get_contents($image));
+                        $galleryPaths[] = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $imagePath;
                     }
                     $validated['gallery'] = $galleryPaths;
                 } catch (\Exception $e) {
@@ -254,25 +262,39 @@ class PostController extends Controller
             $validated['status'] = 'pending';
         }
 
+        // Handle featured image update - upload to S3
         if ($request->hasFile('featured_image')) {
-            if ($post->featured_image) {
-                Storage::disk('public')->delete($post->featured_image);
+            // Delete old image from S3 if exists
+            if ($post->featured_image && str_contains($post->featured_image, 's3.us-east-1.amazonaws.com')) {
+                $oldPath = str_replace('https://s3.us-east-1.amazonaws.com/image.bluprinter/', '', $post->featured_image);
+                Storage::disk('s3')->delete($oldPath);
             }
-            $validated['featured_image'] = $request->file('featured_image')->store('posts', 'public');
+
+            $imageFile = $request->file('featured_image');
+            $imageName = 'post_featured_' . time() . '_' . Str::random(10) . '.' . $imageFile->getClientOriginalExtension();
+            $imagePath = 'posts/featured/' . $imageName;
+            Storage::disk('s3')->put($imagePath, file_get_contents($imageFile));
+            $validated['featured_image'] = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $imagePath;
         }
 
-        // Handle gallery
+        // Handle gallery update - upload to S3
         if ($request->hasFile('gallery')) {
-            // Delete old gallery images
+            // Delete old gallery images from S3
             if ($post->gallery) {
                 foreach ($post->gallery as $image) {
-                    Storage::disk('public')->delete($image);
+                    if (str_contains($image, 's3.us-east-1.amazonaws.com')) {
+                        $oldPath = str_replace('https://s3.us-east-1.amazonaws.com/image.bluprinter/', '', $image);
+                        Storage::disk('s3')->delete($oldPath);
+                    }
                 }
             }
 
             $galleryPaths = [];
             foreach ($request->file('gallery') as $image) {
-                $galleryPaths[] = $image->store('posts/gallery', 'public');
+                $imageName = 'post_gallery_' . time() . '_' . Str::random(10) . '.' . $image->getClientOriginalExtension();
+                $imagePath = 'posts/gallery/' . $imageName;
+                Storage::disk('s3')->put($imagePath, file_get_contents($image));
+                $galleryPaths[] = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $imagePath;
             }
             $validated['gallery'] = $galleryPaths;
         }
@@ -300,13 +322,19 @@ class PostController extends Controller
             abort(403);
         }
 
-        if ($post->featured_image) {
-            Storage::disk('public')->delete($post->featured_image);
+        // Delete featured image from S3
+        if ($post->featured_image && str_contains($post->featured_image, 's3.us-east-1.amazonaws.com')) {
+            $oldPath = str_replace('https://s3.us-east-1.amazonaws.com/image.bluprinter/', '', $post->featured_image);
+            Storage::disk('s3')->delete($oldPath);
         }
 
+        // Delete gallery images from S3
         if ($post->gallery) {
             foreach ($post->gallery as $image) {
-                Storage::disk('public')->delete($image);
+                if (str_contains($image, 's3.us-east-1.amazonaws.com')) {
+                    $oldPath = str_replace('https://s3.us-east-1.amazonaws.com/image.bluprinter/', '', $image);
+                    Storage::disk('s3')->delete($oldPath);
+                }
             }
         }
 
@@ -317,7 +345,7 @@ class PostController extends Controller
     }
 
     /**
-     * Upload image for TinyMCE editor
+     * Upload image for TinyMCE editor - upload to S3
      */
     public function uploadImage(Request $request)
     {
@@ -326,8 +354,11 @@ class PostController extends Controller
         ]);
 
         if ($request->hasFile('file')) {
-            $path = $request->file('file')->store('posts/editor', 'public');
-            $url = Storage::disk('public')->url($path);
+            $imageFile = $request->file('file');
+            $imageName = 'post_editor_' . time() . '_' . Str::random(10) . '.' . $imageFile->getClientOriginalExtension();
+            $imagePath = 'posts/editor/' . $imageName;
+            Storage::disk('s3')->put($imagePath, file_get_contents($imageFile));
+            $url = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $imagePath;
 
             return response()->json([
                 'location' => $url

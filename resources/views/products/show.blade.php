@@ -3,6 +3,10 @@
 @section('title', $product->name)
 
 @section('content')
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+
 <script>
 // Track Facebook Pixel ViewContent for product detail page
 document.addEventListener('DOMContentLoaded', function() {
@@ -1883,6 +1887,22 @@ let allImages = [
     @endif
 ];
 
+// Helper function for showing alerts with SweetAlert2 or fallback
+function showAlert(options) {
+    if (typeof Swal !== 'undefined') {
+        return Swal.fire(options);
+    } else {
+        // Fallback to native confirm/alert
+        if (options.showCancelButton) {
+            const result = confirm(options.text || options.html?.replace(/<[^>]*>/g, '') || '');
+            return Promise.resolve({ isConfirmed: result });
+        } else {
+            alert((options.title ? options.title + '\n\n' : '') + (options.text || options.html?.replace(/<[^>]*>/g, '') || ''));
+            return Promise.resolve({ isConfirmed: true });
+        }
+    }
+}
+
 // Video control function
 function playVideoOnClick(event) {
     console.log('playVideoOnClick called', event);
@@ -3117,12 +3137,46 @@ function addToCart() {
     // Validate required customizations first
     const validation = validateRequiredCustomizations();
     if (!validation.isValid) {
-        alert('Please enter required information for personalization options:\n• ' + validation.missingFields.join('\n• '));
+        const message = validation.needToEnableCustomization 
+            ? `<div class="text-left">
+                    <p class="mb-3 text-gray-600">This product requires personalization. Please enable "Add Personalization" and fill in:</p>
+                    <ul class="list-disc list-inside space-y-1 text-gray-700">
+                        ${validation.missingFields.map(field => `<li>${field}</li>`).join('')}
+                    </ul>
+                </div>`
+            : `<div class="text-left">
+                    <p class="mb-3 text-gray-600">Please fill in all required personalization information:</p>
+                    <ul class="list-disc list-inside space-y-1 text-gray-700">
+                        ${validation.missingFields.map(field => `<li>${field}</li>`).join('')}
+                    </ul>
+                </div>`;
         
-        // Scroll to customization section
+        showAlert({
+            icon: 'warning',
+            title: 'Missing Information',
+            html: message,
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#005366',
+            customClass: {
+                popup: 'rounded-xl',
+                confirmButton: 'px-6 py-3 rounded-lg'
+            }
+        });
+        
+        // Scroll to customization section and auto-enable if needed
+        if (validation.needToEnableCustomization) {
+            const enableCheckbox = document.getElementById('enable-customization');
+            if (enableCheckbox) {
+                enableCheckbox.checked = true;
+                toggleCustomization();
+            }
+        }
+        
         const customizationContainer = document.getElementById('customization-container');
         if (customizationContainer) {
-            customizationContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+                customizationContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
         }
         return;
     }
@@ -3133,7 +3187,17 @@ function addToCart() {
     
     // Check if variant is out of stock
     if (selectedVariant && selectedVariant.quantity !== null && selectedVariant.quantity <= 0) {
-        alert('Out of stock');
+        showAlert({
+            icon: 'error',
+            title: 'Out of Stock',
+            text: 'This product is currently out of stock. Please choose another product.',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#005366',
+            customClass: {
+                popup: 'rounded-xl',
+                confirmButton: 'px-6 py-3 rounded-lg'
+            }
+        });
         return;
     }
     
@@ -3359,62 +3423,94 @@ function getSelectedCustomizations() {
 
 // Kiểm tra required customizations
 function validateRequiredCustomizations() {
-    // Kiểm tra xem có bật customization không
     const enableCustomizationCheckbox = document.getElementById('enable-customization');
     const customizationContainer = document.getElementById('customization-container');
     
-    if (!enableCustomizationCheckbox || !enableCustomizationCheckbox.checked || 
-        !customizationContainer || customizationContainer.classList.contains('hidden')) {
+    // Nếu không có customization container, không cần validate
+    if (!customizationContainer) {
         return { isValid: true, missingFields: [] };
     }
     
     const missingFields = [];
     
-    // Tìm tất cả các customization containers
+    // Tìm tất cả các customization boxes
     const customizationBoxes = customizationContainer.querySelectorAll('.border.border-gray-200.rounded-lg.p-4.bg-white');
     
+    // Kiểm tra xem có customization nào là required không
+    let hasRequiredCustomizations = false;
+    
     customizationBoxes.forEach(box => {
-        const titleElement = box.querySelector('h4');
         const requiredBadge = box.querySelector('.bg-red-100.text-red-800');
-        
-        // Chỉ kiểm tra nếu có required badge
-        if (requiredBadge && titleElement) {
-            const customizationLabel = titleElement.textContent.trim();
-            let hasValidInput = false;
-            
-            // Tìm các input trong box này
-            const inputs = box.querySelectorAll('.customization-input');
-            
-            inputs.forEach(input => {
-                if (input.type === 'radio' || input.type === 'checkbox') {
-                    if (input.checked) {
-                        hasValidInput = true;
-                    }
-                } else if (input.type === 'text' || input.type === 'textarea') {
-                    if (input.value.trim() !== '') {
-                        hasValidInput = true;
-                    }
-                }
-            });
-            
-            // Nếu là radio button, kiểm tra xem có input nào trong group được checked không
-            if (!hasValidInput && inputs.length > 0) {
-                if (inputs[0].type === 'radio') {
-                    const inputName = inputs[0].name;
-                    const radioInputs = customizationContainer.querySelectorAll(`input[name="${inputName}"]`);
-                    hasValidInput = Array.from(radioInputs).some(radio => radio.checked);
-                }
-            }
-            
-            if (!hasValidInput) {
-                missingFields.push(customizationLabel);
-            }
+        if (requiredBadge) {
+            hasRequiredCustomizations = true;
         }
     });
     
+    // Nếu có required customizations nhưng checkbox chưa được check
+    if (hasRequiredCustomizations && (!enableCustomizationCheckbox || !enableCustomizationCheckbox.checked)) {
+        customizationBoxes.forEach(box => {
+            const titleElement = box.querySelector('h4');
+            const requiredBadge = box.querySelector('.bg-red-100.text-red-800');
+            
+            if (requiredBadge && titleElement) {
+                const customizationLabel = titleElement.textContent.trim();
+                missingFields.push(customizationLabel);
+            }
+        });
+        
+        return {
+            isValid: false,
+            missingFields: missingFields,
+            needToEnableCustomization: true
+        };
+    }
+    
+    // Nếu checkbox được check, kiểm tra các required fields
+    if (enableCustomizationCheckbox && enableCustomizationCheckbox.checked) {
+        customizationBoxes.forEach(box => {
+            const titleElement = box.querySelector('h4');
+            const requiredBadge = box.querySelector('.bg-red-100.text-red-800');
+            
+            // Chỉ kiểm tra nếu có required badge
+            if (requiredBadge && titleElement) {
+                const customizationLabel = titleElement.textContent.trim();
+                let hasValidInput = false;
+                
+                // Tìm các input trong box này
+                const inputs = box.querySelectorAll('.customization-input');
+                
+                inputs.forEach(input => {
+                    if (input.type === 'radio' || input.type === 'checkbox') {
+                        if (input.checked) {
+                            hasValidInput = true;
+                        }
+                    } else if (input.type === 'text' || input.type === 'textarea') {
+                        if (input.value.trim() !== '') {
+                            hasValidInput = true;
+                        }
+                    }
+                });
+                
+                // Nếu là radio button, kiểm tra xem có input nào trong group được checked không
+                if (!hasValidInput && inputs.length > 0) {
+                    if (inputs[0].type === 'radio') {
+                        const inputName = inputs[0].name;
+                        const radioInputs = customizationContainer.querySelectorAll(`input[name="${inputName}"]`);
+                        hasValidInput = Array.from(radioInputs).some(radio => radio.checked);
+                    }
+                }
+                
+                if (!hasValidInput) {
+                    missingFields.push(customizationLabel);
+                }
+            }
+        });
+    }
+    
     return {
         isValid: missingFields.length === 0,
-        missingFields: missingFields
+        missingFields: missingFields,
+        needToEnableCustomization: false
     };
 }
 
@@ -3690,7 +3786,87 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
                     '$' + parseFloat(summary.shipping).toFixed(2);
             }
         }
+        
+        // Setup event delegation for cart buttons
+        setupCartPopupEventDelegation();
     }, 100);
+}
+
+// Setup event delegation for cart popup buttons
+function setupCartPopupEventDelegation() {
+    const cartPopupOverlay = document.getElementById('cart-popup-overlay');
+    if (!cartPopupOverlay) return;
+    
+    // Remove existing listener if any
+    cartPopupOverlay.removeEventListener('click', handleCartPopupClick);
+    
+    // Add event listener
+    cartPopupOverlay.addEventListener('click', handleCartPopupClick);
+}
+
+// Handle all cart popup clicks
+function handleCartPopupClick(e) {
+    const target = e.target.closest('button');
+    
+    // Check if clicking on a button first
+    if (target) {
+        // Handle remove item button
+        if (target.classList.contains('remove-cart-item')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const cartItemId = parseInt(target.dataset.cartItemId);
+            if (cartItemId) {
+                removeCartItemById(cartItemId);
+            }
+            return;
+        }
+        
+        // Handle decrease quantity button
+        if (target.classList.contains('decrease-quantity')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const cartItemId = parseInt(target.dataset.cartItemId);
+            const newQuantity = parseInt(target.dataset.newQuantity);
+            if (cartItemId && newQuantity >= 0) {
+                updateCartItemQuantity(e, cartItemId, newQuantity);
+            }
+            return;
+        }
+        
+        // Handle increase quantity button
+        if (target.classList.contains('increase-quantity')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const cartItemId = parseInt(target.dataset.cartItemId);
+            const newQuantity = parseInt(target.dataset.newQuantity);
+            if (cartItemId && newQuantity > 0) {
+                updateCartItemQuantity(e, cartItemId, newQuantity);
+            }
+            return;
+        }
+        
+        // Handle cross-sell add button - stop propagation to parent div
+        if (target.classList.contains('cross-sell-add-btn')) {
+            e.preventDefault();
+            e.stopPropagation();
+            return; // Let the cross-sell-product handler take care of it
+        }
+    }
+    
+    // Check for cross-sell product click (div click, not button)
+    const crossSellProduct = e.target.closest('.cross-sell-product');
+    if (crossSellProduct) {
+        e.preventDefault();
+        const productId = parseInt(crossSellProduct.dataset.productId);
+        const productName = crossSellProduct.dataset.productName;
+        const productPrice = parseFloat(crossSellProduct.dataset.productPrice);
+        const productImage = crossSellProduct.dataset.productImage;
+        const productSlug = crossSellProduct.dataset.productSlug;
+        const hasVariants = crossSellProduct.dataset.hasVariants === 'true';
+        
+        handleCrossSellClick(productId, productName, productPrice, productImage, productSlug, hasVariants);
+        return;
+    }
 }
 
 
@@ -3760,7 +3936,7 @@ function generateCartPopupItems(cartItems) {
                                     <p class="text-xs text-gray-500">Sold by: <a href="/shops/${shop.shop_slug || ''}" class="text-[#005366] font-medium hover:underline">${shop.name}</a></p>
                                 ` : ''}
                             </div>
-                            <button onclick="removeCartItemById(${item.id})" class="ml-2 p-1 text-gray-400 hover:text-red-500 transition-colors">
+                            <button class="remove-cart-item ml-2 p-1 text-gray-400 hover:text-red-500 transition-colors" data-cart-item-id="${item.id}">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                 </svg>
@@ -3790,16 +3966,18 @@ function generateCartPopupItems(cartItems) {
                 <!-- Price and Quantity -->
                         <div class="flex items-center justify-between mt-3">
                     <div class="flex items-center space-x-2">
-                                <button onclick="updateCartItemQuantity(event, ${item.id}, ${item.quantity - 1})" 
-                                        class="w-7 h-7 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors ${item.quantity <= 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+                                <button class="decrease-quantity w-7 h-7 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors ${item.quantity <= 1 ? 'opacity-50 cursor-not-allowed' : ''}" 
+                                        data-cart-item-id="${item.id}" 
+                                        data-new-quantity="${item.quantity - 1}"
                                         ${item.quantity <= 1 ? 'disabled' : ''}>
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
                             </svg>
                         </button>
                                 <span class="text-sm font-semibold min-w-[1.5rem] text-center" id="quantity-${item.id}">${item.quantity}</span>
-                                <button onclick="updateCartItemQuantity(event, ${item.id}, ${item.quantity + 1})" 
-                                        class="w-7 h-7 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors">
+                                <button class="increase-quantity w-7 h-7 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors" 
+                                        data-cart-item-id="${item.id}" 
+                                        data-new-quantity="${item.quantity + 1}">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                             </svg>
@@ -3863,55 +4041,99 @@ function updateCartItemQuantity(e, cartItemId, newQuantity) {
             }, 100);
         } else {
             if (quantitySpan) quantitySpan.textContent = originalText;
-            alert('Unable to update quantity: ' + (data.message || 'Unknown error'));
+            const errorMsg = data.message || 'An error occurred while updating quantity';
+            showAlert({
+                icon: 'error',
+                title: 'Unable to Update',
+                text: errorMsg,
+                confirmButtonText: 'Close',
+                confirmButtonColor: '#005366'
+            });
         }
     })
     .catch(error => {
         console.error('Error updating quantity:', error);
         if (quantitySpan) quantitySpan.textContent = originalText;
-        alert('Error: ' + error.message);
+        const errorMsg = error.message || 'An error occurred';
+        showAlert({
+            icon: 'error',
+            title: 'Error',
+            text: errorMsg,
+            confirmButtonText: 'Close',
+            confirmButtonColor: '#005366'
+        });
     });
 }
 
 function removeCartItemById(cartItemId) {
-    if (!confirm('Are you sure you want to remove this product?')) return;
-    
-    console.log('Removing cart item:', cartItemId);
-    
-    fetch(`/api/cart/remove/${cartItemId}`, {
-        method: 'DELETE',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+    showAlert({
+        icon: 'question',
+        title: 'Confirm Removal',
+        text: 'Are you sure you want to remove this product from your cart?',
+        showCancelButton: true,
+        confirmButtonText: 'Remove',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#E2150C',
+        cancelButtonColor: '#6b7280',
+        customClass: {
+            popup: 'rounded-xl',
+            confirmButton: 'px-6 py-3 rounded-lg',
+            cancelButton: 'px-6 py-3 rounded-lg'
         }
-    })
-    .then(response => {
-        console.log('Remove response status:', response.status);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        console.log('Remove response data:', data);
-        if (data.success) {
-            console.log('Item removed successfully');
-            // Sync localStorage
-            syncLocalStorageWithBackend();
-            // Refresh popup content
-            setTimeout(() => {
-                refreshCartPopupContent();
-            }, 100);
-            // Show notification
-            showCartSuccess('Product removed from cart');
-        } else {
-            alert('Unable to remove product: ' + (data.message || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        console.error('Error removing item:', error);
-        alert('Error: ' + error.message);
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+        
+        console.log('Removing cart item:', cartItemId);
+        
+        fetch(`/api/cart/remove/${cartItemId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        })
+        .then(response => {
+            console.log('Remove response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Remove response data:', data);
+            if (data.success) {
+                console.log('Item removed successfully');
+                // Sync localStorage
+                syncLocalStorageWithBackend();
+                // Refresh popup content
+                setTimeout(() => {
+                    refreshCartPopupContent();
+                }, 100);
+                // Show notification
+                showCartSuccess('Product removed from cart');
+            } else {
+                const errorMsg = data.message || 'An error occurred while removing the product';
+                showAlert({
+                    icon: 'error',
+                    title: 'Unable to Remove',
+                    text: errorMsg,
+                    confirmButtonText: 'Close',
+                    confirmButtonColor: '#005366'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error removing item:', error);
+            const errorMsg = error.message || 'An error occurred';
+            showAlert({
+                icon: 'error',
+                title: 'Error',
+                text: errorMsg,
+                confirmButtonText: 'Close',
+                confirmButtonColor: '#005366'
+            });
+        });
     });
 }
 
@@ -4053,9 +4275,10 @@ function refreshCartPopupContent() {
             // Update header cart count
             updateCartCount();
             
-            // Re-setup shipping calculator after refresh
+            // Re-setup shipping calculator and event delegation after refresh
             setTimeout(() => {
                 setupPopupShippingCalculator();
+                setupCartPopupEventDelegation();
             }, 100);
             
             // If cart is empty, close popup
@@ -4134,7 +4357,12 @@ function generateCrossSellProducts() {
     
     return crossSellProducts.map(product => `
         <div class="border border-gray-200 rounded-lg p-3 hover:border-[#005366] transition-colors cursor-pointer cross-sell-product relative" 
-             onclick="handleCrossSellClick(${product.id}, '${product.name}', ${product.price}, '${product.image || ''}', '${product.slug}', ${product.has_variants})">
+             data-product-id="${product.id}"
+             data-product-name="${product.name}"
+             data-product-price="${product.price}"
+             data-product-image="${product.image || ''}"
+             data-product-slug="${product.slug}"
+             data-has-variants="${product.has_variants}">
             ${product.image && product.image !== 'undefined' && product.image !== '' ? `
                 <div class="relative">
                     <img src="${product.image}" 
@@ -4165,7 +4393,7 @@ function generateCrossSellProducts() {
                         <span class="text-xs text-gray-500 line-through">$${product.originalPrice}</span>
                     ` : ''}
                 </div>
-                <button class="bg-[#005366] text-white text-xs px-3 py-1 rounded hover:bg-[#003d4d] transition-colors flex items-center space-x-1" onclick="event.stopPropagation();">
+                <button class="cross-sell-add-btn bg-[#005366] text-white text-xs px-3 py-1 rounded hover:bg-[#003d4d] transition-colors flex items-center space-x-1">
                     ${product.has_variants ? `
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -4234,7 +4462,13 @@ function addCrossSellToCart(productId, productName, productPrice, productImage) 
     })
     .catch(error => {
         console.error('Failed to add cross-sell product:', error);
-        alert('Unable to add product to cart');
+        showAlert({
+            icon: 'error',
+            title: 'Unable to Add',
+            text: 'An error occurred while adding the product to cart',
+            confirmButtonText: 'Close',
+            confirmButtonColor: '#005366'
+        });
     });
 }
 
@@ -4839,12 +5073,46 @@ function buyNow() {
     // Validate required customizations first
     const validation = validateRequiredCustomizations();
     if (!validation.isValid) {
-        alert('Please enter required information for personalization options:\n• ' + validation.missingFields.join('\n• '));
+        const message = validation.needToEnableCustomization 
+            ? `<div class="text-left">
+                    <p class="mb-3 text-gray-600">This product requires personalization. Please enable "Add Personalization" and fill in:</p>
+                    <ul class="list-disc list-inside space-y-1 text-gray-700">
+                        ${validation.missingFields.map(field => `<li>${field}</li>`).join('')}
+                    </ul>
+                </div>`
+            : `<div class="text-left">
+                    <p class="mb-3 text-gray-600">Please fill in all required personalization information:</p>
+                    <ul class="list-disc list-inside space-y-1 text-gray-700">
+                        ${validation.missingFields.map(field => `<li>${field}</li>`).join('')}
+                    </ul>
+                </div>`;
         
-        // Scroll to customization section
+        showAlert({
+            icon: 'warning',
+            title: 'Missing Information',
+            html: message,
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#005366',
+            customClass: {
+                popup: 'rounded-xl',
+                confirmButton: 'px-6 py-3 rounded-lg'
+            }
+        });
+        
+        // Scroll to customization section and auto-enable if needed
+        if (validation.needToEnableCustomization) {
+            const enableCheckbox = document.getElementById('enable-customization');
+            if (enableCheckbox) {
+                enableCheckbox.checked = true;
+                toggleCustomization();
+            }
+        }
+        
         const customizationContainer = document.getElementById('customization-container');
         if (customizationContainer) {
-            customizationContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+                customizationContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
         }
         return;
     }
@@ -4854,7 +5122,17 @@ function buyNow() {
     
     // Check if variant is out of stock
     if (selectedVariant && selectedVariant.quantity !== null && selectedVariant.quantity <= 0) {
-        alert('Out of stock');
+        showAlert({
+            icon: 'error',
+            title: 'Out of Stock',
+            text: 'This product is currently out of stock. Please choose another product.',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#005366',
+            customClass: {
+                popup: 'rounded-xl',
+                confirmButton: 'px-6 py-3 rounded-lg'
+            }
+        });
         return;
     }
     

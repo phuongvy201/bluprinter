@@ -180,4 +180,44 @@ class Post extends Model
     {
         $this->increment('shares');
     }
+
+    /**
+     * Get featured image URL
+     * Handle both S3 URLs and legacy storage paths
+     */
+    public function getFeaturedImageUrlAttribute(): ?string
+    {
+        if (!$this->featured_image) {
+            return null;
+        }
+
+        // If it's already a full URL (S3), return as is
+        if (str_starts_with($this->featured_image, 'http://') || str_starts_with($this->featured_image, 'https://')) {
+            return $this->featured_image;
+        }
+
+        // Legacy storage path - add /storage/ prefix
+        return asset('storage/' . $this->featured_image);
+    }
+
+    /**
+     * Get gallery URLs
+     * Handle both S3 URLs and legacy storage paths
+     */
+    public function getGalleryUrlsAttribute(): array
+    {
+        if (!$this->gallery || !is_array($this->gallery)) {
+            return [];
+        }
+
+        return array_map(function ($image) {
+            // If it's already a full URL (S3), return as is
+            if (str_starts_with($image, 'http://') || str_starts_with($image, 'https://')) {
+                return $image;
+            }
+
+            // Legacy storage path - add /storage/ prefix
+            return asset('storage/' . $image);
+        }, $this->gallery);
+    }
 }
