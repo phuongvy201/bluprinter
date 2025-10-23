@@ -134,9 +134,9 @@
                                             </button>
                                         </div>
                                         <div class="text-right">
-                                            <p class="text-2xl font-bold text-[#005366]">${{ number_format($item->getTotalPrice(), 2) }}</p>
+                                            <p class="text-2xl font-bold text-[#005366]">${{ number_format($item->getTotalPriceWithCustomizations(), 2) }}</p>
                                             @if($item->quantity > 1)
-                                                <p class="text-sm text-gray-500">${{ number_format($item->price, 2) }} each</p>
+                                                <p class="text-sm text-gray-500">${{ number_format($item->getTotalPriceWithCustomizations() / $item->quantity, 2) }} each</p>
                                             @endif
                                         </div>
                                     </div>

@@ -186,6 +186,96 @@
                                     @if($item->product && $item->product->shop)
                                         <p class="text-xs text-gray-500">Shop: {{ $item->product->shop->name }}</p>
                                     @endif
+
+                                    <!-- Customizations -->
+                                    @if($item->product_options)
+                                        @php
+                                            $productOptions = is_string($item->product_options) 
+                                                ? json_decode($item->product_options, true) 
+                                                : $item->product_options;
+                                            $customizations = $productOptions['customizations'] ?? null;
+                                            $selectedVariant = $productOptions['selected_variant'] ?? null;
+                                        @endphp
+                                        
+                                        @if($customizations && is_array($customizations))
+                                            <div class="mt-2">
+                                                <p class="text-xs font-medium text-blue-600 mb-1">Customizations:</p>
+                                                <div class="space-y-1">
+                                                    @foreach($customizations as $key => $customization)
+                                                        @if(is_array($customization) && isset($customization['value']))
+                                                            <div class="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded inline-block mr-1 mb-1">
+                                                                <span class="font-medium">{{ $key }}:</span> {{ $customization['value'] }}
+                                                                @if(isset($customization['price']) && $customization['price'] > 0)
+                                                                    <span class="text-green-600 font-medium">(+${{ number_format($customization['price'], 2) }})</span>
+                                                                @endif
+                                                            </div>
+                                                        @elseif(!is_array($customization))
+                                                            <div class="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded inline-block mr-1 mb-1">
+                                                                <span class="font-medium">{{ $key }}:</span> {{ $customization }}
+                                                            </div>
+                                                        @endif
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        @endif
+                                        
+                                        @if($selectedVariant && is_array($selectedVariant))
+                                            <div class="mt-2">
+                                                <p class="text-xs font-medium text-green-600 mb-1">Selected Variant:</p>
+                                                <div class="text-xs bg-green-50 text-green-800 px-2 py-1 rounded inline-block mr-1 mb-1">
+                                                    <span class="font-medium">Variant:</span> {{ $selectedVariant['variant_name'] ?? 'N/A' }}
+                                                    @if(isset($selectedVariant['attributes']))
+                                                        @foreach($selectedVariant['attributes'] as $attrKey => $attrValue)
+                                                            <span class="ml-2">{{ $attrKey }}: {{ $attrValue }}</span>
+                                                        @endforeach
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        @endif
+                                    @endif
+
+                                    <!-- Custom Files -->
+                                    @if($item->product && $item->product->allow_customization)
+                                        @php
+                                            $customFiles = \App\Models\CustomFile::where('product_id', $item->product_id)
+                                                ->where(function($query) use ($order) {
+                                                    if ($order->user_id) {
+                                                        $query->where('user_id', $order->user_id);
+                                                    } else {
+                                                        $query->where('session_id', $order->session_id);
+                                                    }
+                                                })
+                                                ->active()
+                                                ->get();
+                                        @endphp
+                                        @if($customFiles->count() > 0)
+                                            <div class="mt-2">
+                                                <p class="text-xs font-medium text-purple-600 mb-1">Custom Files ({{ $customFiles->count() }}):</p>
+                                                <div class="flex flex-wrap gap-1">
+                                                    @foreach($customFiles as $file)
+                                                        <a href="{{ $file->file_url }}"
+                                                           target="_blank"
+                                                           class="text-xs bg-purple-50 text-purple-800 px-2 py-1 rounded inline-flex items-center hover:bg-purple-100 transition-colors">
+                                                            @if($file->is_image)
+                                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                                </svg>
+                                                            @elseif($file->is_video)
+                                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                                                </svg>
+                                                            @else
+                                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                                                </svg>
+                                                            @endif
+                                                            {{ Str::limit($file->original_name, 15) }}
+                                                        </a>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        @endif
+                                    @endif
                                 </div>
                                 
                                 <div class="text-right">

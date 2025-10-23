@@ -218,23 +218,62 @@ class LianLianPayController extends Controller
                 return redirect($successUrl);
             }
 
-            // Check if 3DS authentication is required (check from actual response structure)
+            // Check if 3DS authentication is required (improved detection)
             $requires3DS = false;
             $threeDSecureUrl = null;
+            $threeDSStatus = null;
 
-            if (
-                isset($paymentResponse['order']['3ds_status']) &&
-                $paymentResponse['order']['3ds_status'] === 'CHALLENGE' &&
-                isset($paymentResponse['order']['payment_url'])
-            ) {
-                $requires3DS = true;
-                $threeDSecureUrl = $paymentResponse['order']['payment_url'];
-            } elseif (isset($paymentResponse['3ds_url'])) {
-                $requires3DS = true;
-                $threeDSecureUrl = $paymentResponse['3ds_url'];
-            } elseif (isset($paymentResponse['redirect_url'])) {
-                $requires3DS = true;
-                $threeDSecureUrl = $paymentResponse['redirect_url'];
+            // Log full response structure for debugging
+            Log::info('3DS Detection - Full Response Structure', [
+                'order_id' => $order->id,
+                'response_keys' => array_keys($paymentResponse),
+                'order_keys' => isset($paymentResponse['order']) ? array_keys($paymentResponse['order']) : 'No order key',
+                'has_3ds_status' => isset($paymentResponse['order']['3ds_status']),
+                'has_payment_url' => isset($paymentResponse['order']['payment_url']),
+                'has_3ds_url' => isset($paymentResponse['3ds_url']),
+                'has_redirect_url' => isset($paymentResponse['redirect_url'])
+            ]);
+
+            // Check multiple possible 3DS indicators
+            if (isset($paymentResponse['order']['3ds_status'])) {
+                $threeDSStatus = $paymentResponse['order']['3ds_status'];
+                Log::info('3DS Status Found', [
+                    'order_id' => $order->id,
+                    '3ds_status' => $threeDSStatus
+                ]);
+
+                if ($threeDSStatus === 'CHALLENGE' || $threeDSStatus === 'REQUIRED') {
+                    $requires3DS = true;
+                    $threeDSecureUrl = $paymentResponse['order']['payment_url'] ??
+                        $paymentResponse['order']['3ds_url'] ??
+                        $paymentResponse['order']['redirect_url'] ?? null;
+                }
+            }
+
+            // Fallback checks for different response structures
+            if (!$requires3DS) {
+                if (isset($paymentResponse['3ds_url']) && !empty($paymentResponse['3ds_url'])) {
+                    $requires3DS = true;
+                    $threeDSecureUrl = $paymentResponse['3ds_url'];
+                } elseif (isset($paymentResponse['redirect_url']) && !empty($paymentResponse['redirect_url'])) {
+                    $requires3DS = true;
+                    $threeDSecureUrl = $paymentResponse['redirect_url'];
+                } elseif (isset($paymentResponse['order']['payment_url']) && !empty($paymentResponse['order']['payment_url'])) {
+                    $requires3DS = true;
+                    $threeDSecureUrl = $paymentResponse['order']['payment_url'];
+                }
+            }
+
+            // Additional check for payment status that might indicate 3DS needed
+            if (!$requires3DS && $paymentStatus && $paymentStatus !== 'PS') {
+                // If payment is not successful and not failed, might need 3DS
+                if (in_array($paymentStatus, ['PP', 'WP', 'CHALLENGE', 'PENDING'])) {
+                    Log::info('Payment Status Suggests 3DS May Be Required', [
+                        'order_id' => $order->id,
+                        'payment_status' => $paymentStatus,
+                        'current_3ds_detection' => $requires3DS
+                    ]);
+                }
             }
 
             if ($requires3DS) {
@@ -243,7 +282,21 @@ class LianLianPayController extends Controller
                     'order_number' => $order->order_number,
                     '3ds_url' => $threeDSecureUrl,
                     'payment_status' => $paymentStatus,
-                    '3ds_status' => $paymentResponse['order']['3ds_status'] ?? 'N/A'
+                    '3ds_status' => $threeDSStatus,
+                    'transaction_id' => $transactionId
+                ]);
+
+                // Store 3DS information in session for return handling
+                session([
+                    'lianlian_3ds_info' => [
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'transaction_id' => $transactionId,
+                        '3ds_url' => $threeDSecureUrl,
+                        'payment_status' => $paymentStatus,
+                        '3ds_status' => $threeDSStatus,
+                        'timestamp' => now()->toISOString()
+                    ]
                 ]);
 
                 return response()->json([
@@ -254,8 +307,8 @@ class LianLianPayController extends Controller
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                     'payment_status' => $paymentStatus,
-                    '3ds_status' => $paymentResponse['order']['3ds_status'] ?? null,
-                    'message' => '3DS authentication required'
+                    '3ds_status' => $threeDSStatus,
+                    'message' => '3DS authentication required. You will be redirected to your bank for verification.'
                 ]);
             }
 
@@ -287,17 +340,40 @@ class LianLianPayController extends Controller
     }
 
     /**
-     * Handle payment return
+     * Handle payment return (including 3DS return)
      */
     public function handleReturn(Request $request)
     {
         try {
-            Log::info('LianLian Pay Return', [
-                'query_params' => $request->all()
+            Log::info('LianLian Pay Return (including 3DS)', [
+                'query_params' => $request->all(),
+                'headers' => $request->headers->all(),
+                'session_3ds_info' => session('lianlian_3ds_info'),
+                'session_last_order' => session('last_order_number')
             ]);
+
+            // Check if this is a 3DS return
+            $is3DSReturn = false;
+            $threeDSInfo = session('lianlian_3ds_info');
+
+            if ($threeDSInfo) {
+                $is3DSReturn = true;
+                Log::info('3DS Return Detected', [
+                    '3ds_info' => $threeDSInfo,
+                    'return_params' => $request->all()
+                ]);
+            }
 
             // Lấy order từ session hoặc query params
             $orderNumber = session('last_order_number');
+
+            // If 3DS return, try to get order from 3DS info first
+            if ($is3DSReturn && isset($threeDSInfo['order_number'])) {
+                $orderNumber = $threeDSInfo['order_number'];
+                Log::info('Using order number from 3DS info', [
+                    'order_number' => $orderNumber
+                ]);
+            }
 
             if (!$orderNumber) {
                 // Fallback: Lấy order gần nhất của user
@@ -321,7 +397,8 @@ class LianLianPayController extends Controller
                         'order_number' => $order->order_number,
                         'current_payment_status' => $order->payment_status,
                         'has_transaction_id' => !empty($order->payment_transaction_id),
-                        'transaction_id' => $order->payment_transaction_id
+                        'transaction_id' => $order->payment_transaction_id,
+                        'is_3ds_return' => $is3DSReturn
                     ]);
 
                     // Kiểm tra payment status từ LianLian Pay
@@ -332,7 +409,8 @@ class LianLianPayController extends Controller
 
                         Log::info('Payment status query result', [
                             'order_id' => $order->id,
-                            'payment_status' => $paymentStatus
+                            'payment_status' => $paymentStatus,
+                            'is_3ds_return' => $is3DSReturn
                         ]);
 
                         if ($paymentStatus === 'success') {
@@ -345,8 +423,17 @@ class LianLianPayController extends Controller
                             Log::info('✅ Payment status updated to paid on return', [
                                 'order_id' => $order->id,
                                 'order_number' => $order->order_number,
-                                'payment_status' => $paymentStatus
+                                'payment_status' => $paymentStatus,
+                                'is_3ds_return' => $is3DSReturn
                             ]);
+
+                            // Clear 3DS session data if this was a 3DS return
+                            if ($is3DSReturn) {
+                                session()->forget('lianlian_3ds_info');
+                                Log::info('🧹 Cleared 3DS session data after successful payment', [
+                                    'order_id' => $order->id
+                                ]);
+                            }
 
                             // Clear cart from database after successful payment
                             $sessionId = session()->getId();
@@ -389,7 +476,8 @@ class LianLianPayController extends Controller
                             Log::info('⏳ Payment processing on return', [
                                 'order_id' => $order->id,
                                 'order_number' => $order->order_number,
-                                'payment_status' => $paymentStatus
+                                'payment_status' => $paymentStatus,
+                                'is_3ds_return' => $is3DSReturn
                             ]);
 
                             $querySuccess = true;
@@ -397,7 +485,8 @@ class LianLianPayController extends Controller
                             Log::info('⚠️ Payment still pending on return - will use fallback', [
                                 'order_id' => $order->id,
                                 'order_number' => $order->order_number,
-                                'payment_status' => $paymentStatus
+                                'payment_status' => $paymentStatus,
+                                'is_3ds_return' => $is3DSReturn
                             ]);
                         }
                     } catch (\Exception $e) {
@@ -405,30 +494,43 @@ class LianLianPayController extends Controller
                             'order_id' => $order->id,
                             'order_number' => $order->order_number,
                             'transaction_id' => $order->payment_transaction_id,
-                            'error' => $e->getMessage()
+                            'error' => $e->getMessage(),
+                            'is_3ds_return' => $is3DSReturn
                         ]);
                     }
 
                     // FALLBACK: Nếu query thất bại hoặc trả về pending sau khi user đã hoàn thành 3DS
                     // → Assume payment thành công (vì user đã được redirect về từ 3DS)
                     if (!$querySuccess && $order->payment_transaction_id) {
-                        Log::info('🔄 Applying fallback logic - assuming 3DS success', [
+                        $fallbackReason = $is3DSReturn ? 'User returned from 3DS authentication' : 'User returned from payment';
+
+                        Log::info('🔄 Applying fallback logic - assuming payment success', [
                             'order_id' => $order->id,
                             'transaction_id' => $order->payment_transaction_id,
-                            'reason' => 'User returned from 3DS authentication'
+                            'reason' => $fallbackReason,
+                            'is_3ds_return' => $is3DSReturn
                         ]);
 
-                        // Update to paid assuming 3DS was successful
+                        // Update to paid assuming payment was successful
                         $order->update([
                             'payment_status' => 'paid',
                             'status' => 'processing',
                             'paid_at' => now()
                         ]);
 
-                        Log::info('✅ Payment marked as paid (fallback after 3DS)', [
+                        Log::info('✅ Payment marked as paid (fallback)', [
                             'order_id' => $order->id,
-                            'order_number' => $order->order_number
+                            'order_number' => $order->order_number,
+                            'is_3ds_return' => $is3DSReturn
                         ]);
+
+                        // Clear 3DS session data if this was a 3DS return
+                        if ($is3DSReturn) {
+                            session()->forget('lianlian_3ds_info');
+                            Log::info('🧹 Cleared 3DS session data after fallback success', [
+                                'order_id' => $order->id
+                            ]);
+                        }
 
                         // Clear cart from database after successful payment (fallback)
                         $sessionId = session()->getId();
@@ -585,7 +687,7 @@ class LianLianPayController extends Controller
             $signature = $request->header('X-LianLian-Signature');
 
             // Verify webhook signature
-            $notifyData = $this->lianLianPayService->verifyWebhook($notifyBody, $signature);
+            $notifyData = $this->lianLianPayServiceV2->verifyWebhook($notifyBody, $signature);
 
             if (!$notifyData) {
                 Log::warning('LianLian Pay Webhook: Invalid signature', [
@@ -697,7 +799,7 @@ class LianLianPayController extends Controller
                 return response()->json(['error' => 'No payment transaction found'], 400);
             }
 
-            $queryResponse = $this->lianLianPayService->queryPayment($order->payment_transaction_id);
+            $queryResponse = $this->lianLianPayServiceV2->queryPayment($order->payment_transaction_id);
 
             return response()->json([
                 'success' => true,
@@ -736,7 +838,7 @@ class LianLianPayController extends Controller
             $refundAmount = $request->amount;
             $reason = $request->reason;
 
-            $refundResponse = $this->lianLianPayService->processRefund($order, $refundAmount, $reason);
+            $refundResponse = $this->lianLianPayServiceV2->processRefund($order, $refundAmount, $reason);
 
             // Update order with refund information
             $order->update([
@@ -948,6 +1050,134 @@ class LianLianPayController extends Controller
     }
 
     /**
+     * Create order for payment
+     */
+    protected function createOrder($orderData, $amount)
+    {
+        try {
+            // Get cart items from database
+            $sessionId = session()->getId();
+            $userId = auth()->id();
+
+            $cartItems = \App\Models\Cart::with(['product.shop', 'product.template'])
+                ->where(function ($query) use ($sessionId, $userId) {
+                    if ($userId) {
+                        $query->where('user_id', $userId);
+                    } else {
+                        $query->where('session_id', $sessionId);
+                    }
+                })
+                ->get();
+
+            if ($cartItems->isEmpty()) {
+                Log::error('Cart is empty for order creation');
+                return null;
+            }
+
+            // Calculate totals
+            $subtotal = 0;
+            $orderItems = [];
+
+            foreach ($cartItems as $item) {
+                $product = $item->product;
+                if (!$product) {
+                    continue;
+                }
+
+                $price = $item->price;
+                $quantity = $item->quantity;
+                $total = $price * $quantity;
+
+                $subtotal += $total;
+
+                $orderItems[] = [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'product_description' => $product->description,
+                    'unit_price' => $price,
+                    'quantity' => $quantity,
+                    'total_price' => $total,
+                    'product_options' => [
+                        'selected_variant' => $item->selected_variant,
+                        'customizations' => $item->customizations,
+                    ],
+                ];
+            }
+
+            // Calculate shipping
+            $items = $cartItems->map(function ($item) {
+                return [
+                    'product_id' => $item->product_id,
+                    'quantity' => $item->quantity,
+                    'price' => $item->price,
+                ];
+            });
+
+            $calculator = new \App\Services\ShippingCalculator();
+            $shippingDetails = $calculator->calculateShipping($items, $orderData['country']);
+
+            if (!$shippingDetails['success']) {
+                Log::error('Shipping calculation failed', ['message' => $shippingDetails['message']]);
+                return null;
+            }
+
+            $shippingCost = $shippingDetails['total_shipping'];
+            $taxAmount = 0;
+            $totalAmount = $subtotal + $shippingCost + $taxAmount;
+
+            // Create order
+            $order = \App\Models\Order::create([
+                'user_id' => $userId,
+                'order_number' => 'ORD-' . strtoupper(uniqid()),
+                'customer_name' => $orderData['customer_name'],
+                'customer_email' => $orderData['customer_email'],
+                'customer_phone' => $orderData['customer_phone'],
+                'shipping_address' => $orderData['shipping_address'],
+                'city' => $orderData['city'],
+                'state' => $orderData['state'],
+                'postal_code' => $orderData['postal_code'],
+                'country' => $orderData['country'],
+                'notes' => $orderData['notes'],
+                'subtotal' => $subtotal,
+                'shipping_cost' => $shippingCost,
+                'tax_amount' => $taxAmount,
+                'total_amount' => $totalAmount,
+                'payment_method' => 'lianlian_pay',
+                'payment_status' => 'pending',
+                'status' => 'pending'
+            ]);
+
+            // Create order items
+            foreach ($orderItems as $itemData) {
+                $order->items()->create($itemData);
+            }
+
+            // Clear cart
+            \App\Models\Cart::where(function ($query) use ($sessionId, $userId) {
+                if ($userId) {
+                    $query->where('user_id', $userId);
+                } else {
+                    $query->where('session_id', $sessionId);
+                }
+            })->delete();
+
+            Log::info('Order created successfully', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'total_amount' => $totalAmount
+            ]);
+
+            return $order;
+        } catch (\Exception $e) {
+            Log::error('Order creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return null;
+        }
+    }
+
+    /**
      * Process payment from separate page
      */
     public function processPayment(Request $request)
@@ -966,200 +1196,235 @@ class LianLianPayController extends Controller
             $request->validate([
                 'card_token' => 'required|string',
                 'payment_method' => 'required|in:lianlian_pay',
-                'order_id' => 'nullable|exists:orders,id',
+                'customer_name' => 'required|string|max:255',
+                'customer_email' => 'required|email|max:255',
+                'customer_phone' => 'nullable|string|max:20',
+                'shipping_address' => 'required|string|max:500',
+                'city' => 'required|string|max:100',
+                'state' => 'nullable|string|max:100',
+                'postal_code' => 'required|string|max:20',
+                'country' => 'required|string|max:2',
+                'notes' => 'nullable|string|max:1000',
                 'amount' => 'required|numeric|min:0.01'
             ]);
 
             $cardToken = $request->card_token;
-            $orderId = $request->order_id;
             $amount = $request->amount;
 
-            // Get order if provided
-            $order = null;
-            if ($orderId) {
-                $order = Order::find($orderId);
-                if (!$order) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Order not found'
-                    ], 404);
-                }
+            // Create order first
+            $order = $this->createOrder($request->all(), $amount);
 
-                // Validate order ownership
-                if ($order->user_id !== auth()->id()) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Unauthorized access to order'
-                    ], 403);
-                }
+            if (!$order) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create order'
+                ], 500);
+            }
 
-                // Check if order is already paid
-                if ($order->status === 'paid') {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Order already paid'
-                    ], 400);
+            // Store card token in session for processing
+            session([
+                'lianlian_card_info' => [
+                    'card_token' => $cardToken,
+                    'holder_name' => $order->customer_name,
+                    'billing_address' => [
+                        'line1' => $order->shipping_address,
+                        'line2' => '',
+                        'city' => $order->city,
+                        'state' => $order->state ?? '',
+                        'postal_code' => $order->postal_code,
+                        'country' => $order->country,
+                    ]
+                ]
+            ]);
+
+            // Lưu order number vào session để dùng sau khi return từ 3DS
+            session(['last_order_number' => $order->order_number]);
+
+            // Create payment using improved service
+            $paymentResponse = $this->lianLianPayServiceV2->createPayment($order);
+
+            // Log full response for debugging
+            Log::info('LianLianPayController processPayment - Full Response', [
+                'order_id' => $order->id,
+                'has_return_code' => isset($paymentResponse['return_code']),
+                'return_code' => $paymentResponse['return_code'] ?? 'N/A',
+                'has_order_key' => isset($paymentResponse['order']),
+                'response_keys' => array_keys($paymentResponse)
+            ]);
+
+            // Check if payment creation was successful
+            if (isset($paymentResponse['return_code']) && $paymentResponse['return_code'] !== 'SUCCESS') {
+                Log::error('LianLian Pay Payment Creation Failed', [
+                    'order_id' => $order->id,
+                    'return_code' => $paymentResponse['return_code'],
+                    'return_message' => $paymentResponse['return_message'] ?? 'Unknown error',
+                    'full_response' => $paymentResponse
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $paymentResponse['return_message'] ?? 'Payment creation failed',
+                    'return_code' => $paymentResponse['return_code'],
+                    'order_id' => $order->id
+                ], 400);
+            }
+
+            // Validate response has required structure
+            if (!isset($paymentResponse['order'])) {
+                Log::error('LianLian Pay Response Missing Order Key', [
+                    'order_id' => $order->id,
+                    'response' => $paymentResponse
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid payment response structure',
+                    'order_id' => $order->id
+                ], 500);
+            }
+
+            // Update order with payment transaction ID
+            $transactionId = $paymentResponse['order']['ll_transaction_id']
+                ?? $paymentResponse['order']['merchant_transaction_id']
+                ?? $paymentResponse['merchant_transaction_id']
+                ?? null;
+
+            // Check payment status từ response
+            $paymentStatus = $paymentResponse['order']['payment_data']['payment_status'] ?? null;
+
+            Log::info('LianLianPayController processPayment - Payment Status Check', [
+                'order_id' => $order->id,
+                'payment_status_code' => $paymentStatus,
+                'transaction_id' => $transactionId,
+                'return_code' => $paymentResponse['return_code'] ?? 'N/A'
+            ]);
+
+            // Nếu payment_status = "PS" (Payment Success), mark order as paid ngay
+            if ($paymentStatus === 'PS') {
+                $order->update([
+                    'payment_method' => 'lianlian_pay',
+                    'payment_transaction_id' => $transactionId,
+                    'payment_status' => 'paid',
+                    'status' => 'processing',
+                    'paid_at' => now()
+                ]);
+
+                Log::info('Payment Completed Immediately (PS) in processPayment', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'transaction_id' => $transactionId
+                ]);
+            } else {
+                // Nếu chưa paid, set pending
+                $order->update([
+                    'payment_method' => 'lianlian_pay',
+                    'payment_transaction_id' => $transactionId,
+                    'payment_status' => 'pending'
+                ]);
+
+                Log::info('Payment Still Pending in processPayment', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'payment_status_code' => $paymentStatus,
+                    'transaction_id' => $transactionId
+                ]);
+            }
+
+            // Check if 3DS authentication is required (improved detection)
+            $requires3DS = false;
+            $threeDSecureUrl = null;
+            $threeDSStatus = null;
+
+            // Log full response structure for debugging
+            Log::info('3DS Detection in processPayment - Full Response Structure', [
+                'order_id' => $order->id,
+                'response_keys' => array_keys($paymentResponse),
+                'order_keys' => isset($paymentResponse['order']) ? array_keys($paymentResponse['order']) : 'No order key',
+                'has_3ds_status' => isset($paymentResponse['order']['3ds_status']),
+                'has_payment_url' => isset($paymentResponse['order']['payment_url']),
+                'has_3ds_url' => isset($paymentResponse['3ds_url']),
+                'has_redirect_url' => isset($paymentResponse['redirect_url'])
+            ]);
+
+            // Check multiple possible 3DS indicators
+            if (isset($paymentResponse['order']['3ds_status'])) {
+                $threeDSStatus = $paymentResponse['order']['3ds_status'];
+                Log::info('3DS Status Found in processPayment', [
+                    'order_id' => $order->id,
+                    '3ds_status' => $threeDSStatus
+                ]);
+
+                if ($threeDSStatus === 'CHALLENGE' || $threeDSStatus === 'REQUIRED') {
+                    $requires3DS = true;
+                    $threeDSecureUrl = $paymentResponse['order']['payment_url'] ??
+                        $paymentResponse['order']['3ds_url'] ??
+                        $paymentResponse['order']['redirect_url'] ?? null;
                 }
             }
 
-            // Create payment using the card token
-            $paymentData = [
-                'card_token' => $cardToken,
-                'amount' => $amount,
-                'currency' => 'USD',
-                'order_id' => $orderId,
-                'payment_method' => 'lianlian_pay'
-            ];
+            // Fallback checks for different response structures
+            if (!$requires3DS) {
+                if (isset($paymentResponse['3ds_url']) && !empty($paymentResponse['3ds_url'])) {
+                    $requires3DS = true;
+                    $threeDSecureUrl = $paymentResponse['3ds_url'];
+                } elseif (isset($paymentResponse['redirect_url']) && !empty($paymentResponse['redirect_url'])) {
+                    $requires3DS = true;
+                    $threeDSecureUrl = $paymentResponse['redirect_url'];
+                } elseif (isset($paymentResponse['order']['payment_url']) && !empty($paymentResponse['order']['payment_url'])) {
+                    $requires3DS = true;
+                    $threeDSecureUrl = $paymentResponse['order']['payment_url'];
+                }
+            }
 
-            // If we have an order, use the existing createPayment logic
-            if ($order) {
-                // Store card token in session for processing
+            // Additional check for payment status that might indicate 3DS needed
+            if (!$requires3DS && $paymentStatus && $paymentStatus !== 'PS') {
+                // If payment is not successful and not failed, might need 3DS
+                if (in_array($paymentStatus, ['PP', 'WP', 'CHALLENGE', 'PENDING'])) {
+                    Log::info('Payment Status Suggests 3DS May Be Required in processPayment', [
+                        'order_id' => $order->id,
+                        'payment_status' => $paymentStatus,
+                        'current_3ds_detection' => $requires3DS
+                    ]);
+                }
+            }
+
+            // Store 3DS information in session if required
+            if ($requires3DS) {
                 session([
-                    'lianlian_card_info' => [
-                        'card_token' => $cardToken,
-                        'holder_name' => $request->holder_name ?? $order->customer_name,
-                        'billing_address' => [
-                            'line1' => $request->billing_line1 ?? $order->shipping_address,
-                            'line2' => $request->billing_line2 ?? '',
-                            'city' => $request->billing_city ?? $order->city,
-                            'state' => $request->billing_state ?? $order->state ?? '',
-                            'postal_code' => $request->billing_postal_code ?? $order->postal_code,
-                            'country' => $request->billing_country ?? $order->country,
-                        ]
+                    'lianlian_3ds_info' => [
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'transaction_id' => $transactionId,
+                        '3ds_url' => $threeDSecureUrl,
+                        'payment_status' => $paymentStatus,
+                        '3ds_status' => $threeDSStatus,
+                        'timestamp' => now()->toISOString()
                     ]
                 ]);
 
-                // Lưu order number vào session để dùng sau khi return từ 3DS
-                session(['last_order_number' => $order->order_number]);
-
-                // Create payment using improved service
-                $paymentResponse = $this->lianLianPayServiceV2->createPayment($order);
-
-                // Log full response for debugging
-                Log::info('LianLianPayController processPayment - Full Response', [
-                    'order_id' => $order->id,
-                    'has_return_code' => isset($paymentResponse['return_code']),
-                    'return_code' => $paymentResponse['return_code'] ?? 'N/A',
-                    'has_order_key' => isset($paymentResponse['order']),
-                    'response_keys' => array_keys($paymentResponse)
-                ]);
-
-                // Check if payment creation was successful
-                if (isset($paymentResponse['return_code']) && $paymentResponse['return_code'] !== 'SUCCESS') {
-                    Log::error('LianLian Pay Payment Creation Failed', [
-                        'order_id' => $order->id,
-                        'return_code' => $paymentResponse['return_code'],
-                        'return_message' => $paymentResponse['return_message'] ?? 'Unknown error',
-                        'full_response' => $paymentResponse
-                    ]);
-
-                    return response()->json([
-                        'success' => false,
-                        'message' => $paymentResponse['return_message'] ?? 'Payment creation failed',
-                        'return_code' => $paymentResponse['return_code'],
-                        'order_id' => $order->id
-                    ], 400);
-                }
-
-                // Validate response has required structure
-                if (!isset($paymentResponse['order'])) {
-                    Log::error('LianLian Pay Response Missing Order Key', [
-                        'order_id' => $order->id,
-                        'response' => $paymentResponse
-                    ]);
-
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Invalid payment response structure',
-                        'order_id' => $order->id
-                    ], 500);
-                }
-
-                // Update order with payment transaction ID
-                $transactionId = $paymentResponse['order']['ll_transaction_id']
-                    ?? $paymentResponse['order']['merchant_transaction_id']
-                    ?? $paymentResponse['merchant_transaction_id']
-                    ?? null;
-
-                // Check payment status từ response
-                $paymentStatus = $paymentResponse['order']['payment_data']['payment_status'] ?? null;
-
-                Log::info('LianLianPayController processPayment - Payment Status Check', [
-                    'order_id' => $order->id,
-                    'payment_status_code' => $paymentStatus,
-                    'transaction_id' => $transactionId,
-                    'return_code' => $paymentResponse['return_code'] ?? 'N/A'
-                ]);
-
-                // Nếu payment_status = "PS" (Payment Success), mark order as paid ngay
-                if ($paymentStatus === 'PS') {
-                    $order->update([
-                        'payment_method' => 'lianlian_pay',
-                        'payment_transaction_id' => $transactionId,
-                        'payment_status' => 'paid',
-                        'status' => 'processing',
-                        'paid_at' => now()
-                    ]);
-
-                    Log::info('Payment Completed Immediately (PS) in processPayment', [
-                        'order_id' => $order->id,
-                        'order_number' => $order->order_number,
-                        'transaction_id' => $transactionId
-                    ]);
-                } else {
-                    // Nếu chưa paid, set pending
-                    $order->update([
-                        'payment_method' => 'lianlian_pay',
-                        'payment_transaction_id' => $transactionId,
-                        'payment_status' => 'pending'
-                    ]);
-
-                    Log::info('Payment Still Pending in processPayment', [
-                        'order_id' => $order->id,
-                        'order_number' => $order->order_number,
-                        'payment_status_code' => $paymentStatus,
-                        'transaction_id' => $transactionId
-                    ]);
-                }
-
-                // Check if 3DS authentication is required
-                $requires3DS = false;
-                $threeDSecureUrl = null;
-
-                if (
-                    isset($paymentResponse['order']['3ds_status']) &&
-                    $paymentResponse['order']['3ds_status'] === 'CHALLENGE' &&
-                    isset($paymentResponse['order']['payment_url'])
-                ) {
-                    $requires3DS = true;
-                    $threeDSecureUrl = $paymentResponse['order']['payment_url'];
-                } elseif (isset($paymentResponse['3ds_url'])) {
-                    $requires3DS = true;
-                    $threeDSecureUrl = $paymentResponse['3ds_url'];
-                } elseif (isset($paymentResponse['redirect_url'])) {
-                    $requires3DS = true;
-                    $threeDSecureUrl = $paymentResponse['redirect_url'];
-                }
-
-                return response()->json([
-                    'success' => true,
-                    'requires_3ds' => $requires3DS,
-                    'redirect_url' => $threeDSecureUrl,
-                    'transaction_id' => $transactionId,
+                Log::info('3DS Authentication Required in processPayment', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
-                    'payment_status' => $paymentStatus === 'PS' ? 'paid' : 'pending',
-                    'payment_completed' => $paymentStatus === 'PS',
-                    'data' => $paymentResponse
+                    '3ds_url' => $threeDSecureUrl,
+                    'payment_status' => $paymentStatus,
+                    '3ds_status' => $threeDSStatus,
+                    'transaction_id' => $transactionId
                 ]);
-            } else {
-                // Handle standalone payment without order
-                // This would be for direct payments or other use cases
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Order ID is required for payment processing'
-                ], 400);
             }
+
+            return response()->json([
+                'success' => true,
+                'requires_3ds' => $requires3DS,
+                'redirect_url' => $threeDSecureUrl,
+                'transaction_id' => $transactionId,
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'payment_status' => $paymentStatus === 'PS' ? 'paid' : 'pending',
+                'payment_completed' => $paymentStatus === 'PS',
+                '3ds_status' => $threeDSStatus,
+                'message' => $requires3DS ? '3DS authentication required. You will be redirected to your bank for verification.' : 'Payment processed successfully',
+                'data' => $paymentResponse
+            ]);
         } catch (\Exception $e) {
             Log::error('LianLian Pay Processing Error:', [
                 'error' => $e->getMessage(),

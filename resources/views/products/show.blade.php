@@ -989,6 +989,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     </script>
                 @endif
 
+                <!-- Custom File Upload Section -->
+                @if($product->allow_customization)
+                    <x-custom-file-upload :product="$product" />
+                @endif
+
                 <!-- Action Buttons -->
                 <div class="flex space-x-4">
                     <button id="add-to-cart-btn" 
@@ -997,18 +1002,18 @@ document.addEventListener('DOMContentLoaded', function() {
                             <svg id="cart-icon" class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
                             </svg>
-                        <span id="cart-text">Add to Cart</span>
-                        <div id="cart-loading" class="hidden">
-                            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        </div>
-                    </button>
-                    <button onclick="buyNow()" class="flex-1 bg-[#E2150C] hover:bg-[#c0120a] text-white font-bold py-4 px-6 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2">
-                        <span>Buy Now</span>
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                        </svg>
-                    </button>
-                </div>
+                            <span id="cart-text">Add to Cart</span>
+                            <div id="cart-loading" class="hidden">
+                                <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            </div>
+                        </button>
+                        <button onclick="buyNow()" class="flex-1 bg-[#E2150C] hover:bg-[#c0120a] text-white font-bold py-4 px-6 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2">
+                            <span>Buy Now</span>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                            </svg>
+                        </button>
+                    </div>
 
                 <!-- Wishlist Button -->
                 <div class="w-full mt-4">
@@ -3211,12 +3216,22 @@ function addToCart() {
     
     const variantPrice = selectedVariant && selectedVariant.price ? selectedVariant.price : {{ $product->base_price }};
     
+    // Calculate customization total
+    const customizations = getSelectedCustomizations();
+    let customizationTotal = 0;
+    Object.values(customizations).forEach(customization => {
+        customizationTotal += parseFloat(customization.price) || 0;
+    });
+    
+    // Total price including customizations
+    const totalPrice = variantPrice + customizationTotal;
+    
     // Get current product data
     const productData = {
         id: {{ $product->id }},
         name: '{{ addslashes($product->name) }}',
         slug: '{{ $product->slug }}',
-        price: variantPrice,
+        price: totalPrice,
         image: '@php
             if ($media && count($media) > 0) {
                 if (is_string($media[0])) {
@@ -3242,7 +3257,7 @@ function addToCart() {
             content_name: productData.name,
             content_ids: [productData.id],
             content_type: 'product',
-            value: productData.price,
+            value: totalPrice,
             currency: 'USD'
         });
     }
@@ -3646,8 +3661,22 @@ function showCartPopup(addedProduct) {
 function renderCartPopup(popup, cartItems, summary, shippingDetails) {
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
     
-    // Calculate subtotal
-    const subtotal = parseFloat(summary.subtotal || cartItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0));
+    // Calculate subtotal including customizations
+    const subtotal = parseFloat(summary.subtotal || cartItems.reduce((sum, item) => {
+        const basePrice = parseFloat(item.price) || 0;
+        let customizationTotal = 0;
+        
+        // Add customization prices if they exist
+        if (item.customizations) {
+            Object.values(item.customizations).forEach(customization => {
+                if (customization && customization.price) {
+                    customizationTotal += parseFloat(customization.price) || 0;
+                }
+            });
+        }
+        
+        return sum + ((basePrice + customizationTotal) * item.quantity);
+    }, 0));
     
     // Check if order qualifies for free shipping (>= $100)
     const qualifiesForFreeShipping = subtotal >= 100;

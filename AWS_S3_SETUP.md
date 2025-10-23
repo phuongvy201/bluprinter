@@ -1,201 +1,128 @@
-# AWS S3 Setup Guide
+# Hướng dẫn cấu hình AWS S3 cho Upload File Custom
 
-## Hướng dẫn cấu hình AWS S3 cho tính năng import
+## 1. Tạo AWS Account
 
-### 1. Cài đặt AWS SDK
+-   Truy cập: https://aws.amazon.com
+-   Đăng ký tài khoản AWS (cần thẻ tín dụng)
 
-```bash
-composer require league/flysystem-aws-s3-v3 "^3.0"
-```
+## 2. Tạo S3 Bucket
 
-### 2. Cấu hình AWS S3 trong file `.env`
+1. Đăng nhập AWS Console
+2. Tìm kiếm "S3" trong thanh tìm kiếm
+3. Click "Create bucket"
+4. Cấu hình:
+    - **Bucket name**: `bluprinter-custom-files` (hoặc tên khác)
+    - **Region**: Chọn region gần nhất (VD: `ap-southeast-1` cho Singapore)
+    - **Block Public Access**: Bỏ chọn "Block all public access" (để file có thể truy cập công khai)
+    - Click "Create bucket"
 
-Thêm các dòng sau vào file `.env`:
+## 3. Cấu hình CORS cho Bucket
 
-```env
-AWS_ACCESS_KEY_ID=your-access-key-id
-AWS_SECRET_ACCESS_KEY=your-secret-access-key
-AWS_DEFAULT_REGION=ap-southeast-1
-AWS_BUCKET=your-bucket-name
-AWS_URL=https://your-bucket-name.s3.ap-southeast-1.amazonaws.com
-AWS_USE_PATH_STYLE_ENDPOINT=false
-
-# Set default filesystem disk to S3 (optional)
-FILESYSTEM_DISK=s3
-```
-
-### 3. Lấy AWS Credentials
-
-#### Bước 1: Đăng nhập AWS Console
-
--   Truy cập: https://console.aws.amazon.com/
--   Đăng nhập với tài khoản của bạn
-
-#### Bước 2: Tạo IAM User
-
-1. Vào **IAM** → **Users** → **Add users**
-2. Đặt tên user (ví dụ: `bluprinter-app`)
-3. Chọn **Access key - Programmatic access**
-4. Gắn policy: **AmazonS3FullAccess**
-5. Hoàn tất và lưu lại:
-    - Access Key ID
-    - Secret Access Key
-
-#### Bước 3: Tạo S3 Bucket
-
-1. Vào **S3** → **Create bucket**
-2. Đặt tên bucket (ví dụ: `bluprinter-media`)
-3. Chọn Region (ví dụ: `ap-southeast-1` - Singapore)
-4. **Uncheck** "Block all public access" (để file có thể truy cập công khai)
-5. Create bucket
-
-#### Bước 4: Cấu hình CORS cho bucket
-
-1. Vào bucket vừa tạo → **Permissions** → **CORS**
-2. Thêm cấu hình sau:
+1. Vào bucket vừa tạo
+2. Chọn tab "Permissions"
+3. Scroll xuống "Cross-origin resource sharing (CORS)"
+4. Click "Edit" và thêm:
 
 ```json
 [
     {
         "AllowedHeaders": ["*"],
-        "AllowedMethods": ["GET", "PUT", "POST", "DELETE"],
+        "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
         "AllowedOrigins": ["*"],
-        "ExposeHeaders": []
+        "ExposeHeaders": ["ETag"]
     }
 ]
 ```
 
-#### Bước 5: Cấu hình Bucket Policy (để file public)
+## 4. Tạo IAM User
 
-1. Vào **Permissions** → **Bucket policy**
-2. Thêm policy sau (thay `your-bucket-name`):
+1. Tìm kiếm "IAM" trong AWS Console
+2. Click "Users" > "Add users"
+3. **User name**: `bluprinter-uploader`
+4. **Access type**: Chọn "Programmatic access"
+5. Click "Next: Permissions"
+6. Chọn "Attach existing policies directly"
+7. Tìm và chọn: `AmazonS3FullAccess`
+8. Click "Next" > "Next" > "Create user"
+9. **LƯU Ý**: Lưu lại `Access Key ID` và `Secret Access Key` (chỉ hiển thị 1 lần)
 
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "PublicReadGetObject",
-            "Effect": "Allow",
-            "Principal": "*",
-            "Action": "s3:GetObject",
-            "Resource": "arn:aws:s3:::your-bucket-name/*"
-        }
-    ]
-}
+## 5. Cấu hình Laravel (.env)
+
+Thêm vào file `.env`:
+
+```env
+AWS_ACCESS_KEY_ID=your_access_key_id_here
+AWS_SECRET_ACCESS_KEY=your_secret_access_key_here
+AWS_DEFAULT_REGION=ap-southeast-1
+AWS_BUCKET=bluprinter-custom-files
+AWS_URL=https://bluprinter-custom-files.s3.ap-southeast-1.amazonaws.com
 ```
 
-### 4. Test cấu hình
-
-Chạy lệnh sau trong Laravel Tinker:
-
-```bash
-php artisan tinker
-```
-
-```php
-// Test upload file
-Storage::disk('s3')->put('test.txt', 'Hello S3!', 'public');
-
-// Get URL
-$url = Storage::disk('s3')->url('test.txt');
-echo $url;
-
-// Test download
-$exists = Storage::disk('s3')->exists('test.txt');
-var_dump($exists);
-```
-
-### 5. Cấu trúc thư mục trên S3
-
-Sau khi import, media sẽ được lưu theo cấu trúc:
-
-```
-your-bucket/
-├── products/
-│   ├── images/
-│   │   ├── abc123...xyz.jpg
-│   │   ├── def456...uvw.png
-│   │   └── ...
-│   └── videos/
-│       ├── ghi789...rst.mp4
-│       └── ...
-```
-
-### 6. Lưu ý quan trọng
-
-✅ **Security:**
-
--   Không commit AWS credentials vào Git
--   Sử dụng IAM user với quyền tối thiểu cần thiết
--   Rotate access keys định kỳ
-
-✅ **Cost:**
-
--   S3 tính phí theo dung lượng lưu trữ và băng thông
--   Xem pricing: https://aws.amazon.com/s3/pricing/
-
-✅ **Performance:**
-
--   Upload file lớn có thể mất thời gian
--   Import batch sẽ chậm hơn khi có nhiều media
--   Nên sử dụng queue cho import lớn (tùy chọn)
-
-### 7. Troubleshooting
-
-**Lỗi: "Class 'League\Flysystem\AwsS3V3\AwsS3V3Adapter' not found"**
+## 6. Cài đặt AWS SDK cho Laravel
 
 ```bash
 composer require league/flysystem-aws-s3-v3 "^3.0"
 ```
 
-**Lỗi: "Invalid credentials"**
+## 7. Test Upload
 
--   Kiểm tra lại AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY trong .env
--   Chạy: `php artisan config:clear`
+1. Truy cập trang sản phẩm có `allow_customization = true`
+2. Thử upload file
+3. Kiểm tra trong S3 bucket xem file đã được upload chưa
 
-**Lỗi: "Access Denied"**
+## 8. Quản lý File
 
--   Kiểm tra IAM user có policy S3 đúng chưa
--   Kiểm tra Bucket Policy
+-   **Xóa file tự động**: File sẽ tự động xóa sau 24h nếu không được dùng trong đơn hàng
+-   **Dọn dẹp thủ công**: Chạy command:
+    ```bash
+    php artisan custom-files:cleanup
+    ```
 
-**Lỗi: "403 Forbidden" khi truy cập URL**
+## 9. API Endpoints
 
--   Kiểm tra "Block all public access" đã tắt chưa
--   Kiểm tra Bucket Policy đã cho phép GetObject chưa
+-   **Upload**: `POST /api/custom-files/upload`
+-   **Get Files**: `GET /api/custom-files/files?product_id=123`
+-   **Delete**: `DELETE /api/custom-files/{fileId}`
+-   **Extend Expiration**: `POST /api/custom-files/{fileId}/extend`
+-   **Get Info**: `GET /api/custom-files/upload-info`
 
-### 8. Chuyển đổi từ local sang S3
+## 10. Giới hạn Upload
 
-Nếu bạn đang dùng local storage và muốn chuyển sang S3:
+-   **Max file size**: 10MB
+-   **Max files**: 5 files mỗi lần upload
+-   **Allowed types**:
+    -   Images: JPG, PNG, GIF, WebP, SVG
+    -   Videos: MP4, AVI, MOV, WMV
+    -   Documents: PDF, DOC, DOCX, TXT
+
+## 11. Bảo mật
+
+-   File chỉ có thể xóa bởi người upload (user_id hoặc session_id)
+-   File tự động expire sau 24h
+-   Validation file type và size trước khi upload
+-   Kiểm tra malicious content trong file
+
+## 12. Chi phí AWS S3
+
+-   **Storage**: ~$0.023/GB/tháng
+-   **Request**: ~$0.005/1000 PUT requests
+-   **Data transfer**: Free cho 100GB/tháng đầu
+-   Ước tính: ~$5-10/tháng cho 1000 files upload/tháng
+
+## 13. Alternative: MinIO (Self-hosted S3)
+
+Nếu muốn tự host S3-compatible storage:
 
 ```bash
-# Đổi default disk
-# .env
-FILESYSTEM_DISK=s3
-
-# Clear cache
-php artisan config:clear
-php artisan cache:clear
+docker run -p 9000:9000 -p 9001:9001 \
+  -e "MINIO_ROOT_USER=admin" \
+  -e "MINIO_ROOT_PASSWORD=password123" \
+  minio/minio server /data --console-address ":9001"
 ```
 
-### 9. Alternative: Sử dụng DigitalOcean Spaces hoặc MinIO
+Sau đó cấu hình `.env`:
 
-Nếu không muốn dùng AWS S3, bạn có thể dùng:
-
--   **DigitalOcean Spaces** (tương thích S3 API, rẻ hơn)
--   **MinIO** (self-hosted, miễn phí)
-
-Config tương tự, chỉ cần đổi endpoint và credentials.
-
----
-
-## Sử dụng trong Import
-
-Sau khi setup xong, tính năng import sẽ tự động:
-
-1. ✅ Download hình ảnh/video từ URLs trong file CSV
-2. ✅ Upload lên AWS S3
-3. ✅ Lưu S3 URLs vào database
-4. ✅ Báo lỗi nếu upload thất bại
-
-Không cần làm gì thêm! 🎉
+```env
+AWS_ENDPOINT=http://localhost:9000
+AWS_USE_PATH_STYLE_ENDPOINT=true
+```

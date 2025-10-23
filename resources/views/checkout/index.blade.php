@@ -959,6 +959,45 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('🔒 Current origin:', window.location.origin);
     console.log('🔒 Full URL:', window.location.href);
     
+    // Toast notification function - define early
+    const showToast = (type, title, message) => {
+        Swal.fire({
+            icon: type,
+            title: title,
+            text: message,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 5000,
+            timerProgressBar: true
+        });
+    };
+    
+    // Check if this is a 3DS return
+    const threeDSInfo = sessionStorage.getItem('lianlian_3ds_info');
+    const pending3DS = sessionStorage.getItem('pending_3ds_transaction');
+    
+    if (threeDSInfo || pending3DS) {
+        console.log('🔄 3DS Return Detected', {
+            threeDSInfo: threeDSInfo ? JSON.parse(threeDSInfo) : null,
+            pending3DS: pending3DS ? JSON.parse(pending3DS) : null,
+        });
+        
+        // Clear 3DS session data
+        sessionStorage.removeItem('lianlian_3ds_info');
+        sessionStorage.removeItem('pending_3ds_transaction');
+        
+        // Show success message
+        showToast('success', '3DS Authentication Complete', 'Your payment has been processed successfully');
+        
+        // Redirect to success page after a delay
+        setTimeout(() => {
+            window.location.href = '{{ route("checkout.lianlian.success") }}';
+        }, 3000);
+        
+        return; // Exit early for 3DS return
+    }
+    
     const form = document.getElementById('checkout-form');
     
     // Check if form exists
@@ -982,19 +1021,6 @@ document.addEventListener('DOMContentLoaded', function() {
     let paypalSDKLoadAttempts = 0;
     const MAX_PAYPAL_SDK_ATTEMPTS = 50; // 5 seconds max
     
-    // Toast notification function
-    const showToast = (type, title, message) => {
-        Swal.fire({
-            icon: type,
-            title: title,
-            text: message,
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 5000,
-            timerProgressBar: true
-        });
-    };
     
     // Loading state function
     const showLoading = (loading) => {
@@ -1027,6 +1053,212 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
     
+    // Unified order processing function
+    const processUnifiedOrder = async (orderData) => {
+        try {
+            console.log('📦 Creating unified order with data:', orderData);
+
+            // Validate required fields
+            const requiredFields = ['customer_name', 'customer_email', 'shipping_address', 'city', 'postal_code', 'country'];
+            const missingFields = requiredFields.filter(field => !orderData[field]);
+
+            if (missingFields.length > 0) {
+                throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+            }
+
+            // Create order using unified endpoint
+            const response = await fetch('{{ route("checkout.process") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(orderData),
+                credentials: 'same-origin',
+                mode: 'same-origin'
+            });
+
+            if (!response.ok) {
+                if (response.status === 422) {
+                    const errorData = await response.json();
+                    throw new Error(`Validation failed: ${errorData.message || Object.values(errorData.errors || {}).flat().join(', ')}`);
+                } else {
+                    throw new Error(`Order processing failed: ${response.status} ${response.statusText}`);
+                }
+            }
+
+            const responseData = await response.json();
+            console.log('📋 Unified order response:', responseData);
+
+            if (responseData.success) {
+                // Handle different payment method responses
+                if (orderData.payment_method === 'lianlian_pay') {
+                    await handleLianLianResponse(responseData);
+                } else if (orderData.payment_method === 'paypal') {
+                    await handlePayPalResponse(responseData);
+                } else if (orderData.payment_method === 'stripe') {
+                    await handleStripeResponse(responseData);
+                } else {
+                    // Generic success handling
+                    await handleGenericSuccess(responseData);
+                }
+            } else {
+                throw new Error(responseData.message || 'Order processing failed');
+            }
+
+        } catch (error) {
+            console.error('❌ Unified order processing error:', error);
+            showToast('error', 'Order Error', error.message);
+            throw error;
+        }
+    };
+
+    // Helper functions for payment responses
+    const handleLianLianResponse = async (responseData) => {
+        console.log('🔄 Handling LianLian response:', responseData);
+        
+        if (responseData.payment_completed === true || responseData.payment_status === 'paid') {
+            console.log('✅ LianLian Payment Completed');
+            showToast('success', 'Payment Successful!', 'Your payment has been processed successfully');
+            
+            // Clear cart from localStorage
+            localStorage.removeItem('cart');
+            
+            // Redirect to success page
+            setTimeout(() => {
+                if (responseData.order_number) {
+                    window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                } else {
+                    window.location.href = '{{ route("home") }}';
+                }
+            }, 2000);
+        } else if (responseData.requires_3ds === true && responseData.redirect_url) {
+            console.log('🔐 3DS Authentication Required');
+            await handle3DSRedirect(responseData.redirect_url, responseData.transaction_id);
+        } else if (responseData.payment_url) {
+            // Redirect to payment URL
+            window.location.href = responseData.payment_url;
+        } else {
+            // Payment pending
+            console.log('⏳ LianLian Payment Pending');
+            showToast('info', 'Payment is processing...', 'Your payment is being processed');
+            setTimeout(() => {
+                if (responseData.order_number) {
+                    window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                } else {
+                    window.location.href = '{{ route("checkout.index") }}';
+                }
+            }, 2000);
+        }
+    };
+
+    const handlePayPalResponse = async (responseData) => {
+        console.log('🔄 Handling PayPal response:', responseData);
+        
+        if (responseData.payment_completed === true || responseData.payment_status === 'paid') {
+            console.log('✅ PayPal Payment Completed');
+            showToast('success', 'Payment Successful!', 'Your payment has been processed successfully');
+            
+            // Clear cart from localStorage
+            localStorage.removeItem('cart');
+            
+            // Redirect to success page
+            setTimeout(() => {
+                if (responseData.order_number) {
+                    window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                } else {
+                    window.location.href = '{{ route("home") }}';
+                }
+            }, 2000);
+        } else if (responseData.payment_url) {
+            // Redirect to payment URL
+            window.location.href = responseData.payment_url;
+        } else {
+            // Payment pending
+            console.log('⏳ PayPal Payment Pending');
+            showToast('info', 'Payment is processing...', 'Your payment is being processed');
+            setTimeout(() => {
+                if (responseData.order_number) {
+                    window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                } else {
+                    window.location.href = '{{ route("checkout.index") }}';
+                }
+            }, 2000);
+        }
+    };
+
+    const handleStripeResponse = async (responseData) => {
+        console.log('🔄 Handling Stripe response:', responseData);
+        
+        if (responseData.payment_completed === true || responseData.payment_status === 'paid') {
+            console.log('✅ Stripe Payment Completed');
+            showToast('success', 'Payment Successful!', 'Your payment has been processed successfully');
+            
+            // Clear cart from localStorage
+            localStorage.removeItem('cart');
+            
+            // Redirect to success page
+            setTimeout(() => {
+                if (responseData.order_number) {
+                    window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                } else {
+                    window.location.href = '{{ route("home") }}';
+                }
+            }, 2000);
+        } else if (responseData.payment_url) {
+            // Redirect to payment URL
+            window.location.href = responseData.payment_url;
+        } else {
+            // Payment pending
+            console.log('⏳ Stripe Payment Pending');
+            showToast('info', 'Payment is processing...', 'Your payment is being processed');
+            setTimeout(() => {
+                if (responseData.order_number) {
+                    window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                } else {
+                    window.location.href = '{{ route("checkout.index") }}';
+                }
+            }, 2000);
+        }
+    };
+
+    const handleGenericSuccess = async (responseData) => {
+        console.log('🔄 Handling generic success:', responseData);
+        
+        if (responseData.payment_completed === true || responseData.payment_status === 'paid') {
+            console.log('✅ Generic Payment Completed');
+            showToast('success', 'Payment Successful!', 'Your payment has been processed successfully');
+            
+            // Clear cart from localStorage
+            localStorage.removeItem('cart');
+            
+            // Redirect to success page
+            setTimeout(() => {
+                if (responseData.order_number) {
+                    window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                } else {
+                    window.location.href = '{{ route("home") }}';
+                }
+            }, 2000);
+        } else if (responseData.payment_url) {
+            // Redirect to payment URL
+            window.location.href = responseData.payment_url;
+        } else {
+            // Payment pending
+            console.log('⏳ Generic Payment Pending');
+            showToast('info', 'Payment is processing...', 'Your payment is being processed');
+            setTimeout(() => {
+                if (responseData.order_number) {
+                    window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
+                } else {
+                    window.location.href = '{{ route("checkout.index") }}';
+                }
+            }, 2000);
+        }
+    };
+
     // Initialize LianLian Pay iframe
     const initializeLianLianIframe = async () => {
         try {
@@ -1780,37 +2012,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
                 country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
                 notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
+                payment_method: 'stripe'
             };
             
-            const response = await fetch('{{ route("payment.stripe.process") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify(orderData),
-            });
-            
-            const responseData = await response.json();
-            
-            if (responseData.success) {
-                showToast('success', 'Payment Successful!', 'Your order has been placed successfully');
-                
-                // Clear cart from localStorage
-                localStorage.removeItem('cart');
-                
-                // Redirect to success page
-                setTimeout(() => {
-                    if (responseData.order_number) {
-                        window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
-                    } else {
-                        window.location.href = '{{ route("home") }}';
-                    }
-                }, 2000);
-            } else {
-                throw new Error(responseData.message || 'Order creation failed');
-            }
+            // Use unified order processing
+            await processUnifiedOrder(orderData);
             
         } catch (error) {
             console.error('❌ Order processing error:', error);
@@ -1932,95 +2138,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
             }
             
-            // Create order first
-            console.log('📦 Creating order...');
-            const checkoutUrl = new URL('/checkout/process', window.location.origin);
+            // Add card token to order data
+            orderData.card_token = cardToken;
             
-            const orderResponse = await fetch(checkoutUrl.toString(), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(orderData),
-                credentials: 'same-origin',
-                mode: 'same-origin'
-            });
-            
-            if (!orderResponse.ok) {
-                const errorText = await orderResponse.text();
-                throw new Error(`Order creation failed: ${orderResponse.status} ${orderResponse.statusText}`);
-            }
-            
-            const orderResult = await orderResponse.json();
-            console.log('📦 Order creation result:', orderResult);
-            
-            if (!orderResult.success) {
-                throw new Error(orderResult.message || 'Failed to create order');
-            }
-            
-            // Process payment with card token
-            const paymentData = {
-                card_token: cardToken,
-                payment_method: 'lianlian_pay',
-                order_id: orderResult.order_id,
-                amount: '{{ $total }}',
-            };
-            
-            console.log('📤 Sending payment data:', paymentData);
-            
-            const paymentResponse = await fetch('{{ route("payment.lianlian.process") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(paymentData)
-            });
-            
-            const responseData = await paymentResponse.json();
-            console.log('📥 Payment response:', responseData);
-            
-            if (responseData.success) {
-                // Check if 3DS authentication is required
-                if (responseData.requires_3ds === true && responseData.redirect_url) {
-                    console.log('🔐 3DS Authentication Required');
-                    await handle3DSRedirect(responseData.redirect_url, responseData.transaction_id);
-                    return;
-                }
-                
-                // Check if payment is completed immediately
-                if (responseData.payment_completed === true || responseData.payment_status === 'paid') {
-                    console.log('✅ Payment Completed Immediately');
-                    showToast('success', 'Payment successful! Redirecting...', 'Payment completed successfully');
-                    setTimeout(() => {
-                        if (responseData.order_number) {
-                            window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
-                        } else {
-                            window.location.href = '{{ route("checkout.index") }}';
-                        }
-                    }, 2000);
-                } else {
-                    // Payment pending
-                    console.log('⏳ Payment Pending');
-                    showToast('info', 'Payment is processing...', 'Your payment is being processed');
-                    setTimeout(() => {
-                        if (responseData.order_number) {
-                            window.location.href = '{{ route("checkout.success", ":order_number") }}'.replace(':order_number', responseData.order_number);
-                        } else {
-                            window.location.href = '{{ route("checkout.index") }}';
-                        }
-                    }, 2000);
-                }
-            } else {
-                const errorMessage = responseData.message || 'Payment failed';
-                const errorCode = responseData.return_code || 'Unknown error';
-                showToast('error', 'Payment Error', `Payment failed (${errorCode}): ${errorMessage}`);
-            }
+            // Create order using unified processing
+            console.log('📦 Creating order with unified processing...');
+            await processUnifiedOrder(orderData);
             
         } catch (error) {
             console.error('❌ Server payment error:', error);

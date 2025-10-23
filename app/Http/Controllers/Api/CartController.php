@@ -120,7 +120,7 @@ class CartController extends Controller
 
             $totalItems = $cartItems->sum('quantity');
             $totalPrice = $cartItems->sum(function ($item) {
-                return $item->getTotalPrice();
+                return $item->getTotalPriceWithCustomizations();
             });
 
             // Calculate summary (without tax)

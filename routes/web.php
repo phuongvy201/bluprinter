@@ -25,6 +25,7 @@ use App\Http\Controllers\CartController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\Api\CartController as ApiCartController;
+use App\Http\Controllers\Api\CustomFileController;
 use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\Admin\ShippingZoneController;
 use App\Http\Controllers\Admin\ShippingRateController;
@@ -72,6 +73,9 @@ Route::prefix('payment/lianlian')->name('payment.lianlian.')->group(function () 
     // New routes for separate payment page
     Route::get('/payment', [App\Http\Controllers\Payment\LianLianPayController::class, 'showPaymentPage'])->name('payment');
     Route::post('/process', [App\Http\Controllers\Payment\LianLianPayController::class, 'processPayment'])->name('process');
+
+    // New route for processing payment with card token
+    Route::post('/process-payment', [App\Http\Controllers\Payment\LianLianPayController::class, 'processPayment'])->name('process-payment');
 });
 
 // Stripe Payment routes
@@ -588,6 +592,16 @@ Route::get('/test-zoom-effect', function () {
 Route::get('/test-cart', function () {
     return view('test-cart');
 })->name('test.cart');
+
+// Custom File Upload API Routes
+Route::prefix('api/custom-files')->name('api.custom-files.')->group(function () {
+    Route::post('/upload', [CustomFileController::class, 'upload'])->name('upload');
+    Route::get('/files', [CustomFileController::class, 'getFiles'])->name('files');
+    Route::delete('/{fileId}', [CustomFileController::class, 'delete'])->name('delete');
+    Route::post('/{fileId}/extend', [CustomFileController::class, 'extendExpiration'])->name('extend');
+    Route::get('/upload-info', [CustomFileController::class, 'getUploadInfo'])->name('info');
+    Route::post('/cleanup', [CustomFileController::class, 'cleanupExpired'])->name('cleanup');
+});
 
 // Test route for variant removal logic
 Route::get('/test-remove-variant', [ProductTemplateController::class, 'testRemoveVariant'])

@@ -98,6 +98,78 @@
                             <span id="mobile-cart-count" class="cart-count absolute -top-1 -right-1 bg-[#E2150C] text-white text-xs rounded-full w-4 h-4 md:w-5 md:h-5 flex items-center justify-center font-semibold" style="display: none;">0</span>
                         </a>
 
+                        <!-- Login/User Button for Mobile -->
+                        @auth
+                            <!-- User Avatar for Mobile -->
+                            <div class="relative group">
+                                <button class="p-2 md:p-3 text-gray-600 hover:text-[#005366] transition rounded-lg hover:bg-gray-50">
+                                    @if(auth()->user()->avatar)
+                                        <img src="{{ auth()->user()->avatar }}" alt="{{ auth()->user()->name }}" 
+                                             class="w-6 h-6 md:w-7 md:h-7 rounded-full object-cover">
+                                    @else
+                                        <div class="w-6 h-6 md:w-7 md:h-7 bg-[#005366] rounded-full flex items-center justify-center text-white font-semibold text-xs">
+                                            {{ substr(auth()->user()->name, 0, 1) }}
+                                        </div>
+                                    @endif
+                                </button>
+                                
+                                <!-- Mobile User Dropdown -->
+                                <div class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                                    <div class="py-2">
+                                        <div class="px-3 py-2 border-b border-gray-100">
+                                            <p class="text-sm font-semibold text-gray-900">{{ auth()->user()->name }}</p>
+                                            <p class="text-xs text-gray-500">{{ auth()->user()->email }}</p>
+                                        </div>
+                                        @if(auth()->user()->hasAnyRole(['admin', 'seller', 'ad-partner']))
+                                            <a href="{{ route('dashboard') }}" class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
+                                                <svg class="w-4 h-4 mr-2 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                                                </svg>
+                                                Dashboard
+                                            </a>
+                                        @endif
+                                        @if(!auth()->user()->hasVerifiedEmail())
+                                            <a href="{{ route('verification.notice') }}" class="flex items-center px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 transition">
+                                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                                </svg>
+                                                Verify Email
+                                            </a>
+                                        @endif
+                                        <a href="{{ route('customer.orders.index') }}" class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
+                                            <svg class="w-4 h-4 mr-2 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                                            </svg>
+                                            My Orders
+                                        </a>
+                                        <a href="{{ route('customer.profile.index') }}" class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
+                                            <svg class="w-4 h-4 mr-2 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                            </svg>
+                                            Profile
+                                        </a>
+                                        <hr class="my-1">
+                                        <form method="POST" action="{{ route('logout') }}">
+                                            @csrf
+                                            <button type="submit" class="flex items-center w-full px-3 py-2 text-sm text-[#E2150C] hover:bg-red-50 transition">
+                                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                                                </svg>
+                                                Logout
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        @else
+                            <!-- Login Button for Mobile -->
+                            <a href="{{ route('login') }}" class="p-2 md:p-3 text-gray-600 hover:text-[#005366] transition rounded-lg hover:bg-gray-50">
+                                <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
+                                </svg>
+                            </a>
+                        @endauth
+
                         <!-- Menu Button -->
                         <button id="mobile-menu-btn" class="p-2 md:p-3 text-gray-600 hover:text-[#005366] transition rounded-lg hover:bg-gray-50">
                             <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

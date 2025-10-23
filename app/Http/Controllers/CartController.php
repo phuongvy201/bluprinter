@@ -33,9 +33,9 @@ class CartController extends Controller
             }
         });
 
-        // Calculate totals (without tax)
+        // Calculate totals (without tax) including customizations
         $subtotal = $cartItems->sum(function ($item) {
-            return $item->getTotalPrice();
+            return $item->getTotalPriceWithCustomizations();
         });
 
         // Calculate shipping using ShippingCalculator

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Payment;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Services\ShippingCalculator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Stripe\Stripe;
 use Stripe\PaymentIntent;
@@ -90,18 +92,29 @@ class StripePaymentController extends Controller
                 ], 400);
             }
 
-            // Get cart from session
-            $cart = session('cart', []);
+            // Get cart items from database (same as CheckoutController)
+            $sessionId = session()->getId();
+            $userId = Auth::id();
+
+            $cartItems = \App\Models\Cart::with(['product.shop', 'product.template'])
+                ->where(function ($query) use ($sessionId, $userId) {
+                    if ($userId) {
+                        $query->where('user_id', $userId);
+                    } else {
+                        $query->where('session_id', $sessionId);
+                    }
+                })
+                ->get();
 
             // Debug cart contents
             Log::info('Stripe Payment - Cart Debug', [
-                'cart' => $cart,
-                'cart_count' => count($cart),
-                'session_id' => session()->getId(),
-                'user_id' => auth()->id(),
+                'cart_items' => $cartItems->toArray(),
+                'cart_count' => $cartItems->count(),
+                'session_id' => $sessionId,
+                'user_id' => $userId,
             ]);
 
-            if (empty($cart)) {
+            if ($cartItems->isEmpty()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Cart is empty. Please add products to cart first.',
@@ -112,14 +125,14 @@ class StripePaymentController extends Controller
             $subtotal = 0;
             $orderItems = [];
 
-            foreach ($cart as $item) {
-                $product = \App\Models\Product::find($item['product_id']);
+            foreach ($cartItems as $item) {
+                $product = $item->product;
                 if (!$product) {
                     continue;
                 }
 
-                $price = $product->getEffectivePrice();
-                $quantity = $item['quantity'];
+                $price = $item->price; // Use actual price from cart (includes variant pricing)
+                $quantity = $item->quantity;
                 $total = $price * $quantity;
 
                 $subtotal += $total;
@@ -127,15 +140,38 @@ class StripePaymentController extends Controller
                 $orderItems[] = [
                     'product_id' => $product->id,
                     'product_name' => $product->name,
+                    'product_description' => $product->description,
+                    'unit_price' => $price,
                     'quantity' => $quantity,
-                    'price' => $price,
-                    'total' => $total,
+                    'total_price' => $total,
+                    'product_options' => [
+                        'selected_variant' => $item->selected_variant,
+                        'customizations' => $item->customizations,
+                    ],
                 ];
             }
 
-            // Calculate shipping (implement your logic)
-            $shippingCost = $this->calculateShipping($validated['country']);
-            $taxAmount = 0; // Implement tax calculation if needed
+            // Calculate shipping using ShippingCalculator (same as CheckoutController)
+            $items = $cartItems->map(function ($item) {
+                return [
+                    'product_id' => $item->product_id,
+                    'quantity' => $item->quantity,
+                    'price' => $item->price, // Use actual price from cart (includes variant pricing)
+                ];
+            });
+
+            $calculator = new ShippingCalculator();
+            $shippingDetails = $calculator->calculateShipping($items, $validated['country']);
+
+            if (!$shippingDetails['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Shipping calculation failed: ' . $shippingDetails['message'],
+                ], 400);
+            }
+
+            $shippingCost = $shippingDetails['total_shipping'];
+            $taxAmount = 0; // No tax
             $totalAmount = $subtotal + $shippingCost + $taxAmount;
 
             // Verify amount matches
@@ -149,7 +185,7 @@ class StripePaymentController extends Controller
 
             // Create order
             $order = Order::create([
-                'user_id' => auth()->id(),
+                'user_id' => $userId,
                 'order_number' => 'ORD-' . strtoupper(uniqid()),
                 'customer_name' => $validated['customer_name'],
                 'customer_email' => $validated['customer_email'],
@@ -166,8 +202,10 @@ class StripePaymentController extends Controller
                 'total_amount' => $totalAmount,
                 'payment_method' => 'stripe',
                 'payment_status' => 'paid',
+                'status' => 'processing',
                 'payment_id' => $paymentIntent->id,
-                'order_status' => 'processing',
+                'payment_transaction_id' => $paymentIntent->id,
+                'paid_at' => now()
             ]);
 
             // Create order items
@@ -175,8 +213,17 @@ class StripePaymentController extends Controller
                 $order->items()->create($itemData);
             }
 
-            // Clear cart
-            session()->forget('cart');
+            // Clear cart from database (same as CheckoutController)
+            $sessionId = session()->getId();
+            $userId = Auth::id();
+
+            \App\Models\Cart::where(function ($query) use ($sessionId, $userId) {
+                if ($userId) {
+                    $query->where('user_id', $userId);
+                } else {
+                    $query->where('session_id', $sessionId);
+                }
+            })->delete();
 
             // Log successful payment
             Log::info('Stripe payment successful', [
@@ -302,21 +349,5 @@ class StripePaymentController extends Controller
                 Log::info('Charge refunded for order: ' . $order->order_number);
             }
         }
-    }
-
-    /**
-     * Calculate shipping cost based on country
-     */
-    protected function calculateShipping($country)
-    {
-        // Implement your shipping calculation logic
-        // This is a simple example
-        $shippingRates = [
-            'US' => 10.00,
-            'GB' => 15.00,
-            'default' => 20.00,
-        ];
-
-        return $shippingRates[$country] ?? $shippingRates['default'];
     }
 }

@@ -22,3 +22,11 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+*.md
+
+# Bỏ theo dõi các file ảnh logo
+/public/images/printerval-seller-logo.png
+/public/images/printerval-seller-logo.svg
+
+# Bỏ theo dõi file log
+/public/log.txt

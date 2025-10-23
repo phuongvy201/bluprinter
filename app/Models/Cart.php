@@ -44,16 +44,43 @@ class Cart extends Model
     // Helper methods
     public function getTotalPrice(): float
     {
-        $total = $this->price * $this->quantity;
+        // Price already includes variant and customization prices from frontend
+        // So we just multiply by quantity
+        return $this->price * $this->quantity;
+    }
 
-        // Add customization prices
-        if ($this->customizations) {
+    public function getTotalPriceWithCustomizations(): float
+    {
+        $basePrice = $this->price * $this->quantity;
+        $customizationTotal = 0;
+
+        // Add customization prices if they exist
+        if ($this->customizations && is_array($this->customizations)) {
             foreach ($this->customizations as $customization) {
-                $total += ($customization['price'] ?? 0) * $this->quantity;
+                if (isset($customization['price']) && is_numeric($customization['price'])) {
+                    $customizationTotal += floatval($customization['price']);
+                }
             }
         }
 
-        return $total;
+        return $basePrice + ($customizationTotal * $this->quantity);
+    }
+
+    public function getUnitPriceWithCustomizations(): float
+    {
+        $basePrice = $this->price;
+        $customizationTotal = 0;
+
+        // Add customization prices if they exist
+        if ($this->customizations && is_array($this->customizations)) {
+            foreach ($this->customizations as $customization) {
+                if (isset($customization['price']) && is_numeric($customization['price'])) {
+                    $customizationTotal += floatval($customization['price']);
+                }
+            }
+        }
+
+        return $basePrice + $customizationTotal;
     }
 
     public function getDisplayName(): string

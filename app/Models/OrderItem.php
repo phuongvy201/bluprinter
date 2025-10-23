@@ -38,4 +38,10 @@ class OrderItem extends Model
     {
         return $this->belongsTo(Product::class);
     }
+
+    // Accessor for backward compatibility
+    public function getPriceAttribute()
+    {
+        return $this->unit_price;
+    }
 }

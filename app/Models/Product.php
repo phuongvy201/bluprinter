@@ -69,6 +69,11 @@ class Product extends Model
         return $this->hasMany(Review::class)->approved();
     }
 
+    public function cartItems(): HasMany
+    {
+        return $this->hasMany(CartItem::class);
+    }
+
     // Accessors
     public function getBasePriceAttribute(): float
     {

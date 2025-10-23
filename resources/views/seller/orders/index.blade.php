@@ -458,6 +458,53 @@
                                                             <div>
                                                                 <p class="font-medium text-gray-900">{{ $item->product->name ?? 'Product not found' }}</p>
                                                                 <p class="text-sm text-gray-500">Qty: {{ $item->quantity }} × ${{ number_format($item->price, 2) }}</p>
+                                                                
+                                                                <!-- Customizations -->
+                                                                @if($item->product_options)
+                                                                    @php
+                                                                        $productOptions = is_string($item->product_options) 
+                                                                            ? json_decode($item->product_options, true) 
+                                                                            : $item->product_options;
+                                                                        $customizations = $productOptions['customizations'] ?? null;
+                                                                        $selectedVariant = $productOptions['selected_variant'] ?? null;
+                                                                    @endphp
+                                                                    
+                                                                    @if($customizations && is_array($customizations))
+                                                                        <div class="mt-2">
+                                                                            <p class="text-xs font-medium text-blue-600 mb-1">Customizations:</p>
+                                                                            <div class="space-y-1">
+                                                                                @foreach($customizations as $key => $customization)
+                                                                                    @if(is_array($customization) && isset($customization['value']))
+                                                                                        <div class="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded inline-block mr-1 mb-1">
+                                                                                            <span class="font-medium">{{ $key }}:</span> {{ $customization['value'] }}
+                                                                                            @if(isset($customization['price']) && $customization['price'] > 0)
+                                                                                                <span class="text-green-600 font-medium">(+${{ number_format($customization['price'], 2) }})</span>
+                                                                                            @endif
+                                                                                        </div>
+                                                                                    @elseif(!is_array($customization))
+                                                                                        <div class="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded inline-block mr-1 mb-1">
+                                                                                            <span class="font-medium">{{ $key }}:</span> {{ $customization }}
+                                                                                        </div>
+                                                                                    @endif
+                                                                                @endforeach
+                                                                            </div>
+                                                                        </div>
+                                                                    @endif
+                                                                    
+                                                                    @if($selectedVariant && is_array($selectedVariant))
+                                                                        <div class="mt-2">
+                                                                            <p class="text-xs font-medium text-green-600 mb-1">Selected Variant:</p>
+                                                                            <div class="text-xs bg-green-50 text-green-800 px-2 py-1 rounded inline-block mr-1 mb-1">
+                                                                                <span class="font-medium">Variant:</span> {{ $selectedVariant['variant_name'] ?? 'N/A' }}
+                                                                                @if(isset($selectedVariant['attributes']))
+                                                                                    @foreach($selectedVariant['attributes'] as $attrKey => $attrValue)
+                                                                                        <span class="ml-2">{{ $attrKey }}: {{ $attrValue }}</span>
+                                                                                    @endforeach
+                                                                                @endif
+                                                                            </div>
+                                                                        </div>
+                                                                    @endif
+                                                                @endif
                                                             </div>
                                                         </div>
                                                         <div class="text-right">
