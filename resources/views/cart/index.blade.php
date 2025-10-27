@@ -68,11 +68,18 @@
                                                 </p>
                                             @endif
                                         </div>
-                                        <button onclick="removeFromCart({{ $item->id }})" class="ml-4 p-2 text-gray-400 hover:text-red-500 transition-colors">
-                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                            </svg>
-                                        </button>
+                                        <div class="flex gap-2">
+                                            <button onclick="openEditCartModal({{ $item->id }})" class="p-2 text-gray-400 hover:text-[#005366] transition-colors" title="Edit">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                </svg>
+                                            </button>
+                                            <button onclick="removeFromCart({{ $item->id }})" class="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Remove">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <!-- Variant Info -->
@@ -258,6 +265,23 @@
             </div>
         @endif
 
+        <!-- Edit Cart Modal -->
+        <div id="editCartModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
+                    <h2 class="text-2xl font-bold text-gray-900">Edit Cart Item</h2>
+                    <button onclick="closeEditCartModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="editCartModalContent" class="p-6">
+                    <!-- Content will be loaded dynamically -->
+                </div>
+            </div>
+        </div>
+
         <!-- Recently Viewed Products -->
         <div id="recentlyViewedSection" class="mt-12" style="display: none;">
             <div class="mb-6 flex items-center justify-between">
@@ -317,6 +341,7 @@
 <!-- JavaScript for Cart Operations -->
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+const cartItemsData = @json($cartItems);
 
 function updateQuantity(cartItemId, newQuantity) {
     if (newQuantity < 1) return;
@@ -367,6 +392,325 @@ function removeFromCart(cartItemId) {
     })
     .catch(error => {
         console.error('Error:', error);
+        alert('An error occurred');
+    });
+}
+
+// Edit Cart Modal Functions
+function openEditCartModal(cartItemId) {
+    // Get cart item data from the page
+    const cartItem = cartItemsData.find(item => item.id === cartItemId);
+    
+    if (!cartItem) {
+        alert('Cart item not found');
+        return;
+    }
+    
+    // Show modal
+    const modal = document.getElementById('editCartModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    // Build modal content
+    const content = document.getElementById('editCartModalContent');
+    content.innerHTML = buildEditCartModalContent(cartItem);
+    window.__editingCartContext = {
+        id: cartItemId,
+        item: cartItem,
+        originalCustomizations: cartItem.customizations || {},
+        variants: (cartItem.product && cartItem.product.variants) ? cartItem.product.variants : []
+    };
+}
+
+function closeEditCartModal() {
+    const modal = document.getElementById('editCartModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function buildEditCartModalContent(cartItem) {
+    const product = cartItem.product;
+    const variants = product.variants || [];
+    const selectedVariant = cartItem.selected_variant || {};
+    const customizations = cartItem.customizations || {};
+    
+    return `
+        <div class="space-y-6">
+            <!-- Product Info -->
+            <div class="flex gap-4">
+                <img src="${getProductImage(product)}" alt="${product.name}" class="w-24 h-24 object-cover rounded-lg">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">${product.name}</h3>
+                    <p class="text-gray-600">$${parseFloat(cartItem.price).toFixed(2)} each</p>
+                </div>
+            </div>
+            
+            <!-- Variants -->
+            ${variants.length > 0 ? `
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Variants</label>
+                <div class="space-y-2">
+                    ${buildVariantOptions(variants, selectedVariant)}
+                </div>
+            </div>
+            ` : ''}
+
+            ${Object.keys(customizations).length > 0 ? `
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Customizations</label>
+                <div class="space-y-3">
+                    ${Object.entries(customizations).map(([key, value]) => `
+                        <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">
+                            <div class="sm:col-span-2">
+                                <span class="text-sm text-gray-600">${key}</span>
+                            </div>
+                            <div class="sm:col-span-3">
+                                <input type="text" class="w-full border-2 border-gray-200 rounded-lg px-3 py-2 customization-input" 
+                                       data-label="${key}" placeholder="Value" value="${(value && value.value) ? String(value.value).replace(/"/g, '&quot;') : ''}" 
+                                       oninput="updateCartModalTotal()" />
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+            
+            <!-- Quantity -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+                <div class="flex items-center gap-3">
+                    <button onclick="updateModalQuantity(${cartItem.id}, ${cartItem.quantity - 1})" 
+                            class="w-10 h-10 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            ${cartItem.quantity <= 1 ? 'disabled' : ''}>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
+                        </svg>
+                    </button>
+                    <span class="text-xl font-semibold" id="modalQuantity${cartItem.id}">${cartItem.quantity}</span>
+                    <button onclick="updateModalQuantity(${cartItem.id}, ${cartItem.quantity + 1})" 
+                            class="w-10 h-10 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Total Price -->
+            <div class="border-t pt-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-lg font-semibold text-gray-900">Total</span>
+                    <span class="text-2xl font-bold text-[#005366]" id="modalTotal${cartItem.id}">$${(parseFloat(cartItem.price) * cartItem.quantity).toFixed(2)}</span>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex gap-3 pt-4">
+                <button onclick="saveCartChanges(${cartItem.id})" 
+                        class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-3 rounded-xl transition-colors">
+                    Save Changes
+                </button>
+                <button onclick="closeEditCartModal()" 
+                        class="px-6 py-3 border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-medium rounded-xl transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function buildVariantOptions(variants, selectedVariant) {
+    // Group variants by attribute type
+    const attributeGroups = {};
+    variants.forEach(variant => {
+        if (variant.attributes) {
+            Object.keys(variant.attributes).forEach(key => {
+                if (!attributeGroups[key]) {
+                    attributeGroups[key] = new Set();
+                }
+                attributeGroups[key].add(variant.attributes[key]);
+            });
+        }
+    });
+    
+    return Object.keys(attributeGroups).map(key => {
+        const values = Array.from(attributeGroups[key]);
+        const selectedValue = selectedVariant && selectedVariant.attributes ? selectedVariant.attributes[key] : '';
+        
+        return `
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">${key.charAt(0).toUpperCase() + key.slice(1)}</label>
+                <select class="w-full border-2 border-gray-200 rounded-lg px-4 py-2 focus:border-[#005366] focus:outline-none" 
+                        id="variant-${key}" 
+                        onchange="updateCartModalTotal(${JSON.stringify(variants).replace(/"/g, '&quot;')})">
+                    ${values.map(value => `
+                        <option value="${value}" ${value === selectedValue ? 'selected' : ''}>${value}</option>
+                    `).join('')}
+                </select>
+            </div>
+        `;
+    }).join('');
+}
+
+function getProductImage(product) {
+    if (product.media && product.media.length > 0) {
+        const media = product.media[0];
+        if (typeof media === 'string') {
+            return media;
+        } else if (media.url) {
+            return media.url;
+        } else if (media.path) {
+            return media.path;
+        }
+    }
+    return '/images/placeholder.jpg';
+}
+
+function updateModalQuantity(cartItemId, newQuantity) {
+    if (newQuantity < 1) return;
+    
+    // Update display
+    const quantityDisplay = document.getElementById('modalQuantity' + cartItemId);
+    if (quantityDisplay) {
+        quantityDisplay.textContent = newQuantity;
+    }
+    
+    // Update total
+    updateCartModalTotal();
+}
+
+function updateCartModalTotal(variants) {
+    const ctx = window.__editingCartContext;
+    if (!ctx) return;
+    if (Array.isArray(variants) && variants.length) {
+        ctx.variants = variants;
+    }
+    const cartItemId = ctx.id;
+    const cartItem = ctx.item;
+    const quantity = parseInt(document.getElementById('modalQuantity' + cartItemId)?.textContent || '1');
+
+    const selectedVariant = (function getSelectedVariant() {
+        const vars = ctx.variants || [];
+        if (!vars.length) return null;
+        const attributes = {};
+        vars.forEach(v => {
+            if (v.attributes) {
+                Object.keys(v.attributes).forEach(key => {
+                    const sel = document.getElementById('variant-' + key);
+                    if (sel) attributes[key] = sel.value;
+                });
+            }
+        });
+        const match = vars.find(v => v.attributes && Object.keys(attributes).every(k => String(v.attributes[k]) === String(attributes[k])));
+        if (match) return { id: match.id, attributes: match.attributes, price: match.price };
+        return Object.keys(attributes).length ? { attributes } : null;
+    })();
+
+    let unitPrice = (function getBaseUnitPrice() {
+        if (selectedVariant && selectedVariant.price != null && selectedVariant.price !== '') {
+            const v = parseFloat(selectedVariant.price);
+            if (!isNaN(v)) return v;
+        }
+        const p = cartItem.product || {};
+        const candidates = [p.price, p.base_price, (p.template || {}).base_price, cartItem.price];
+        for (const c of candidates) {
+            const v = parseFloat(c);
+            if (!isNaN(v)) return v;
+        }
+        return 0;
+    })();
+
+    const customizations = (function getSelectedCustomizationsPreservePrice() {
+        const map = {};
+        document.querySelectorAll('.customization-input').forEach(input => {
+            const label = input.dataset.label;
+            const value = input.value || '';
+            const original = ctx.originalCustomizations && ctx.originalCustomizations[label];
+            const price = original && original.price ? parseFloat(original.price) || 0 : 0;
+            if (value.trim() !== '') {
+                map[label] = { value: value.trim(), price };
+            }
+        });
+        return map;
+    })();
+
+    let customizationUnitTotal = 0;
+    Object.values(customizations).forEach(c => { customizationUnitTotal += parseFloat(c.price) || 0; });
+    const unitTotal = unitPrice + customizationUnitTotal;
+    const total = unitTotal * quantity;
+    const totalDisplay = document.getElementById('modalTotal' + cartItemId);
+    if (totalDisplay) totalDisplay.textContent = '$' + total.toFixed(2);
+}
+
+function saveCartChanges(cartItemId) {
+    const ctx = window.__editingCartContext;
+    if (!ctx || ctx.id !== cartItemId) return;
+    const cartItem = ctx.item;
+    const newQuantity = parseInt(document.getElementById('modalQuantity' + cartItemId)?.textContent || '1');
+
+    // Recompute payload like in updateCartModalTotal
+    const vars = ctx.variants || [];
+    const attributes = {};
+    vars.forEach(v => {
+        if (v.attributes) {
+            Object.keys(v.attributes).forEach(key => {
+                const sel = document.getElementById('variant-' + key);
+                if (sel) attributes[key] = sel.value;
+            });
+        }
+    });
+    const match = vars.find(v => v.attributes && Object.keys(attributes).every(k => String(v.attributes[k]) === String(attributes[k])));
+    const selectedVariant = match ? { id: match.id, attributes: match.attributes, price: match.price } : (Object.keys(attributes).length ? { attributes } : null);
+
+    const customizations = {};
+    document.querySelectorAll('.customization-input').forEach(input => {
+        const label = input.dataset.label;
+        const value = input.value || '';
+        const original = ctx.originalCustomizations && ctx.originalCustomizations[label];
+        const price = original && original.price ? parseFloat(original.price) || 0 : 0;
+        if (value.trim() !== '') {
+            customizations[label] = { value: value.trim(), price };
+        }
+    });
+
+    let unitPrice = (function () {
+        if (selectedVariant && selectedVariant.price != null && selectedVariant.price !== '') {
+            const v = parseFloat(selectedVariant.price);
+            if (!isNaN(v)) return v;
+        }
+        const p = cartItem.product || {};
+        const candidates = [p.price, p.base_price, (p.template || {}).base_price, cartItem.price];
+        for (const c of candidates) {
+            const v = parseFloat(c);
+            if (!isNaN(v)) return v;
+        }
+        return 0;
+    })();
+    Object.values(customizations).forEach(c => { unitPrice += parseFloat(c.price) || 0; });
+
+    fetch(`/api/cart/update/${cartItemId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken
+        },
+        body: JSON.stringify({
+            quantity: newQuantity,
+            selected_variant: selectedVariant,
+            customizations: customizations,
+            price: unitPrice
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed to update cart item');
+        }
+    })
+    .catch(err => {
+        console.error('Error:', err);
         alert('An error occurred');
     });
 }

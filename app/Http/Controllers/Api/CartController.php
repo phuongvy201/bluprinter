@@ -174,11 +174,53 @@ class CartController extends Controller
         }
     }
 
+    public function show($id)
+    {
+        try {
+            $sessionId = session()->getId();
+            $userId = Auth::id();
+
+            $cartItem = Cart::with(['product.shop', 'product.template', 'product.variants', 'variant'])
+                ->where('id', $id)
+                ->where(function ($query) use ($sessionId, $userId) {
+                    if ($userId) {
+                        $query->where('user_id', $userId);
+                    } else {
+                        $query->where('session_id', $sessionId);
+                    }
+                })
+                ->firstOrFail();
+
+            // Transform cart item to include media
+            if ($cartItem->product) {
+                $cartItem->product->media = $cartItem->product->getEffectiveMedia();
+            }
+
+            return response()->json([
+                'success' => true,
+                'cart_item' => $cartItem
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error getting cart item', [
+                'error' => $e->getMessage(),
+                'cart_item_id' => $id
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get cart item'
+            ], 500);
+        }
+    }
+
     public function update(Request $request, $id)
     {
         try {
             $request->validate([
-                'quantity' => 'required|integer|min:1'
+                'quantity' => 'required|integer|min:1',
+                'selected_variant' => 'nullable|array',
+                'customizations' => 'nullable|array',
+                'price' => 'nullable|numeric|min:0'
             ]);
 
             $sessionId = session()->getId();
@@ -194,9 +236,27 @@ class CartController extends Controller
                 })
                 ->firstOrFail();
 
-            $cartItem->update([
+            $updateData = [
                 'quantity' => $request->quantity
-            ]);
+            ];
+
+            // Update variant if provided
+            if ($request->has('selected_variant')) {
+                $updateData['selected_variant'] = $request->selected_variant;
+                $updateData['variant_id'] = $request->selected_variant['id'] ?? null;
+            }
+
+            // Update customizations if provided
+            if ($request->has('customizations')) {
+                $updateData['customizations'] = $request->customizations;
+            }
+
+            // Update unit price if provided (price includes variant and customization unit total)
+            if ($request->has('price')) {
+                $updateData['price'] = $request->price;
+            }
+
+            $cartItem->update($updateData);
 
             return response()->json([
                 'success' => true,

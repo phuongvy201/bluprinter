@@ -30,6 +30,9 @@ use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\Admin\ShippingZoneController;
 use App\Http\Controllers\Admin\ShippingRateController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\SupportController;
+use App\Http\Controllers\BulkOrderController;
+use App\Http\Controllers\PromoCodeController;
 
 // Public routes
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -115,6 +118,22 @@ Route::get('/blog/tag/{slug}', [BlogController::class, 'tag'])->name('blog.tag')
 
 // Pages routes (must be last to avoid conflicts)
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('page.show');
+
+// Support Ticket routes
+Route::get('/support/ticket', [SupportController::class, 'create'])->name('support.ticket.create');
+Route::post('/support/ticket', [SupportController::class, 'store'])->name('support.ticket.store');
+
+// Support Request routes
+Route::get('/support/request', [SupportController::class, 'requestCreate'])->name('support.request.create');
+Route::post('/support/request', [SupportController::class, 'requestStore'])->name('support.request.store');
+
+// Bulk Order routes
+Route::get('/bulk-order', [BulkOrderController::class, 'create'])->name('bulk.order.create');
+Route::post('/bulk-order', [BulkOrderController::class, 'store'])->name('bulk.order.store');
+
+// Promo Code routes
+Route::get('/promo-code', [PromoCodeController::class, 'create'])->name('promo.code.create');
+Route::post('/promo-code', [PromoCodeController::class, 'store'])->name('promo.code.store');
 
 // Customer Profile routes (requires authentication)
 Route::middleware('auth')->prefix('customer')->name('customer.')->group(function () {

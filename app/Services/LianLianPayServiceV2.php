@@ -14,6 +14,7 @@ use lianlianpay\v3sdk\model\PayRequest;
 use lianlianpay\v3sdk\model\Product;
 use lianlianpay\v3sdk\model\RequestPaymentData;
 use lianlianpay\v3sdk\model\Shipping;
+use lianlianpay\v3sdk\model\TerminalData;
 use lianlianpay\v3sdk\service\Payment;
 use lianlianpay\v3sdk\service\Notification;
 
@@ -42,72 +43,52 @@ class LianLianPayServiceV2
      */
     public function createPayment(Order $order)
     {
-        Log::info('🔧 LIANLIAN PAY SERVICE CREATE PAYMENT CALLED', [
+        Log::info('🔧 LIANLIAN PAY CREATE PAYMENT (Simplified)', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
-            'total_amount' => $order->total_amount
+            'amount' => $order->total_amount
         ]);
 
         try {
-            // Log input data
-            Log::info('LianLian Pay Input Data:', [
-                'order_id' => $order->id,
-                'order_amount' => $order->total_amount,
-                'customer_name' => $order->customer_name,
-                'country' => $order->country
-            ]);
-
-            // Initialize SDK
+            // 1️⃣ Khởi tạo SDK và khóa
             $paySdk = PaySDK::getInstance();
             $paySdk->init($this->sandbox);
             $paySdk->setKey($this->privateKey, $this->publicKey);
 
-            // Log SDK configuration
-            Log::info('LianLian SDK Config:', [
-                'sandbox_mode' => $this->sandbox,
-                'merchant_id' => $this->merchantId,
-                'private_key_length' => strlen($this->privateKey),
-                'public_key_length' => strlen($this->publicKey)
-            ]);
-
-            // Tạo PayRequest object theo code mẫu
+            // 2️⃣ Tạo đối tượng PayRequest
             $payRequest = new PayRequest();
-
-            // Basic payment information - chỉ những trường cần thiết
             $payRequest->merchant_id = $this->merchantId;
             $payRequest->biz_code = 'EC';
             $payRequest->country = $order->country ?? 'US';
 
-            // Set URLs - chỉ những trường cần thiết
+            // URL callback & redirect
             $payRequest->redirect_url = url('/payment/lianlian/return');
             $payRequest->notification_url = url('/payment/lianlian/webhook-v2');
 
-            // Generate transaction ID
+            // 3️⃣ Sinh mã giao dịch duy nhất
             $time = now()->format('YmdHis');
             $merchantTransactionId = 'Order-' . $time;
             $payRequest->merchant_transaction_id = $merchantTransactionId;
             $payRequest->payment_method = 'inter_credit_card';
 
-            // Create address object - chỉ những trường cần thiết
+            // 4️⃣ Khách hàng & địa chỉ
             $address = new Address();
-            $address->city = $order->city;
+            $address->city = $order->city ?? 'N/A';
             $address->country = $order->country ?? 'US';
-            $address->line1 = $order->shipping_address;
-            $address->line2 = '';
+            $address->line1 = $order->shipping_address ?? 'N/A';
+            $address->postal_code = $order->postal_code ?? '00000';
             $address->state = $order->state ?? '';
-            $address->postal_code = $order->postal_code;
 
-            // Create customer object - chỉ những trường cần thiết
             $customer = new Customer();
             $customer->address = $address;
             $customer->customer_type = 'I';
             $customer->full_name = $order->customer_name;
-            $customer->email = $order->customer_email;
             $customer->first_name = $this->getFirstName($order->customer_name);
             $customer->last_name = $this->getLastName($order->customer_name);
+            $customer->email = $order->customer_email;
             $payRequest->customer = $customer;
 
-            // Create products array - chỉ những trường cần thiết
+            // 5️⃣ Sản phẩm (chỉ lấy 1 dòng demo hoặc loop đơn giản)
             $products = [];
             foreach ($order->items as $item) {
                 $product = new Product();
@@ -116,20 +97,20 @@ class LianLianPayServiceV2
                 $product->price = $item->unit_price;
                 $product->product_id = (string)$item->product_id;
                 $product->quantity = $item->quantity;
-                $product->shipping_provider = 'other';
+                $product->shipping_provider = 'DHL';
                 $product->sku = 'SKU-' . $item->product_id;
                 $product->url = url('/products/' . $item->product_id);
                 $products[] = $product;
             }
 
-            // Create shipping object - chỉ những trường cần thiết
+            // 6️⃣ Thông tin vận chuyển
             $shipping = new Shipping();
             $shipping->address = $address;
             $shipping->name = $order->customer_name;
             $shipping->phone = $order->customer_phone ?? '';
             $shipping->cycle = '48h';
 
-            // Create merchant order object - chỉ những trường cần thiết
+            // 7️⃣ Merchant Order
             $merchantOrder = new MerchantOrder();
             $merchantOrder->merchant_order_id = $merchantTransactionId;
             $merchantOrder->merchant_order_time = $time;
@@ -138,10 +119,9 @@ class LianLianPayServiceV2
             $merchantOrder->order_description = 'Order from Bluprinter';
             $merchantOrder->products = $products;
             $merchantOrder->shipping = $shipping;
-
             $payRequest->merchant_order = $merchantOrder;
 
-            // Add card information if available in session - chỉ những trường cần thiết
+            // 8️⃣ Dữ liệu thẻ (nếu có trong session)
             $cardInfo = session('lianlian_card_info');
             if ($cardInfo) {
                 $paymentData = new RequestPaymentData();
@@ -166,121 +146,31 @@ class LianLianPayServiceV2
                 $payRequest->payment_data = $paymentData;
             }
 
-            // Log request details
-            Log::info('LianLian Pay Request Details:', [
-                'merchant_id' => $payRequest->merchant_id,
-                'transaction_id' => $merchantTransactionId,
-                'amount' => $merchantOrder->order_amount,
-                'currency' => $merchantOrder->order_currency_code,
-                'customer_name' => $customer->full_name,
-                'country' => $address->country,
-                'products_count' => count($products)
+
+
+            // 9️⃣ Log JSON request
+            Log::info('LianLian Pay Request JSON', [
+                'request' => json_encode($payRequest, JSON_PRETTY_PRINT)
             ]);
 
-            // Debug: Log PayRequest object structure
-            Log::info('LianLian PayRequest Object:', [
-                'merchant_id' => $payRequest->merchant_id,
-                'biz_code' => $payRequest->biz_code,
-                'country' => $payRequest->country,
-                'merchant_order' => [
-                    'merchant_order_id' => $payRequest->merchant_order->merchant_order_id,
-                    'order_amount' => $payRequest->merchant_order->order_amount,
-                    'order_currency_code' => $payRequest->merchant_order->order_currency_code,
-                    'products_count' => count($payRequest->merchant_order->products),
-                    'shipping' => $payRequest->merchant_order->shipping ? 'present' : 'missing'
-                ],
-                'payment_data' => $payRequest->payment_data ? 'present' : 'missing',
-                'customer' => $payRequest->customer ? 'present' : 'missing'
-            ]);
-
-            // Log PayRequest object để debug
-            Log::info('LianLian PayRequest Object:', [
-                'merchant_id' => $payRequest->merchant_id,
-                'merchant_transaction_id' => $payRequest->merchant_transaction_id,
-                'payment_method' => $payRequest->payment_method,
-                'country' => $payRequest->country,
-                'terminal_data' => [
-                    'user_order_ip' => $payRequest->terminal_data->user_order_ip ?? 'missing',
-                    'user_client_mode' => $payRequest->terminal_data->user_client_mode ?? 'missing',
-                    'user_client_app_type' => $payRequest->terminal_data->user_client_app_type ?? 'missing'
-                ]
-            ]);
-
-            // Tạo payment object và gọi pay method theo code mẫu
+            // 🔟 Gửi yêu cầu thanh toán
             $payment = new Payment();
-
-            // Gọi payment->pay method với đầy đủ tham số
             $payResponse = $payment->pay($payRequest, $this->privateKey, $this->publicKey);
 
-            // Log response theo format SDK
-            $payResponseJson = json_encode($payResponse, JSON_PRETTY_PRINT);
-            Log::info('LianLian Pay Response JSON:', ['response' => $payResponseJson]);
-
-            // Log the response
             Log::info('LianLian Pay Response', [
-                'order_id' => $order->id,
-                'return_code' => $payResponse['return_code'] ?? 'No return code',
-                'return_message' => $payResponse['return_message'] ?? 'No message',
-                'trace_id' => $payResponse['trace_id'] ?? 'No trace ID',
-                'full_response' => $payResponse
+                'response' => json_encode($payResponse, JSON_PRETTY_PRINT)
             ]);
 
-            // Xử lý 3DS authentication
-            if (isset($payResponse['return_code']) && $payResponse['return_code'] === 'SUCCESS') {
-                // Kiểm tra xem có yêu cầu 3DS authentication không
-                $requires3DS = false;
-                $threeDSecureUrl = null;
-                $paymentStatus = null;
-                $threeDSStatus = null;
-
-                // Kiểm tra 3DS status và payment_url trong order object
-                if (
-                    isset($payResponse['order']['3ds_status']) &&
-                    $payResponse['order']['3ds_status'] === 'CHALLENGE' &&
-                    isset($payResponse['order']['payment_url']) &&
-                    !empty($payResponse['order']['payment_url'])
-                ) {
-                    $requires3DS = true;
-                    $threeDSecureUrl = $payResponse['order']['payment_url'];
-                    $paymentStatus = $payResponse['order']['payment_data']['payment_status'] ?? null;
-                    $threeDSStatus = $payResponse['order']['3ds_status'];
-                }
-                // Fallback: Kiểm tra các trường khác có thể chứa 3DS URL
-                elseif (isset($payResponse['3ds_url']) && !empty($payResponse['3ds_url'])) {
-                    $requires3DS = true;
-                    $threeDSecureUrl = $payResponse['3ds_url'];
-                } elseif (isset($payResponse['redirect_url']) && !empty($payResponse['redirect_url'])) {
-                    $requires3DS = true;
-                    $threeDSecureUrl = $payResponse['redirect_url'];
-                } elseif (isset($payResponse['payment_data']['3ds_url']) && !empty($payResponse['payment_data']['3ds_url'])) {
-                    $requires3DS = true;
-                    $threeDSecureUrl = $payResponse['payment_data']['3ds_url'];
-                }
-
-                Log::info('3DS Authentication Check:', [
-                    'order_id' => $order->id,
-                    'requires_3ds' => $requires3DS,
-                    '3ds_url' => $threeDSecureUrl,
-                    'payment_status' => $paymentStatus,
-                    '3ds_status' => $threeDSStatus
-                ]);
-
-                // Luôn trả về cấu trúc thống nhất từ $payResponse
-                // Không cần return riêng cho 3DS vì controller sẽ tự check
-            }
-
-            // Luôn return $payResponse để giữ cấu trúc thống nhất
             return $payResponse;
         } catch (\Exception $e) {
-            Log::error('LianLian Pay Error', [
-                'order_id' => $order->id,
+            Log::error('❌ LianLian Pay Error', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-
             throw new \Exception('Payment creation failed: ' . $e->getMessage());
         }
     }
+
 
     /**
      * Get payment token for iframe

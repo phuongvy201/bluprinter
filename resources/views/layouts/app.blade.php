@@ -252,6 +252,20 @@
                                     </svg>
                                 </a>
                             </div>
+                            <div class="mt-4 flex flex-wrap gap-3">
+                                <a href="/support/ticket" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-blue-500 text-blue-100 hover:bg-blue-600/20 transition">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M5 11h14M5 19h14M5 15h14"/></svg>
+                                    Submit Ticket
+                                </a>
+                                <a href="/support/request" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-purple-500 text-purple-100 hover:bg-purple-600/20 transition">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2"/></svg>
+                                    Submit Request
+                                </a>
+                                <a href="/bulk-order" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-indigo-500 text-indigo-100 hover:bg-indigo-600/20 transition">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18"/></svg>
+                                    Bulk Order
+                                </a>
+                            </div>
                         </div>
                     </div>
 
@@ -281,6 +295,7 @@
                             <li><a href="/page/returns-exchanges-policy" class="text-gray-300 hover:text-white transition-colors">Returns & Exchanges Policy</a></li>
                             <li><a href="/page/dmca" class="text-gray-300 hover:text-white transition-colors">DMCA</a></li>
                             <li><a href="/page/our-intellectual-property-policy" class="text-gray-300 hover:text-white transition-colors">Our Intellectual Property Policy</a></li>
+                            
                         </ul>
                     </div>
 
@@ -318,13 +333,14 @@
                             Stay updated with the latest trends, exclusive offers, and exciting updates by signing up for our newsletter. 
                             Secret privileges for your purchase will be delivered straight to your inbox.
                         </p>
+                        
                         <form class="flex" action="#" method="POST" id="newsletter-form">
                             @csrf
                             <input type="email" name="email" placeholder="Your email address" required
                                    class="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400">
                             <button type="submit" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-r-lg transition-colors">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
                             </button>
                         </form>

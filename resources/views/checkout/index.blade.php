@@ -19,6 +19,22 @@
         font-family: 'Inter', sans-serif;
     }
 
+function buildCheckoutCustomizationInputs(customizations) {
+    var html = '';
+    if (!customizations) return html;
+    Object.keys(customizations).forEach(function(k){
+        var v = customizations[k] || {};
+        var value = v && v.value ? String(v.value).replace(/"/g, '&quot;') : '';
+        html += '<div class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">'
+             + '<div class="sm:col-span-2"><span class="text-sm text-gray-600">' + k + '</span></div>'
+             + '<div class="sm:col-span-3">'
+             + '<input type="text" class="w-full border-2 border-gray-200 rounded-lg px-3 py-2 checkout-customization-input" data-label="' + k + '" value="' + value + '" oninput="updateCheckoutModalTotal()" />'
+             + '</div>'
+             + '</div>';
+    });
+    return html;
+}
+
     @keyframes fadeInUp {
         from {
             opacity: 0;
@@ -842,9 +858,9 @@
                     </div>
                     
                     <!-- Products -->
-                    <div class="space-y-3 mb-6 max-h-64 overflow-y-auto">
+                    <div class="space-y-3 mb-6">
                         @foreach($products as $item)
-                            <div class="product-item flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div class="product-item p-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm transition flex gap-3" data-checkout-cart-item-id="{{ $item['cart_item']->id }}">
                                 @php
                                     $media = $item['product']->getEffectiveMedia();
                                     $imageUrl = null;
@@ -856,25 +872,60 @@
                                         }
                                     }
                                 @endphp
-                                @if($imageUrl)
-                                    <img src="{{ $imageUrl }}" 
-                                         alt="{{ $item['product']->name }}"
-                                         class="w-12 h-12 object-cover rounded-lg">
-                                @else
-                                    <div class="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                        </svg>
-                                    </div>
-                                @endif
-                                
-                                <div class="flex-1 min-w-0">
-                                    <h3 class="font-medium text-gray-900 text-sm truncate">{{ Str::limit($item['product']->name, 30) }}</h3>
-                                    <p class="text-xs text-gray-600">Qty: {{ $item['quantity'] }}</p>
+                                <div class="shrink-0">
+                                    @if($imageUrl)
+                                        <img src="{{ $imageUrl }}" 
+                                             alt="{{ $item['product']->name }}"
+                                             class="w-14 h-14 object-cover rounded-lg">
+                                    @else
+                                        <div class="w-14 h-14 bg-gray-200 rounded-lg flex items-center justify-center">
+                                            <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                            </svg>
+                                        </div>
+                                    @endif
                                 </div>
                                 
-                                <div class="text-right">
-                                    <p class="font-semibold text-gray-900">${{ number_format($item['total'], 2) }}</p>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <h3 class="font-semibold text-gray-900 text-sm truncate">{{ Str::limit($item['product']->name, 42) }}</h3>
+                                        <div class="flex items-center gap-2 shrink-0">
+                                            <button onclick="openCheckoutEditCartModal({{ $item['cart_item']->id }})" class="p-1.5 text-gray-400 hover:text-blue-600" title="Edit item">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                            </button>
+                                            <p class="font-semibold text-gray-900">${{ number_format($item['total'], 2) }}</p>
+                                        </div>
+                                    </div>
+                                    <p class="text-[11px] text-gray-500 mt-0.5">Qty: {{ $item['quantity'] }}</p>
+
+                                    @php $sv = $item['cart_item']->selected_variant; @endphp
+                                    @if($sv && is_array($sv) && isset($sv['attributes']) && is_array($sv['attributes']))
+                                        <div class="flex flex-wrap gap-1 mt-1">
+                                            @foreach($sv['attributes'] as $k => $v)
+                                                <span class="px-2 py-0.5 bg-gray-100 text-gray-700 text-[10px] rounded">{{ $k }}: {{ $v }}</span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+
+                                    @if($item['cart_item']->customizations && count($item['cart_item']->customizations) > 0)
+                                        @php $cid = $item['cart_item']->id; @endphp
+                                        <div class="mt-2">
+                                            <ul id="cust-list-{{ $cid }}" class="space-y-0.5">
+                                                @foreach($item['cart_item']->customizations as $k => $c)
+                                                    <li class="text-[11px] text-gray-700 {{ $loop->iteration > 3 ? 'hidden more-'.$cid : '' }}">
+                                                        <span class="text-gray-500">{{ $k }}:</span>
+                                                        <span class="font-medium">{{ $c['value'] }}</span>
+                                                        @if(isset($c['price']) && $c['price']>0)
+                                                            <span class="text-green-600">(+${{ number_format($c['price'],2) }})</span>
+                                                        @endif
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                            @if(count($item['cart_item']->customizations) > 3)
+                                                <button type="button" class="mt-1 text-[11px] text-blue-600 hover:underline" onclick="toggleCheckoutCustList({{ $cid }})" id="cust-toggle-{{ $cid }}">View more</button>
+                                            @endif
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach
@@ -912,6 +963,19 @@
         </div>
     </div>
 </div>
+
+<!-- Checkout Edit Cart Modal -->
+<div id="checkoutEditCartModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
+            <h2 class="text-2xl font-bold text-gray-900">Edit Item</h2>
+            <button onclick="closeCheckoutEditCartModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <div id="checkoutEditCartModalContent" class="p-6"></div>
+    </div>
+    </div>
 
 <script>
 // Clear any cached data
@@ -1296,7 +1360,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Load LianLian SDK
             if (!window.LLP) {
                 const script = document.createElement('script');
-                script.src = 'https://secure-checkout.lianlianpay.com/v2/llpay.min.js';
+                script.src = 'https://gacashier.lianlianpay-inc.com/sandbox2/llpay.min.js';
                 script.async = true;
                 
                 await new Promise((resolve, reject) => {
@@ -2350,4 +2414,186 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+@php
+    $checkoutItems = [];
+    foreach ($products as $item) {
+        $checkoutItems[] = [
+            'id' => $item['cart_item']->id,
+            'quantity' => $item['cart_item']->quantity,
+            'price' => (float) $item['cart_item']->price,
+            'product' => [
+                'name' => $item['product']->name,
+                'variants' => $item['product']->variants,
+                'media' => $item['product']->media ?? $item['product']->getEffectiveMedia(),
+                'base_price' => (float) ($item['product']->base_price ?? 0),
+                'price' => (float) ($item['product']->price ?? 0),
+                'template' => $item['product']->template ? ['base_price' => (float) $item['product']->template->base_price] : null,
+            ],
+            'selected_variant' => $item['cart_item']->selected_variant,
+            'customizations' => $item['cart_item']->customizations,
+        ];
+    }
+@endphp
+
+<!-- Build checkoutItemsData from server-side products for modal editing -->
+<script>
+const checkoutItemsData = @json($checkoutItems);
+const checkoutCsrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+function openCheckoutEditCartModal(cartItemId) {
+    const ci = checkoutItemsData.find(i => i.id === cartItemId);
+    if (!ci) { alert('Cart item not found'); return; }
+    const modal = document.getElementById('checkoutEditCartModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    const content = document.getElementById('checkoutEditCartModalContent');
+    content.innerHTML = buildCheckoutEditContent(ci);
+    window.__checkoutEditingCtx = {
+        id: cartItemId,
+        item: ci,
+        variants: (ci.product && ci.product.variants) ? ci.product.variants : [],
+        originalCustomizations: ci.customizations || {}
+    };
+}
+
+function closeCheckoutEditCartModal() {
+    const modal = document.getElementById('checkoutEditCartModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function buildCheckoutEditContent(ci) {
+    const product = ci.product;
+    const variants = product.variants || [];
+    const selectedVariant = ci.selected_variant || {};
+    const customizations = ci.customizations || {};
+    const img = getCheckoutProductImage(product);
+    const total = (parseFloat(ci.price) * ci.quantity).toFixed(2);
+    return `
+        <div class="space-y-6">
+            <div class="flex gap-4">
+                <img src="${img}" alt="${product.name}" class="w-24 h-24 object-cover rounded-lg">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">${product.name}</h3>
+                    <p class="text-gray-600">$${parseFloat(ci.price).toFixed(2)} each</p>
+                </div>
+            </div>
+            ${variants.length ? `
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Variants</label>
+                <div class="space-y-2">${buildCheckoutVariantOptions(variants, selectedVariant)}</div>
+            </div>` : ''}
+            ${Object.keys(customizations).length ? `
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Customizations</label>
+                <div class="space-y-3">
+                    ${buildCheckoutCustomizationInputs(customizations)}
+                </div>
+            </div>` : ''}
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+                <div class="flex items-center gap-3">
+                    <button onclick="updateCheckoutModalQty(${ci.id}, ${ci.quantity - 1})" class="w-10 h-10 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors" ${ci.quantity<=1?'disabled':''}>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                    </button>
+                    <span class="text-xl font-semibold" id="checkoutModalQty${ci.id}">${ci.quantity}</span>
+                    <button onclick="updateCheckoutModalQty(${ci.id}, ${ci.quantity + 1})" class="w-10 h-10 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="border-t pt-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-lg font-semibold text-gray-900">Total</span>
+                    <span class="text-2xl font-bold text-[#005366]" id="checkoutModalTotal${ci.id}">$${total}</span>
+                </div>
+            </div>
+            <div class="flex gap-3 pt-4">
+                <button onclick="saveCheckoutCartChanges(${ci.id})" class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-3 rounded-xl transition-colors">Save Changes</button>
+                <button onclick="closeCheckoutEditCartModal()" class="px-6 py-3 border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-medium rounded-xl transition-colors">Cancel</button>
+            </div>
+        </div>`;
+}
+
+function buildCheckoutVariantOptions(variants, selectedVariant) {
+    const groups = {};
+    variants.forEach(v => { if (v.attributes) Object.keys(v.attributes).forEach(k => { groups[k] = groups[k]||new Set(); groups[k].add(v.attributes[k]); }); });
+    return Object.keys(groups).map(k => {
+        const values = Array.from(groups[k]);
+        const sel = selectedVariant && selectedVariant.attributes ? selectedVariant.attributes[k] : '';
+        return `
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">${k.charAt(0).toUpperCase()+k.slice(1)}</label>
+            <select class="w-full border-2 border-gray-200 rounded-lg px-4 py-2 focus:border-[#005366] focus:outline-none" id="checkout-variant-${k}" onchange="updateCheckoutModalTotal()">
+                ${values.map(v => `<option value="${v}" ${v===sel?'selected':''}>${v}</option>`).join('')}
+            </select>
+        </div>`;
+    }).join('');
+}
+
+function buildCheckoutCustomizationInputs(customizations) {
+    var html = '';
+    if (!customizations) return html;
+    Object.keys(customizations).forEach(function(k){
+        var v = customizations[k] || {};
+        var value = v && v.value ? String(v.value).replace(/"/g, '&quot;') : '';
+        html += '<div class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">'
+             + '<div class="sm:col-span-2"><span class="text-sm text-gray-600">' + k + '</span></div>'
+             + '<div class="sm:col-span-3">'
+             + '<input type="text" class="w-full border-2 border-gray-200 rounded-lg px-3 py-2 checkout-customization-input" data-label="' + k + '" value="' + value + '" oninput="updateCheckoutModalTotal()" />'
+             + '</div>'
+             + '</div>';
+    });
+    return html;
+}
+
+function getCheckoutProductImage(product) {
+    const media = product && product.media && product.media.length ? product.media[0] : null;
+    if (!media) return '/images/placeholder.jpg';
+    if (typeof media === 'string') return media;
+    if (media.url) return media.url; if (media.path) return media.path; return '/images/placeholder.jpg';
+}
+
+function updateCheckoutModalQty(id, newQty) {
+    if (newQty < 1) return; const el = document.getElementById('checkoutModalQty'+id); if (el) el.textContent = newQty; updateCheckoutModalTotal();
+}
+
+function updateCheckoutModalTotal() {
+    const ctx = window.__checkoutEditingCtx; if (!ctx) return; const id = ctx.id; const item = ctx.item; const qty = parseInt(document.getElementById('checkoutModalQty'+id)?.textContent || '1');
+    // selected variant
+    const attrs = {}; (ctx.variants||[]).forEach(v=>{ if(v.attributes){ Object.keys(v.attributes).forEach(k=>{ const sel=document.getElementById('checkout-variant-'+k); if(sel) attrs[k]=sel.value;});}});
+    const match = (ctx.variants||[]).find(v=>v.attributes && Object.keys(attrs).every(k=>String(v.attributes[k])===String(attrs[k])));
+    let unitPrice = 0;
+    if (match && match.price!=null && match.price!=='') { const pv=parseFloat(match.price); if(!isNaN(pv)) unitPrice=pv; }
+    if (!unitPrice) {
+        const p=item.product||{}; const candidates=[p.price,p.base_price,(p.template||{}).base_price,item.price]; for(const c of candidates){ const v=parseFloat(c); if(!isNaN(v)){ unitPrice=v; break; } }
+    }
+    // customizations keep original price
+    const customMap={}; document.querySelectorAll('.checkout-customization-input').forEach(inp=>{ const label=inp.dataset.label; const value=inp.value||''; const orig=ctx.originalCustomizations&&ctx.originalCustomizations[label]; const price=orig&&orig.price?parseFloat(orig.price)||0:0; if(value.trim()!==''){ customMap[label]={value:value.trim(),price}; }});
+    let custTotal=0; Object.values(customMap).forEach(c=>{ custTotal+=parseFloat(c.price)||0; });
+    const total = (unitPrice + custTotal) * qty; const td=document.getElementById('checkoutModalTotal'+id); if (td) td.textContent='$'+total.toFixed(2);
+}
+
+function saveCheckoutCartChanges(cartItemId) {
+    const ctx = window.__checkoutEditingCtx; if (!ctx || ctx.id!==cartItemId) return; const item=ctx.item; const qty=parseInt(document.getElementById('checkoutModalQty'+cartItemId)?.textContent||'1');
+    const attrs={}; (ctx.variants||[]).forEach(v=>{ if(v.attributes){ Object.keys(v.attributes).forEach(k=>{ const sel=document.getElementById('checkout-variant-'+k); if(sel) attrs[k]=sel.value;});}});
+    const match=(ctx.variants||[]).find(v=>v.attributes && Object.keys(attrs).every(k=>String(v.attributes[k])===String(attrs[k])));
+    const selectedVariant = match ? { id: match.id, attributes: match.attributes, price: match.price } : (Object.keys(attrs).length ? { attributes: attrs } : null);
+    const customizations={}; document.querySelectorAll('.checkout-customization-input').forEach(inp=>{ const label=inp.dataset.label; const value=inp.value||''; const orig=ctx.originalCustomizations&&ctx.originalCustomizations[label]; const price=orig&&orig.price?parseFloat(orig.price)||0:0; if(value.trim()!==''){ customizations[label]={ value:value.trim(), price }; }});
+    let unitPrice=0; if (selectedVariant && selectedVariant.price!=null && selectedVariant.price!==''){ const v=parseFloat(selectedVariant.price); if(!isNaN(v)) unitPrice=v; }
+    if (!unitPrice){ const p=item.product||{}; const candidates=[p.price,p.base_price,(p.template||{}).base_price,item.price]; for(const c of candidates){ const v=parseFloat(c); if(!isNaN(v)){ unitPrice=v; break; } } }
+    Object.values(customizations).forEach(c=>{ unitPrice += parseFloat(c.price)||0; });
+    fetch(`/api/cart/update/${cartItemId}`, {
+        method:'PUT', headers:{ 'Content-Type':'application/json','X-CSRF-TOKEN': checkoutCsrfToken },
+        body: JSON.stringify({ quantity: qty, selected_variant: selectedVariant, customizations: customizations, price: unitPrice })
+    }).then(r=>r.json()).then(data=>{ if(data.success){ window.location.reload(); } else { alert('Failed to update cart item'); }}).catch(err=>{ console.error(err); alert('An error occurred'); });
+}
+</script>
+
+<!-- Modal for editing cart items -->
+<div id="checkoutEditCartModal" class="hidden fixed top-0 left-0 w-full h-full bg-gray-500 bg-opacity-75 flex items-center justify-center">
+    <div id="checkoutEditCartModalContent" class="bg-white rounded-lg shadow-lg p-6 w-1/2"></div>
+</div>
+
 @endsection

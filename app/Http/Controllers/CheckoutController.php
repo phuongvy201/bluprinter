@@ -24,7 +24,7 @@ class CheckoutController extends Controller
         $userId = Auth::id();
 
         // Get cart items from database
-        $cartItems = Cart::with(['product.shop', 'product.template'])
+        $cartItems = Cart::with(['product.shop', 'product.template', 'product.variants'])
             ->where(function ($query) use ($sessionId, $userId) {
                 if ($userId) {
                     $query->where('user_id', $userId);
