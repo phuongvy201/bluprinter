@@ -262,6 +262,7 @@ class ProductController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Product created successfully',
+                'product_id' => $product->id,
                 'product_url' => route('products.show', $product->slug)
             ], 201)
                 ->header('Access-Control-Allow-Origin', '*')

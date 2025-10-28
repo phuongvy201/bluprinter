@@ -143,35 +143,41 @@
                                     },
                                 },
                                 responses: {
-                                    201: {
-                                        description:
-                                            "Product created successfully",
-                                        content: {
-                                            "application/json": {
-                                                schema: {
-                                                    type: "object",
-                                                    properties: {
-                                                        success: {
-                                                            type: "boolean",
-                                                            example: true,
-                                                        },
-                                                        message: {
-                                                            type: "string",
-                                                            example:
-                                                                "Product created successfully",
-                                                        },
-                                                        product_url: {
-                                                            type: "string",
-                                                            description:
-                                                                "URL to view the created product",
-                                                            example:
-                                                                "https://bluprinter.com/products/ai-generated-t-shirt-design",
-                                                        },
-                                                    },
-                                                },
-                                            },
-                                        },
-                                    },
+                                   201: {
+                                       description:
+                                           "Product created successfully",
+                                       content: {
+                                           "application/json": {
+                                               schema: {
+                                                   type: "object",
+                                                   properties: {
+                                                       success: {
+                                                           type: "boolean",
+                                                           example: true,
+                                                       },
+                                                       message: {
+                                                           type: "string",
+                                                           example:
+                                                               "Product created successfully",
+                                                       },
+                                                       product_id: {
+                                                           type: "integer",
+                                                           description:
+                                                               "ID of the created product",
+                                                           example: 123,
+                                                       },
+                                                       product_url: {
+                                                           type: "string",
+                                                           description:
+                                                               "URL to view the created product",
+                                                           example:
+                                                               "https://bluprinter.com/products/ai-generated-t-shirt-design",
+                                                       },
+                                                   },
+                                               },
+                                           },
+                                       },
+                                   },
                                     400: {
                                         description: "Validation error",
                                         content: {
