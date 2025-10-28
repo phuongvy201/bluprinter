@@ -28,7 +28,7 @@ function buildCheckoutCustomizationInputs(customizations) {
         html += '<div class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">'
              + '<div class="sm:col-span-2"><span class="text-sm text-gray-600">' + k + '</span></div>'
              + '<div class="sm:col-span-3">'
-             + '<input type="text" class="w-full border-2 border-gray-200 rounded-lg px-3 py-2 checkout-customization-input" data-label="' + k + '" value="' + value + '" oninput="updateCheckoutModalTotal()" />'
+             + '<input type="text" class="w-full border-2 border-gray-200 rounded-lg px-3 py-2 checkout-customization-input" data-label="' + k + '" value="' + value + '" oninput="updateCheckoutModalTotal()" title="' + value + '" />'
              + '</div>'
              + '</div>';
     });
@@ -100,47 +100,6 @@ function buildCheckoutCustomizationInputs(customizations) {
         background-clip: text;
     }
 
-    .form-input {
-        @apply w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200;
-        background: #fafafa;
-        border: 2px solid #d1d5db;
-        border-radius: 12px;
-    }
-
-    .form-input:focus {
-        background: white;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-        border-color: #3b82f6;
-        outline: none;
-    }
-
-    .form-input:hover {
-        border-color: #9ca3af;
-        background: #f9fafb;
-    }
-
-    .form-input::placeholder {
-        color: #9ca3af;
-        font-weight: 400;
-    }
-
-    textarea.form-input {
-        resize: vertical;
-        min-height: 80px;
-    }
-
-    select.form-input {
-        cursor: pointer;
-    }
-
-    select.form-input option {
-        padding: 8px;
-    }
-
-    .form-label {
-        @apply block text-sm font-medium text-gray-700 mb-2;
-    }
 
     /* Payment option styling for new radio button interface */
     .payment-option {
@@ -171,203 +130,201 @@ function buildCheckoutCustomizationInputs(customizations) {
         @apply border-blue-500 bg-blue-50;
     }
 
-    .checkout-btn {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-        border-radius: 12px;
-    }
-
-    .checkout-btn::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-        transition: left 0.5s;
-    }
-
-    .checkout-btn:hover::before {
-        left: 100%;
-    }
-
-    .checkout-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-    }
 
     .product-item {
-        transition: all 0.3s ease;
-        border-radius: 12px;
-    }
-
-    .product-item:hover {
-        transform: translateX(5px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        @apply transition-all duration-300 rounded-xl hover:shadow-lg hover:transform hover:translate-x-1;
     }
 
     .step-indicator {
-        @apply flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 text-white font-semibold text-sm;
+        @apply flex items-center justify-center w-10 h-10 rounded-full bg-blue-500 text-white font-semibold text-sm shadow-md;
     }
 
     .step-indicator.active {
-        @apply bg-gradient-to-r from-blue-500 to-purple-600;
+        @apply bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg;
     }
 
     .step-indicator.completed {
-        @apply bg-green-500;
+        @apply bg-green-500 shadow-lg;
     }
 
-    .security-badge {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        border-radius: 12px;
-    }
 
     .floating-label {
-        position: relative;
+        @apply relative;
     }
 
     .floating-label input:focus + label,
     .floating-label input:not(:placeholder-shown) + label {
-        transform: translateY(-20px) scale(0.85);
-        color: #667eea;
+        @apply -translate-y-5 scale-90 text-blue-600;
     }
 
     .floating-label label {
-        position: absolute;
-        left: 12px;
-        top: 12px;
-        transition: all 0.2s ease;
-        pointer-events: none;
-        color: #6b7280;
+        @apply absolute left-3 top-3 transition-all duration-200 pointer-events-none text-gray-500;
     }
 
     /* Main containers */
     .checkout-container {
-        border-radius: 20px;
+        @apply rounded-2xl;
     }
 
     .order-summary-container {
-        border-radius: 20px;
+        @apply rounded-2xl;
     }
 
     /* LianLian Pay iframe styles */
     #llpay-card-element {
-        min-height: 280px;
-        border: 2px solid #e5e7eb;
-        border-radius: 12px;
-        background: white;
-        position: relative;
-        overflow: hidden;
+        @apply min-h-[280px] border-2 border-gray-200 rounded-xl bg-white relative overflow-hidden shadow-sm;
     }
 
     #llpay-card-element iframe {
-        width: 100% !important;
-        height: 280px !important;
-        border: none !important;
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
-        z-index: 1000 !important;
-        background: white !important;
+        @apply w-full h-[280px] border-0 block visible opacity-100 absolute top-0 left-0 z-[1000] bg-white;
     }
 
     #lianlian-loading-placeholder {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        text-align: center;
-        z-index: 999;
+        @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center z-[999];
     }
 
     /* PayPal button styles */
     #paypal-button-container {
-        min-height: 200px;
-        border-radius: 12px;
-        position: relative;
+        @apply min-h-[200px] rounded-xl relative;
     }
 
     #paypal-button {
-        min-height: 120px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        @apply min-h-[120px] flex items-center justify-center;
     }
 
     #paypal-button button {
-        border-radius: 8px !important;
-        min-height: 48px !important;
+        @apply rounded-lg min-h-[48px];
     }
     
     /* Stripe card element styles */
     #stripe-card-container {
-        min-height: 200px;
-        border-radius: 12px;
-        position: relative;
+        @apply min-h-[200px] rounded-xl relative;
     }
     
     #stripe-card-element {
-        min-height: 50px;
-        padding: 12px;
+        @apply min-h-[50px] p-3;
     }
     
     .StripeElement {
-        background-color: white;
-        padding: 12px 16px;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
+        @apply bg-white p-4 rounded-lg border border-gray-200 shadow-sm;
     }
     
     .StripeElement--focus {
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        @apply border-blue-500 shadow-lg ring-2 ring-blue-200;
     }
     
     .StripeElement--invalid {
-        border-color: #f87171;
+        @apply border-red-500 shadow-lg ring-2 ring-red-200;
+    }
+
+    /* Ensure submit button is always visible */
+    button[type="submit"] {
+        position: relative !important;
+        z-index: 10 !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* Prevent text overflow in customizations */
+    .customization-value {
+        word-break: break-all;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+        display: inline-block;
+    }
+
+    /* Tip selection styling */
+    .tip-option {
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .tip-option:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .tip-option.selected {
+        border: 3px solid #10b981 !important;
+        background-color: #f0fdf4 !important;
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.4) !important;
+        transform: translateY(-2px) !important;
+    }
+
+    .tip-option.selected span {
+        color: #059669 !important;
+        font-weight: 700 !important;
+    }
+
+    /* Force override Tailwind */
+    button.tip-option.selected {
+        border: 3px solid #10b981 !important;
+        background-color: #f0fdf4 !important;
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.4) !important;
+    }
+
+    .tip-option.selected::before {
+        content: '✓';
+        position: absolute;
+        top: -3px;
+        right: -3px;
+        background: #10b981;
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        z-index: 20;
+        border: 2px solid white;
     }
 </style>
 
 <div class="min-h-screen bg-gray-50 py-8">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Progress Steps -->
-        <div class="mb-8 animate-fadeInUp">
+        <div class="mb-12 animate-fadeInUp">
             <div class="flex items-center justify-center space-x-8">
                 <div class="flex items-center">
                     <div class="step-indicator completed">
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
                         </svg>
                     </div>
-                    <span class="ml-3 font-medium text-gray-700">Cart</span>
+                    <span class="ml-4 font-semibold text-gray-700 text-lg">Cart</span>
                 </div>
-                <div class="w-12 h-1 bg-blue-500 rounded"></div>
+                <div class="w-16 h-2 bg-gradient-to-r from-green-500 to-blue-500 rounded-full shadow-sm"></div>
                 <div class="flex items-center">
                     <div class="step-indicator active">2</div>
-                    <span class="ml-3 font-semibold text-gray-900">Checkout</span>
+                    <span class="ml-4 font-bold text-gray-900 text-lg">Checkout</span>
                 </div>
-                <div class="w-12 h-1 bg-gray-300 rounded"></div>
+                <div class="w-16 h-2 bg-gray-300 rounded-full"></div>
                 <div class="flex items-center">
-                    <div class="w-8 h-8 rounded-full bg-gray-300 text-white font-semibold text-sm flex items-center justify-center">3</div>
-                    <span class="ml-3 font-medium text-gray-500">Complete</span>
+                    <div class="w-10 h-10 rounded-full bg-gray-300 text-white font-semibold text-sm flex items-center justify-center shadow-md">3</div>
+                    <span class="ml-4 font-medium text-gray-500 text-lg">Complete</span>
                 </div>
             </div>
         </div>
 
         <!-- Header -->
-        <div class="text-center mb-10 animate-fadeInUp">
-            <h1 class="text-4xl font-bold text-gray-900 mb-3">
-                Complete Your 
-                <span class="gradient-text">Order</span>
-            </h1>
-            <p class="text-lg text-gray-600">Secure checkout with multiple payment options</p>
+        <div class="text-center mb-12 animate-fadeInUp">
+            <div class="inline-block p-6 bg-white rounded-2xl shadow-lg mb-6">
+                <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                    </svg>
+                </div>
+                <h1 class="text-5xl font-bold text-gray-900 mb-3">
+                    Complete Your 
+                    <span class="gradient-text">Order</span>
+                </h1>
+                <p class="text-xl text-gray-600">Secure checkout with multiple payment options</p>
+            </div>
         </div>
 
         <div class="flex flex-col lg:grid lg:grid-cols-3 gap-8">
@@ -393,6 +350,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                     
                     <form id="checkout-form" method="POST" action="{{ route('checkout.process') }}" class="space-y-8">
                         @csrf
+                        <input type="hidden" id="tip_amount" name="tip_amount" value="0">
                         
                         <!-- Contact Information -->
                         <div class="space-y-5">
@@ -415,7 +373,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                         </span>
                                     </label>
                                     <input type="text" id="customer_name" name="customer_name" 
-                                           class="form-input" required
+                                           class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5" required
                                            value="{{ auth()->user() ? auth()->user()->name : '' }}"
                                            placeholder="John Doe">
                                     @error('customer_name')
@@ -438,7 +396,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                         </span>
                                     </label>
                                     <input type="email" id="customer_email" name="customer_email" 
-                                           class="form-input" required
+                                           class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5" required
                                            value="{{ auth()->user() ? auth()->user()->email : '' }}"
                                            placeholder="john@example.com">
                                     @error('customer_email')
@@ -462,7 +420,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                     </span>
                                 </label>
                                 <input type="tel" id="customer_phone" name="customer_phone" 
-                                       class="form-input"
+                                       class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5"
                                        placeholder="+1 (555) 123-4567">
                                 @error('customer_phone')
                                     <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -497,7 +455,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                     </span>
                                 </label>
                                 <textarea id="shipping_address" name="shipping_address" 
-                                          class="form-input" rows="3" required
+                                          class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5 resize-vertical min-h-[100px]" rows="3" required
                                           placeholder="Street address, apartment, suite, unit, etc."></textarea>
                                 @error('shipping_address')
                                     <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -520,7 +478,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                         </span>
                                     </label>
                                     <input type="text" id="city" name="city" 
-                                           class="form-input" required
+                                           class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5" required
                                            placeholder="New York">
                                     @error('city')
                                         <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -542,7 +500,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                         </span>
                                     </label>
                                     <input type="text" id="state" name="state" 
-                                           class="form-input"
+                                           class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5"
                                            placeholder="NY">
                                     @error('state')
                                         <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -564,7 +522,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                         </span>
                                     </label>
                                     <input type="text" id="postal_code" name="postal_code" 
-                                           class="form-input" required
+                                           class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5" required
                                            placeholder="10001">
                                     @error('postal_code')
                                         <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -586,7 +544,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                         Country *
                                     </span>
                                 </label>
-                                <select id="country" name="country" class="form-input" required>
+                                <select id="country" name="country" class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5 cursor-pointer" required>
                                     <option value="">Select Country</option>
                                     <option value="US">🇺🇸 United States</option>
                                     <option value="GB">🇬🇧 United Kingdom</option>
@@ -622,7 +580,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                     </span>
                                 </label>
                                 <textarea id="notes" name="notes" 
-                                          class="form-input" rows="3"
+                                          class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5 resize-vertical min-h-[100px]" rows="3"
                                           placeholder="Any special instructions for your order..."></textarea>
                             </div>
                         </div>
@@ -640,25 +598,25 @@ function buildCheckoutCustomizationInputs(customizations) {
                             <div class="space-y-4">
                                 <!-- LianLian Pay -->
                                 <div class="relative">
-                                    <label for="payment_lianlian" class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all duration-300 payment-option">
-                                        <input type="radio" id="payment_lianlian" name="payment_method" value="lianlian_pay" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mr-4" checked>
+                                    <label for="payment_lianlian" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-blue-500 hover:shadow-xl transition-all duration-300 payment-option bg-white">
+                                        <input type="radio" id="payment_lianlian" name="payment_method" value="lianlian_pay" class="w-6 h-6 text-blue-600 border-gray-300 focus:ring-blue-500 mr-5" checked>
                                         <div class="flex items-center flex-1">
-                                            <div class="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-3 mr-4 shadow-md">
-                                                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                            <div class="bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl p-4 mr-5 shadow-lg">
+                                                <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
                                                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                                                 </svg>
                                             </div>
                                             <div class="flex-1">
-                                                <div class="flex items-center space-x-2">
-                                                    <span class="font-bold text-gray-900 text-lg">LianLian Pay</span>
-                                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">RECOMMENDED</span>
+                                                <div class="flex items-center space-x-3">
+                                                    <span class="font-bold text-gray-900 text-xl">LianLian Pay</span>
+                                                    <span class="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-bold rounded-full shadow-md">RECOMMENDED</span>
                                                 </div>
-                                                <p class="text-sm text-gray-600 mt-1">Credit Card & Digital Wallet with 3D Secure</p>
-                                                <div class="flex items-center mt-2 text-xs text-blue-600">
-                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <p class="text-sm text-gray-600 mt-2">Credit Card & Digital Wallet with 3D Secure</p>
+                                                <div class="flex items-center mt-3 text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg">
+                                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                                     </svg>
-                                                    <span>3DS authentication may be required</span>
+                                                    <span class="font-medium">3DS authentication may be required</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -709,21 +667,21 @@ function buildCheckoutCustomizationInputs(customizations) {
 
                                 <!-- PayPal -->
                                 <div class="relative">
-                                    <label for="payment_paypal" class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all duration-300 payment-option">
-                                        <input type="radio" id="payment_paypal" name="payment_method" value="paypal" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mr-4">
+                                    <label for="payment_paypal" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-blue-500 hover:shadow-xl transition-all duration-300 payment-option bg-white">
+                                        <input type="radio" id="payment_paypal" name="payment_method" value="paypal" class="w-6 h-6 text-blue-600 border-gray-300 focus:ring-blue-500 mr-5">
                                         <div class="flex items-center flex-1">
-                                            <div class="bg-blue-600 rounded-xl p-3 mr-4 shadow-md">
+                                            <div class="bg-blue-600 rounded-2xl p-4 mr-5 shadow-lg">
                                                 <img src="https://www.paypalobjects.com/webstatic/icon/pp258.png" 
-                                                     alt="PayPal" class="h-8 w-8">
+                                                     alt="PayPal" class="h-10 w-10">
                                             </div>
                                             <div class="flex-1">
-                                                <span class="font-bold text-gray-900 text-lg">PayPal</span>
-                                                <p class="text-sm text-gray-600 mt-1">Safe & secure payment platform</p>
-                                                <div class="flex items-center mt-2 text-xs text-green-600">
-                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <span class="font-bold text-gray-900 text-xl">PayPal</span>
+                                                <p class="text-sm text-gray-600 mt-2">Safe & secure payment platform</p>
+                                                <div class="flex items-center mt-3 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                                     </svg>
-                                                    <span>Fast and reliable checkout</span>
+                                                    <span class="font-medium">Fast and reliable checkout</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -750,25 +708,25 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 
                                 <!-- Stripe -->
                                 <div class="relative">
-                                    <label for="payment_stripe" class="flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all duration-300 payment-option">
-                                        <input type="radio" id="payment_stripe" name="payment_method" value="stripe" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mr-4">
+                                    <label for="payment_stripe" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-blue-500 hover:shadow-xl transition-all duration-300 payment-option bg-white">
+                                        <input type="radio" id="payment_stripe" name="payment_method" value="stripe" class="w-6 h-6 text-blue-600 border-gray-300 focus:ring-blue-500 mr-5">
                                         <div class="flex items-center flex-1">
-                                            <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-3 mr-4 shadow-md">
-                                                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                            <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-4 mr-5 shadow-lg">
+                                                <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
                                                     <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.274 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.386-2.061 1.386-1.705 0-3.888-.921-5.811-1.758L4.443 24c2.254.893 5.18 1.758 7.83 1.758 2.532 0 4.633-.624 6.123-1.844 1.543-1.271 2.346-3.116 2.346-5.342 0-3.896-2.467-5.76-6.476-7.219z"/>
                                                 </svg>
                                             </div>
                                             <div class="flex-1">
-                                                <div class="flex items-center space-x-2">
-                                                    <span class="font-bold text-gray-900 text-lg">Credit Card (Stripe)</span>
-                                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">SECURE</span>
+                                                <div class="flex items-center space-x-3">
+                                                    <span class="font-bold text-gray-900 text-xl">Credit Card (Stripe)</span>
+                                                    <span class="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-bold rounded-full shadow-md">SECURE</span>
                                                 </div>
-                                                <p class="text-sm text-gray-600 mt-1">Direct credit card processing</p>
-                                                <div class="flex items-center mt-2 text-xs text-green-600">
-                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <p class="text-sm text-gray-600 mt-2">Direct credit card processing</p>
+                                                <div class="flex items-center mt-3 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                                     </svg>
-                                                    <span>PCI-DSS compliant & 3D Secure</span>
+                                                    <span class="font-medium">PCI-DSS compliant & 3D Secure</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -820,10 +778,10 @@ function buildCheckoutCustomizationInputs(customizations) {
                         </div>
 
                         <!-- Submit Button -->
-                        <div class="mt-8 pt-6 border-t-2 border-gray-100">
+                        <div class="mt-8 pt-6 border-t-2 border-gray-100 relative z-10">
                             <button type="submit" 
-                                    class="checkout-btn w-full py-5 px-6 text-white rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all duration-300">
-                                <span class="flex items-center justify-center relative z-10">
+                                    class="w-full py-5 px-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group cursor-pointer">
+                                <span class="flex items-center justify-center relative z-20">
                                     <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                                     </svg>
@@ -832,13 +790,24 @@ function buildCheckoutCustomizationInputs(customizations) {
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
                                     </svg>
                                 </span>
+                                <!-- Shimmer effect -->
+                                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 -translate-x-full group-hover:translate-x-full transition-transform duration-700 z-10"></div>
                             </button>
-                            <p class="text-center text-sm text-gray-500 mt-4">
-                                <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
-                                </svg>
-                                Your information is protected with 256-bit SSL encryption
-                            </p>
+                            
+                            <!-- Security Information -->
+                            <div class="mt-6 p-6 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-xl">
+                                <div class="flex items-center justify-center text-white">
+                                    <div class="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center mr-4">
+                                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    </div>
+                                    <div class="text-center">
+                                        <h3 class="text-lg font-bold mb-1">🔒 100% Secure Checkout</h3>
+                                        <p class="text-green-100 text-sm">Your information is protected with 256-bit SSL encryption</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </form>
                     </div>
@@ -914,7 +883,13 @@ function buildCheckoutCustomizationInputs(customizations) {
                                                 @foreach($item['cart_item']->customizations as $k => $c)
                                                     <li class="text-[11px] text-gray-700 {{ $loop->iteration > 3 ? 'hidden more-'.$cid : '' }}">
                                                         <span class="text-gray-500">{{ $k }}:</span>
-                                                        <span class="font-medium">{{ $c['value'] }}</span>
+                                                        <span class="font-medium customization-value" title="{{ $c['value'] }}">
+                                                            @if(strlen($c['value']) > 50)
+                                                                {{ Str::limit($c['value'], 50) }}
+                                                            @else
+                                                                {{ $c['value'] }}
+                                                            @endif
+                                                        </span>
                                                         @if(isset($c['price']) && $c['price']>0)
                                                             <span class="text-green-600">(+${{ number_format($c['price'],2) }})</span>
                                                         @endif
@@ -931,6 +906,38 @@ function buildCheckoutCustomizationInputs(customizations) {
                         @endforeach
                     </div>
 
+                    <!-- Tip Selection -->
+                    <div class="border-t border-gray-200 pt-4 mb-4">
+                        <div class="flex items-center mb-3">
+                            <svg class="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                            </svg>
+                            <h3 class="text-sm font-semibold text-gray-700">Love your items? Please support our designers. Thank you! ❤️</h3>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2 mb-3">
+                            <button type="button" onclick="selectTip(0)" class="tip-option p-3 border-2 border-gray-200 rounded-lg text-center hover:border-blue-500 transition-all duration-200" data-tip="0">
+                                <span class="text-sm font-medium text-gray-700">No tips</span>
+                            </button>
+                            <button type="button" onclick="selectTip(5)" class="tip-option p-3 border-2 border-gray-200 rounded-lg text-center hover:border-green-500 transition-all duration-200" data-tip="5">
+                                <span class="text-sm font-medium text-gray-700">$5.00</span>
+                            </button>
+                            <button type="button" onclick="selectTip(3)" class="tip-option p-3 border-2 border-gray-200 rounded-lg text-center hover:border-green-500 transition-all duration-200" data-tip="3">
+                                <span class="text-sm font-medium text-gray-700">$3.00</span>
+                            </button>
+                            <button type="button" onclick="selectTip(3.15)" class="tip-option p-3 border-2 border-gray-200 rounded-lg text-center hover:border-green-500 transition-all duration-200" data-tip="3.15">
+                                <span class="text-sm font-medium text-gray-700">$3.15</span>
+                            </button>
+                        </div>
+                        
+                        <div class="flex gap-2">
+                            <button type="button" onclick="selectTip('custom')" class="tip-option flex-1 p-3 border-2 border-gray-200 rounded-lg text-center hover:border-green-500 transition-all duration-200" data-tip="custom">
+                                <span class="text-sm font-medium text-gray-700">Other</span>
+                            </button>
+                            <input type="number" id="custom-tip-amount" placeholder="Custom amount" min="0" step="0.01" class="hidden w-32 px-3 py-2 border-2 border-gray-200 rounded-lg text-sm focus:border-green-500 focus:outline-none" onchange="updateCustomTip(this.value)">
+                        </div>
+                    </div>
+
                     <!-- Order Totals -->
                     <div class="border-t border-gray-200 pt-4 space-y-3">
                         <div class="flex justify-between text-gray-600">
@@ -943,6 +950,11 @@ function buildCheckoutCustomizationInputs(customizations) {
                             <span class="shipping-cost-display">${{ number_format($shippingCost, 2) }}</span>
                         </div>
                         
+                        <div class="flex justify-between text-gray-600" id="tip-line" style="display: none;">
+                            <span>Tips</span>
+                            <span class="tip-amount-display">$0.00</span>
+                        </div>
+                        
                         <div class="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-3 mt-3">
                             <span>Total</span>
                             <span class="text-blue-600 total-display">${{ number_format($total, 2) }}</span>
@@ -950,12 +962,28 @@ function buildCheckoutCustomizationInputs(customizations) {
                     </div>
 
                     <!-- Security Badge -->
-                    <div class="mt-6 p-4 security-badge rounded-lg text-white">
-                        <div class="flex items-center justify-center">
-                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                            </svg>
-                            <span class="font-semibold">100% Secure Checkout</span>
+                    <div class="mt-6 p-6 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-xl text-white">
+                        <div class="text-center">
+                            <div class="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="font-bold text-xl mb-2">🔒 100% Secure Checkout</h3>
+                            <div class="space-y-1 text-green-100 text-sm">
+                                <div class="flex items-center justify-center">
+                                    <span class="mr-2">🔒</span>
+                                    <span>SSL Encrypted</span>
+                                </div>
+                                <div class="flex items-center justify-center">
+                                    <span class="mr-2">🛡️</span>
+                                    <span>PCI Compliant</span>
+                                </div>
+                                <div class="flex items-center justify-center">
+                                    <span class="mr-2">💳</span>
+                                    <span>Safe Payments</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1360,7 +1388,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Load LianLian SDK
             if (!window.LLP) {
                 const script = document.createElement('script');
-                script.src = 'https://gacashier.lianlianpay-inc.com/sandbox2/llpay.min.js';
+                script.src = 'https://secure-checkout.lianlianpay.com/v2/llpay.min.js';
                 script.async = true;
                 
                 await new Promise((resolve, reject) => {
@@ -2400,7 +2428,25 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial validation when page loads
     setTimeout(() => {
         updatePayPalButtonState();
+        initializeTipSelection();
     }, 500);
+    
+    // Initialize tip selection on page load
+    function initializeTipSelection() {
+        // Check if there's a default tip amount and select it
+        const tipAmount = parseFloat('{{ $tipAmount ?? 0 }}');
+        if (tipAmount > 0) {
+            const tipButton = document.querySelector(`[data-tip="${tipAmount}"]`);
+            if (tipButton) {
+                tipButton.classList.add('selected');
+                selectedTipAmount = tipAmount;
+                updateTotal();
+            }
+        }
+        
+        // Debug: Log all tip options (remove in production)
+        // console.log('Available tip options:', document.querySelectorAll('.tip-option'));
+    }
     
     // Cleanup iframe on page unload
     window.addEventListener('beforeunload', () => {
@@ -2412,6 +2458,110 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+
+    // Tip selection functionality
+    let selectedTipAmount = 0;
+    
+    window.selectTip = function(amount) {
+        console.log('Selecting tip:', amount);
+        
+        // Remove selected class from all tip options
+        document.querySelectorAll('.tip-option').forEach(btn => {
+            btn.classList.remove('selected');
+            
+            // Clear inline styles
+            btn.style.border = '';
+            btn.style.backgroundColor = '';
+            btn.style.boxShadow = '';
+            btn.style.transform = '';
+            
+            console.log('Removed selected from:', btn);
+        });
+        
+        // Add selected class to clicked button
+        const clickedButton = event.target.closest('.tip-option');
+        if (clickedButton) {
+            clickedButton.classList.add('selected');
+            
+            // Force inline styles as backup
+            clickedButton.style.border = '3px solid #10b981';
+            clickedButton.style.backgroundColor = '#f0fdf4';
+            clickedButton.style.boxShadow = '0 0 0 4px rgba(16, 185, 129, 0.4)';
+            clickedButton.style.transform = 'translateY(-2px)';
+            
+            console.log('Added selected to:', clickedButton);
+        }
+        
+        if (amount === 'custom') {
+            // Show custom tip input
+            const customInput = document.getElementById('custom-tip-amount');
+            customInput.classList.remove('hidden');
+            customInput.focus();
+            selectedTipAmount = 0;
+        } else {
+            // Hide custom tip input
+            const customInput = document.getElementById('custom-tip-amount');
+            customInput.classList.add('hidden');
+            selectedTipAmount = parseFloat(amount) || 0;
+            updateTotal();
+        }
+    };
+    
+    window.updateCustomTip = function(value) {
+        selectedTipAmount = parseFloat(value) || 0;
+        
+        // Add selected class to custom tip button when user types
+        if (selectedTipAmount > 0) {
+            document.querySelectorAll('.tip-option').forEach(btn => {
+                btn.classList.remove('selected');
+                
+                // Clear inline styles
+                btn.style.border = '';
+                btn.style.backgroundColor = '';
+                btn.style.boxShadow = '';
+                btn.style.transform = '';
+            });
+            
+            const customButton = document.querySelector('[data-tip="custom"]');
+            customButton.classList.add('selected');
+            
+            // Force inline styles for custom button
+            customButton.style.border = '3px solid #10b981';
+            customButton.style.backgroundColor = '#f0fdf4';
+            customButton.style.boxShadow = '0 0 0 4px rgba(16, 185, 129, 0.4)';
+            customButton.style.transform = 'translateY(-2px)';
+        }
+        
+        updateTotal();
+    };
+    
+    function updateTotal() {
+        const subtotal = parseFloat('{{ $subtotal }}');
+        const shipping = parseFloat('{{ $shippingCost }}');
+        const tip = selectedTipAmount;
+        const total = subtotal + shipping + tip;
+        
+        // Update tip line visibility
+        const tipLine = document.getElementById('tip-line');
+        const tipAmountDisplay = document.querySelector('.tip-amount-display');
+        const totalDisplay = document.querySelector('.total-display');
+        
+        if (tip > 0) {
+            tipLine.style.display = 'flex';
+            tipAmountDisplay.textContent = '$' + tip.toFixed(2);
+        } else {
+            tipLine.style.display = 'none';
+        }
+        
+        // Update total
+        totalDisplay.textContent = '$' + total.toFixed(2);
+        
+        // Store tip amount for form submission
+        const tipInput = document.getElementById('tip_amount');
+        if (tipInput) {
+            tipInput.value = tip;
+        }
+    }
 });
 </script>
 
@@ -2541,7 +2691,7 @@ function buildCheckoutCustomizationInputs(customizations) {
         html += '<div class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">'
              + '<div class="sm:col-span-2"><span class="text-sm text-gray-600">' + k + '</span></div>'
              + '<div class="sm:col-span-3">'
-             + '<input type="text" class="w-full border-2 border-gray-200 rounded-lg px-3 py-2 checkout-customization-input" data-label="' + k + '" value="' + value + '" oninput="updateCheckoutModalTotal()" />'
+             + '<input type="text" class="w-full border-2 border-gray-200 rounded-lg px-3 py-2 checkout-customization-input" data-label="' + k + '" value="' + value + '" oninput="updateCheckoutModalTotal()" title="' + value + '" />'
              + '</div>'
              + '</div>';
     });
@@ -2592,7 +2742,7 @@ function saveCheckoutCartChanges(cartItemId) {
 </script>
 
 <!-- Modal for editing cart items -->
-<div id="checkoutEditCartModal" class="hidden fixed top-0 left-0 w-full h-full bg-gray-500 bg-opacity-75 flex items-center justify-center">
+<div id="checkoutEditCartModal" class="hidden fixed top-0 left-0 w-full h-full bg-gray-500 bg-opacity-75 items-center justify-center">
     <div id="checkoutEditCartModalContent" class="bg-white rounded-lg shadow-lg p-6 w-1/2"></div>
 </div>
 

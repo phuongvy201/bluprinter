@@ -26,6 +26,7 @@ use App\Http\Controllers\PageController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\Api\CartController as ApiCartController;
 use App\Http\Controllers\Api\CustomFileController;
+use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\Admin\ShippingZoneController;
 use App\Http\Controllers\Admin\ShippingRateController;
@@ -612,6 +613,10 @@ Route::get('/test-cart', function () {
     return view('test-cart');
 })->name('test.cart');
 
+Route::get('/test-s3-upload', function () {
+    return view('test-s3-upload');
+})->name('test.s3-upload');
+
 // Custom File Upload API Routes
 Route::prefix('api/custom-files')->name('api.custom-files.')->group(function () {
     Route::post('/upload', [CustomFileController::class, 'upload'])->name('upload');
@@ -620,6 +625,12 @@ Route::prefix('api/custom-files')->name('api.custom-files.')->group(function () 
     Route::post('/{fileId}/extend', [CustomFileController::class, 'extendExpiration'])->name('extend');
     Route::get('/upload-info', [CustomFileController::class, 'getUploadInfo'])->name('info');
     Route::post('/cleanup', [CustomFileController::class, 'cleanupExpired'])->name('cleanup');
+});
+
+// Direct S3 Upload API Routes
+Route::prefix('api/upload')->name('api.upload.')->group(function () {
+    Route::post('/presigned-urls', [UploadController::class, 'generatePresignedUrls'])->name('presigned-urls');
+    Route::post('/confirm', [UploadController::class, 'confirmUpload'])->name('confirm');
 });
 
 // Test route for variant removal logic

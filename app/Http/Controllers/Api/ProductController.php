@@ -41,7 +41,7 @@ class ProductController extends Controller
                 ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
         }
 
-        // Validate request data - support both single file and array for Swagger UI
+        // Validate request data - support multipart form data with URLs
         $validationRules = [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -51,21 +51,64 @@ class ProductController extends Controller
             'quantity' => 'nullable|integer|min:0',
         ];
 
-        // Only validate video if it's present
-        if ($request->hasFile('video')) {
-            $validationRules['video'] = 'file|mimes:mp4,avi,mov,webm|max:102400';
+        // Handle media_urls from form data
+        $mediaUrls = [];
+
+        // Try different ways to get media URLs
+        if ($request->has('media_urls') && is_array($request->input('media_urls'))) {
+            // If it's already an array
+            $mediaUrls = $request->input('media_urls');
+        } else {
+            // Try indexed format
+            $urlIndex = 0;
+            while ($request->has("media_urls[$urlIndex]")) {
+                $mediaUrls[] = $request->input("media_urls[$urlIndex]");
+                $urlIndex++;
+            }
         }
 
-        // Check if images is array or single file
-        if ($request->hasFile('images')) {
-            if (is_array($request->file('images'))) {
-                $validationRules['images'] = 'required|array|min:1|max:8';
-                $validationRules['images.*'] = 'required|file|mimes:jpeg,jpg,png,webp|max:10240';
-            } else {
-                $validationRules['images'] = 'required|file|mimes:jpeg,jpg,png,webp|max:10240';
+
+        // Validate media URLs
+        if (empty($mediaUrls)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'At least one media URL is required',
+                'errors' => [
+                    'media_urls' => ['At least one media URL is required']
+                ]
+            ], 422)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+        }
+
+        // Validate each URL
+        foreach ($mediaUrls as $index => $url) {
+            if (!filter_var($url, FILTER_VALIDATE_URL)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid URL format',
+                    'errors' => [
+                        "media_urls.$index" => ['The URL must be a valid URL']
+                    ]
+                ], 422)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
             }
-        } else {
-            $validationRules['images'] = 'required';
+        }
+
+        if (count($mediaUrls) > 10) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Too many media URLs',
+                'errors' => [
+                    'media_urls' => ['Maximum 10 media URLs allowed']
+                ]
+            ], 422)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
         }
 
         $validator = Validator::make($request->all(), $validationRules);
@@ -95,67 +138,49 @@ class ProductController extends Controller
                 $counter++;
             }
 
-            // Upload images to AWS S3 (support both single file and array)
-            $uploadedImages = [];
-            $images = $request->file('images');
+            // Handle media - download and upload URLs to S3
+            $processedMediaUrls = [];
 
-            // Normalize to array if single file (for Swagger UI)
-            if (!is_array($images)) {
-                $images = [$images];
-            }
-
-            foreach ($images as $index => $image) {
+            foreach ($mediaUrls as $index => $url) {
                 try {
-                    // Validate file
-                    if (!$image->isValid()) {
+                    // Download file from URL
+                    $fileContent = file_get_contents($url);
+                    if ($fileContent === false) {
+                        \Log::warning("Failed to download file from URL: $url");
                         continue;
                     }
 
-                    $fileName = time() . '_' . Str::random(10) . '.' . $image->getClientOriginalExtension();
-                    $filePath = Storage::disk('s3')->putFileAs('products', $image, $fileName);
+                    // Get file info
+                    $urlInfo = parse_url($url);
+                    $pathInfo = pathinfo($urlInfo['path'] ?? '');
+                    $extension = $pathInfo['extension'] ?? 'jpg';
 
-                    if ($filePath) {
-                        // Create the correct S3 URL format (giống Admin/ProductController)
+                    // Determine content type
+                    $contentType = $this->getContentTypeFromExtension($extension);
+
+                    // Generate unique filename
+                    $fileName = time() . '_' . Str::random(10) . '_' . $index . '.' . $extension;
+
+                    // Determine folder based on content type
+                    $folder = strpos($contentType, 'video/') === 0 ? 'products/videos' : 'products/images';
+                    $filePath = $folder . '/' . $fileName;
+
+                    // Upload to S3
+                    $uploaded = Storage::disk('s3')->put($filePath, $fileContent);
+
+                    if ($uploaded) {
                         $imageUrl = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $filePath;
-                        $uploadedImages[] = [
-                            'url' => $imageUrl,
-                            'filename' => $fileName,
-                            'order' => $index + 1
-                        ];
+                        $processedMediaUrls[] = $imageUrl;
+                        \Log::info("Successfully uploaded URL to S3", [
+                            'original_url' => $url,
+                            's3_url' => $imageUrl,
+                            'file_path' => $filePath
+                        ]);
                     }
                 } catch (\Exception $e) {
-                    // Continue with other files instead of failing completely
+                    \Log::warning("Failed to process URL: $url - " . $e->getMessage());
                     continue;
                 }
-            }
-
-            // Upload video to AWS S3 (optional)
-            $video = $request->file('video');
-            $videoUrl = null;
-
-            if ($video) {
-                try {
-                    if ($video->isValid()) {
-                        $videoFileName = time() . '_' . Str::random(10) . '.' . $video->getClientOriginalExtension();
-                        $videoPath = Storage::disk('s3')->putFileAs('products', $video, $videoFileName);
-
-                        if ($videoPath) {
-                            // Create the correct S3 URL format (giống Admin/ProductController)
-                            $videoUrl = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $videoPath;
-                        }
-                    }
-                } catch (\Exception $e) {
-                    // Continue without video if upload fails
-                }
-            }
-
-            // Prepare media array (giống format trong Admin/ProductController)
-            $mediaUrls = [];
-            foreach ($uploadedImages as $image) {
-                $mediaUrls[] = $image['url'];
-            }
-            if ($videoUrl) {
-                $mediaUrls[] = $videoUrl;
             }
 
             // Determine shop_id with priority order:
@@ -184,7 +209,7 @@ class ProductController extends Controller
                 'price' => $request->price ?? $template->base_price,
 
                 // Media: Ưu tiên media mới upload, fallback về template media
-                'media' => !empty($mediaUrls) ? $mediaUrls : ($template->media ?? []),
+                'media' => !empty($processedMediaUrls) ? $processedMediaUrls : ($template->media ?? []),
 
                 // Quantity mặc định
                 'quantity' => $request->quantity ?? 999,
@@ -327,5 +352,25 @@ class ProductController extends Controller
         }
 
         return $token;
+    }
+
+    /**
+     * Get content type from file extension
+     */
+    private function getContentTypeFromExtension($extension)
+    {
+        $contentTypes = [
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            'mp4' => 'video/mp4',
+            'avi' => 'video/avi',
+            'mov' => 'video/quicktime',
+            'webm' => 'video/webm',
+        ];
+
+        return $contentTypes[strtolower($extension)] ?? 'image/jpeg';
     }
 }
