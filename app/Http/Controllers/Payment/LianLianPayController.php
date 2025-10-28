@@ -1123,7 +1123,8 @@ class LianLianPayController extends Controller
 
             $shippingCost = $shippingDetails['total_shipping'];
             $taxAmount = 0;
-            $totalAmount = $subtotal + $shippingCost + $taxAmount;
+            $tipAmount = $orderData['tip_amount'] ?? 0; // Get tip amount
+            $totalAmount = $subtotal + $shippingCost + $taxAmount + $tipAmount;
 
             // Create order
             $order = \App\Models\Order::create([
@@ -1141,6 +1142,7 @@ class LianLianPayController extends Controller
                 'subtotal' => $subtotal,
                 'shipping_cost' => $shippingCost,
                 'tax_amount' => $taxAmount,
+                'tip_amount' => $tipAmount,
                 'total_amount' => $totalAmount,
                 'payment_method' => 'lianlian_pay',
                 'payment_status' => 'pending',

@@ -172,7 +172,8 @@ class StripePaymentController extends Controller
 
             $shippingCost = $shippingDetails['total_shipping'];
             $taxAmount = 0; // No tax
-            $totalAmount = $subtotal + $shippingCost + $taxAmount;
+            $tipAmount = $validated['tip_amount'] ?? 0; // Get tip amount
+            $totalAmount = $subtotal + $shippingCost + $taxAmount + $tipAmount;
 
             // Verify amount matches
             $paidAmount = $paymentIntent->amount / 100; // Convert from cents
@@ -199,6 +200,7 @@ class StripePaymentController extends Controller
                 'subtotal' => $subtotal,
                 'shipping_cost' => $shippingCost,
                 'tax_amount' => $taxAmount,
+                'tip_amount' => $tipAmount,
                 'total_amount' => $totalAmount,
                 'payment_method' => 'stripe',
                 'payment_status' => 'paid',

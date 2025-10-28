@@ -216,7 +216,8 @@ class CheckoutController extends Controller
         $shippingCost = $qualifiesForFreeShipping ? 0 : $originalShippingCost;
 
         $taxAmount = 0; // No tax
-        $total = $subtotal + $shippingCost;
+        $tipAmount = $request->tip_amount ?? 0; // Get tip amount from request
+        $total = $subtotal + $shippingCost + $tipAmount;
 
         // Log freeship application for debugging
         Log::info('🚚 FREESHIP LOGIC APPLIED', [
@@ -224,6 +225,7 @@ class CheckoutController extends Controller
             'original_shipping_cost' => $originalShippingCost,
             'qualifies_for_free_shipping' => $qualifiesForFreeShipping,
             'final_shipping_cost' => $shippingCost,
+            'tip_amount' => $tipAmount,
             'total_amount' => $total
         ]);
 
@@ -242,6 +244,7 @@ class CheckoutController extends Controller
             'subtotal' => $subtotal,
             'tax_amount' => $taxAmount,
             'shipping_cost' => $shippingCost,
+            'tip_amount' => $tipAmount,
             'total_amount' => $total,
             'currency' => 'USD',
             'status' => 'pending',

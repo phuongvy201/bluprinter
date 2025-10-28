@@ -1388,7 +1388,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Load LianLian SDK
             if (!window.LLP) {
                 const script = document.createElement('script');
-                script.src = 'https://secure-checkout.lianlianpay.com/v2/llpay.min.js';
+                script.src = 'https://gacashier.lianlianpay-inc.com/sandbox2/llpay.min.js';
                 script.async = true;
                 
                 await new Promise((resolve, reject) => {
@@ -1488,7 +1488,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const subtotal = parseFloat('{{ $subtotal }}');
             const tax = parseFloat('{{ $taxAmount }}');
             const shipping = parseFloat('{{ $shippingCost }}');
-            const total = subtotal + tax + shipping;
+            const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
+            const total = subtotal + tax + shipping + tip;
             
             // Get order data from form
             const checkoutForm = document.getElementById('checkout-form');
@@ -1555,7 +1556,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         const subtotal = parseFloat('{{ $subtotal }}');
                         const tax = parseFloat('{{ $taxAmount }}');
                         const shipping = parseFloat('{{ $shippingCost }}');
-                        const total = subtotal + tax + shipping;
+                        const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
+                        const total = subtotal + tax + shipping + tip;
                         
                         // Create order on PayPal side using actions.order.create()
                         return actions.order.create({
@@ -1601,6 +1603,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
                             country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
                             notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
+                            tip_amount: parseFloat(document.getElementById('tip_amount')?.value || 0),
                         };
                         
                         console.log('📋 Sending order data:', currentOrderData);
@@ -2017,7 +2020,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const subtotal = parseFloat('{{ $subtotal }}');
             const tax = parseFloat('{{ $taxAmount }}');
             const shipping = parseFloat('{{ $shippingCost }}');
-            const total = subtotal + tax + shipping;
+            const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
+            const total = subtotal + tax + shipping + tip;
             
             // Create Payment Intent on server
             console.log('📝 Creating Payment Intent...');
@@ -2104,6 +2108,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
                 country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
                 notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
+                tip_amount: parseFloat(document.getElementById('tip_amount')?.value || 0),
                 payment_method: 'stripe'
             };
             
@@ -2220,6 +2225,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
                 payment_method: 'lianlian_pay',
                 notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
+                tip_amount: parseFloat(document.getElementById('tip_amount')?.value || 0),
             };
             
             // Validate order data

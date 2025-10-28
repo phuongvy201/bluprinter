@@ -192,6 +192,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <span>Tax</span>
                                 <span>${{ number_format($order->tax_amount, 2) }}</span>
                             </div>
+                            @if($order->tip_amount > 0)
+                            <div class="flex justify-between text-gray-600">
+                                <span>Tips</span>
+                                <span>${{ number_format($order->tip_amount, 2) }}</span>
+                            </div>
+                            @endif
                             <div class="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-2">
                                 <span>Total</span>
                                 <span>${{ number_format($order->total_amount, 2) }}</span>
