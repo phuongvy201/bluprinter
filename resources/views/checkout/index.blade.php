@@ -945,6 +945,23 @@ function buildCheckoutCustomizationInputs(customizations) {
                             <span>${{ number_format($subtotal, 2) }}</span>
                         </div>
                         
+                        <!-- Delivery Information -->
+                        <div class="border-t pt-3">
+                            <div class="flex justify-between items-center text-gray-600 mb-3">
+                                <span id="delivery-country-text">Deliver to United States</span>
+                                <button onclick="openDeliveryModal()" class="text-orange-500 hover:text-orange-600 text-sm font-medium">
+                                    Change
+                                </button>
+                            </div>
+                            
+                            <div class="text-xs text-gray-500">
+                                <div class="flex justify-between">
+                                    <span>Zone:</span>
+                                    <span id="delivery-zone-text">United States</span>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="flex justify-between text-gray-600">
                             <span>Shipping</span>
                             <span class="shipping-cost-display">${{ number_format($shippingCost, 2) }}</span>
@@ -1388,7 +1405,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Load LianLian SDK
             if (!window.LLP) {
                 const script = document.createElement('script');
-                script.src = 'https://gacashier.lianlianpay-inc.com/sandbox2/llpay.min.js';
+                script.src = 'https://secure-checkout.lianlianpay.com/v2/llpay.min.js';
                 script.async = true;
                 
                 await new Promise((resolve, reject) => {
@@ -2745,11 +2762,184 @@ function saveCheckoutCartChanges(cartItemId) {
         body: JSON.stringify({ quantity: qty, selected_variant: selectedVariant, customizations: customizations, price: unitPrice })
     }).then(r=>r.json()).then(data=>{ if(data.success){ window.location.reload(); } else { alert('Failed to update cart item'); }}).catch(err=>{ console.error(err); alert('An error occurred'); });
 }
+
+// Delivery Modal Functions
+function openDeliveryModal() {
+    const modal = document.getElementById('deliveryModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeDeliveryModal() {
+    const modal = document.getElementById('deliveryModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function selectCountry(countryCode, countryName, shippingCost) {
+    // Update display
+    document.getElementById('delivery-country-text').textContent = `Deliver to ${countryName}`;
+    document.getElementById('delivery-zone-text').textContent = countryName;
+    
+    // Close modal
+    closeDeliveryModal();
+    
+    // Update shipping cost based on country
+    updateCheckoutShippingForCountry(countryCode, countryName, shippingCost);
+}
+
+async function updateCheckoutShippingForCountry(countryCode, countryName, shippingCost) {
+    // Show loading state
+    const shippingCostElement = document.querySelector('.shipping-cost-display');
+    if (shippingCostElement) {
+        shippingCostElement.innerHTML = '<span class="text-gray-500">Calculating...</span>';
+    }
+    
+    try {
+        // Calculate actual shipping cost via API
+        const response = await fetch('/checkout/calculate-shipping', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ country: countryCode })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.shipping) {
+            const newShipping = parseFloat(data.shipping.total_shipping);
+            const subtotal = parseFloat('{{ $subtotal }}');
+            const qualifiesForFreeShipping = subtotal >= 100;
+            const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
+            const newTotal = subtotal + actualShipping;
+            
+            // Update shipping cost display
+            if (shippingCostElement) {
+                if (qualifiesForFreeShipping) {
+                    shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+                } else {
+                    shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
+                }
+            }
+            
+            // Update total
+            const totalElement = document.querySelector('.total-display');
+            if (totalElement) {
+                totalElement.textContent = `$${newTotal.toFixed(2)}`;
+            }
+            
+            console.log('Checkout shipping updated:', {
+                country: countryCode,
+                originalShipping: newShipping,
+                actualShipping: actualShipping,
+                qualifiesForFreeShipping: qualifiesForFreeShipping
+            });
+        } else {
+            // Fallback to static cost if API fails
+            const newShipping = parseFloat(shippingCost) || 0;
+            const subtotal = parseFloat('{{ $subtotal }}');
+            const qualifiesForFreeShipping = subtotal >= 100;
+            const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
+            const newTotal = subtotal + actualShipping;
+            
+            if (shippingCostElement) {
+                if (qualifiesForFreeShipping) {
+                    shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+                } else {
+                    shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
+                }
+            }
+            
+            const totalElement = document.querySelector('.total-display');
+            if (totalElement) {
+                totalElement.textContent = `$${newTotal.toFixed(2)}`;
+            }
+        }
+    } catch (error) {
+        console.error('Checkout shipping calculation error:', error);
+        
+        // Fallback to static cost
+        const newShipping = parseFloat(shippingCost) || 0;
+        const subtotal = parseFloat('{{ $subtotal }}');
+        const qualifiesForFreeShipping = subtotal >= 100;
+        const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
+        const newTotal = subtotal + actualShipping;
+        
+        if (shippingCostElement) {
+            if (qualifiesForFreeShipping) {
+                shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+            } else {
+                shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
+            }
+        }
+        
+        const totalElement = document.querySelector('.total-display');
+        if (totalElement) {
+            totalElement.textContent = `$${newTotal.toFixed(2)}`;
+        }
+    }
+}
+
+// Close modal on backdrop click
+document.getElementById('deliveryModal').addEventListener('click', function(e) {
+    if (e.target === this) closeDeliveryModal();
+});
 </script>
 
 <!-- Modal for editing cart items -->
 <div id="checkoutEditCartModal" class="hidden fixed top-0 left-0 w-full h-full bg-gray-500 bg-opacity-75 items-center justify-center">
     <div id="checkoutEditCartModalContent" class="bg-white rounded-lg shadow-lg p-6 w-1/2"></div>
+</div>
+
+<!-- Delivery Country Modal -->
+<div id="deliveryModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full">
+        <div class="px-6 py-4 border-b flex justify-between items-center">
+            <h2 class="text-xl font-bold text-gray-900">Select Delivery Country</h2>
+            <button onclick="closeDeliveryModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="p-6">
+            <div class="space-y-3">
+                @foreach($shippingZones as $zone)
+                    @php
+                        $firstCountry = $zone->countries[0] ?? 'US';
+                        $countryFlags = [
+                            'US' => '🇺🇸', 'GB' => '🇬🇧', 'CA' => '🇨🇦', 'AU' => '🇦🇺',
+                            'DE' => '🇩🇪', 'FR' => '🇫🇷', 'IT' => '🇮🇹', 'ES' => '🇪🇸',
+                            'JP' => '🇯🇵', 'KR' => '🇰🇷', 'CN' => '🇨🇳', 'IN' => '🇮🇳',
+                            'BR' => '🇧🇷', 'MX' => '🇲🇽', 'RU' => '🇷🇺', 'ZA' => '🇿🇦'
+                        ];
+                        $flag = $countryFlags[$firstCountry] ?? '🌍';
+                        $rate = $zone->activeShippingRates->first();
+                        $shippingCost = $rate ? $rate->first_item_cost : 0;
+                    @endphp
+                    <div class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors" 
+                         onclick="selectCountry('{{ $firstCountry }}', '{{ $zone->name }}', {{ $shippingCost }})">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-2xl">{{ $flag }}</span>
+                                <div>
+                                    <div class="font-medium text-gray-900">{{ $zone->name }}</div>
+                                    <div class="text-sm text-gray-500">{{ $firstCountry }}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm font-medium text-gray-900">${{ number_format($shippingCost, 2) }}</div>
+                                <div class="text-xs text-gray-500">{{ $rate->name ?? 'Standard shipping' }}</div>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    </div>
 </div>
 
 @endsection

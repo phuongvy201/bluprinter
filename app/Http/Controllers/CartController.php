@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Cart;
 use App\Models\Product;
+use App\Models\ShippingZone;
 use App\Services\ShippingCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -64,6 +65,14 @@ class CartController extends Controller
 
         $total = $subtotal + $shipping;
 
-        return view('cart.index', compact('cartItems', 'subtotal', 'shipping', 'total', 'shippingDetails'));
+        // Get all active shipping zones for the delivery modal
+        $shippingZones = ShippingZone::active()
+            ->ordered()
+            ->with(['activeShippingRates' => function ($query) {
+                $query->ordered();
+            }])
+            ->get();
+
+        return view('cart.index', compact('cartItems', 'subtotal', 'shipping', 'total', 'shippingDetails', 'shippingZones'));
     }
 }

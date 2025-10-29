@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Cart;
+use App\Models\ShippingZone;
 use App\Services\PayPalService;
 use App\Services\ShippingCalculator;
 use App\Mail\OrderConfirmation;
@@ -88,7 +89,15 @@ class CheckoutController extends Controller
         $taxAmount = 0; // No tax
         $total = $subtotal + $shippingCost;
 
-        return view('checkout.index', compact('products', 'subtotal', 'shippingCost', 'taxAmount', 'total', 'shippingDetails'));
+        // Get all active shipping zones for the delivery modal
+        $shippingZones = ShippingZone::active()
+            ->ordered()
+            ->with(['activeShippingRates' => function ($query) {
+                $query->ordered();
+            }])
+            ->get();
+
+        return view('checkout.index', compact('products', 'subtotal', 'shippingCost', 'taxAmount', 'total', 'shippingDetails', 'shippingZones'));
     }
 
     public function process(Request $request)

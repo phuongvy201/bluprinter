@@ -164,44 +164,21 @@
                                 <span class="font-semibold">${{ number_format($subtotal, 2) }}</span>
                             </div>
                             
-                            <!-- Shipping Details -->
+                            <!-- Delivery Information -->
                             <div class="border-t pt-3">
                                 <div class="flex justify-between items-center text-gray-600 mb-3">
-                                    <span>Shipping</span>
-                                    <div class="flex items-center space-x-3">
-                                        <div class="relative">
-                                            <select id="shippingCountry" class="text-sm border-2 border-gray-200 rounded-lg px-3 py-2 appearance-none bg-white pr-8 cursor-pointer hover:border-gray-300 focus:border-[#005366] focus:outline-none transition-colors min-w-[90px] [&::-ms-expand]:hidden [&::-webkit-appearance]:none">
-                                                <option value="US">🇺🇸 US</option>
-                                                <option value="GB">🇬🇧 UK</option>
-                                            </select>
-                                            <div class="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                                                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                                </svg>
-                                            </div>
-                                        </div>
-                                        <span id="shippingCost" class="font-semibold text-right min-w-[5rem] text-lg">
-                                            @php
-                                                $qualifiesForFreeShipping = $subtotal >= 100;
-                                                $actualShipping = $qualifiesForFreeShipping ? 0 : $shipping;
-                                            @endphp
-                                            @if($actualShipping == 0)
-                                                <span class="text-green-600">FREE</span>
-                                            @else
-                                                ${{ number_format($actualShipping, 2) }}
-                                            @endif
-                                        </span>
-                                    </div>
+                                    <span id="delivery-country-text">Deliver to United Kingdom</span>
+                                    <button onclick="openDeliveryModal()" class="text-orange-500 hover:text-orange-600 text-sm font-medium">
+                                        Change
+                                    </button>
                                 </div>
                                 
-                                @if($shippingDetails && $shipping > 0)
-                                    <div class="text-xs text-gray-500">
-                                        <div class="flex justify-between">
-                                            <span>Zone:</span>
-                                            <span>{{ $shippingDetails['zone_name'] ?? 'US' }}</span>
-                                        </div>
+                                <div class="text-xs text-gray-500">
+                                    <div class="flex justify-between">
+                                        <span>Zone:</span>
+                                        <span id="delivery-zone-text">United Kingdom</span>
                                     </div>
-                                @endif
+                                </div>
                             </div>
                             
                             @php
@@ -209,6 +186,19 @@
                                 $actualShipping = $qualifiesForFreeShipping ? 0 : $shipping;
                                 $actualTotal = $subtotal + $actualShipping;
                             @endphp
+                            
+                            <!-- Shipping Cost Display -->
+                            <div class="flex justify-between items-center text-gray-600 mb-3">
+                                <span>Shipping</span>
+                                <span id="shippingCost" class="font-semibold text-right text-lg">
+                                    @if($actualShipping == 0)
+                                        <span class="text-green-600">FREE</span>
+                                    @else
+                                        ${{ number_format($actualShipping, 2) }}
+                                    @endif
+                                </span>
+                            </div>
+                            
                             <div class="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
                                 <span>Total</span>
                                 <span class="text-[#005366]">${{ number_format($actualTotal, 2) }}</span>
@@ -226,38 +216,105 @@
                             @endif
                         </div>
 
+                        <!-- Main Checkout Button -->
                         <a href="{{ route('checkout.index') }}" 
                            onclick="trackInitiateCheckout(event)"
-                           class="block w-full bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 rounded-xl transition-colors duration-200 mb-3 flex items-center justify-center space-x-2">
-                            <span>Proceed to Checkout</span>
+                           class="block w-full bg-[#E2150C] hover:bg-[#c4120a] text-white font-bold py-4 rounded-xl transition-colors duration-200 mb-4 flex items-center justify-center space-x-2">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
                             </svg>
+                            <span>CHECKOUT</span>
                         </a>
 
-                        <a href="{{ route('products.index') }}" class="block w-full text-center text-[#005366] hover:text-[#003d4d] font-medium py-3 border-2 border-[#005366] rounded-xl hover:bg-[#005366] hover:text-white transition-all duration-200">
+                        <!-- Express Checkout Section -->
+                        <div class="text-center mb-4">
+                            <p class="text-sm text-gray-500 mb-3">Express checkout</p>
+                            <div class="flex flex-wrap justify-center gap-2 mb-4">
+                                <!-- Payment Method Icons -->
+                                <div class="flex items-center justify-center w-12 h-8 bg-gray-100 rounded border">
+                                    <span class="text-xs font-bold text-blue-600">AMEX</span>
+                                </div>
+                                <div class="flex items-center justify-center w-12 h-8 bg-gray-100 rounded border">
+                                    <span class="text-xs font-bold text-blue-600">VISA</span>
+                                </div>
+                                <div class="flex items-center justify-center w-12 h-8 bg-gray-100 rounded border">
+                                    <span class="text-xs font-bold text-red-600">MC</span>
+                                </div>
+                               
+                                <div class="flex items-center justify-center w-12 h-8 bg-gray-100 rounded border">
+                                    <span class="text-xs font-bold text-blue-600">PayPal</span>
+                                </div>
+                               
+                            </div>
+                        </div>
+
+
+                        <a href="{{ route('products.index') }}" class="block w-full text-center text-[#005366] hover:text-[#003d4d] font-medium py-3 border-2 border-[#005366] rounded-xl hover:bg-[#005366] hover:text-white transition-all duration-200 mb-6">
                             Continue Shopping
                         </a>
 
-                        <!-- Trust Badges -->
-                        <div class="mt-6 pt-6 border-t space-y-3">
-                            <div class="flex items-center space-x-3 text-sm text-gray-600">
-                                <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                </svg>
-                                <span>Secure Checkout</span>
+                        <!-- Customer Reviews Section -->
+                        <div class="mt-6 pt-6 border-t">
+                            <h3 class="text-sm font-medium text-gray-900 mb-3">Our customers are saying:</h3>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <div class="flex">
+                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                    </svg>
+                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                    </svg>
+                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                    </svg>
+                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                    </svg>
+                                    <svg class="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                    </svg>
+                                </div>
+                                <span class="text-sm text-gray-600">3.9 out of 5 based on 5819 reviews</span>
                             </div>
-                            <div class="flex items-center space-x-3 text-sm text-gray-600">
-                                <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                                 </svg>
-                                <span>Free Returns within 30 days</span>
+                                <span class="text-sm text-gray-600">Google Customer Reviews</span>
                             </div>
-                            <div class="flex items-center space-x-3 text-sm text-gray-600">
-                                <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                </svg>
-                                <span>Bluprinter Guarantee</span>
+                        </div>
+
+                        <!-- Guarantee Section -->
+                        <div class="mt-6 pt-6 border-t">
+                            <div class="flex items-center space-x-4">
+                                <div class="flex-shrink-0">
+                                    <div class="w-16 h-16 border-2 border-dashed border-gray-300 rounded-full flex items-center justify-center">
+                                        <div class="text-center">
+                                            <div class="text-xs font-bold text-gray-700">GUARANTEE</div>
+                                            <div class="text-xs font-bold text-gray-700">PERFECT FIT</div>
+                                            <div class="flex justify-center mt-1">
+                                                <svg class="w-3 h-3 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                </svg>
+                                                <svg class="w-3 h-3 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                </svg>
+                                                <svg class="w-3 h-3 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-gray-900 mb-1">Don't love it? We'll fix it. For free.</p>
+                                    <a href="#" class="text-sm text-[#005366] hover:text-[#003d4d] font-medium">
+                                        Bluprinter Guarantee »
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -278,6 +335,54 @@
                 </div>
                 <div id="editCartModalContent" class="p-6">
                     <!-- Content will be loaded dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Delivery Country Modal -->
+        <div id="deliveryModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl max-w-md w-full">
+                <div class="px-6 py-4 border-b flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-900">Select Delivery Country</h2>
+                    <button onclick="closeDeliveryModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div class="space-y-3">
+                        @foreach($shippingZones as $zone)
+                            @php
+                                $firstCountry = $zone->countries[0] ?? 'US';
+                                $countryFlags = [
+                                    'US' => '🇺🇸', 'GB' => '🇬🇧', 'CA' => '🇨🇦', 'AU' => '🇦🇺',
+                                    'DE' => '🇩🇪', 'FR' => '🇫🇷', 'IT' => '🇮🇹', 'ES' => '🇪🇸',
+                                    'JP' => '🇯🇵', 'KR' => '🇰🇷', 'CN' => '🇨🇳', 'IN' => '🇮🇳',
+                                    'BR' => '🇧🇷', 'MX' => '🇲🇽', 'RU' => '🇷🇺', 'ZA' => '🇿🇦'
+                                ];
+                                $flag = $countryFlags[$firstCountry] ?? '🌍';
+                                $rate = $zone->activeShippingRates->first();
+                                $shippingCost = $rate ? $rate->first_item_cost : 0;
+                            @endphp
+                            <div class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors" 
+                                 onclick="selectCountry('{{ $firstCountry }}', '{{ $zone->name }}', {{ $shippingCost }})">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-3">
+                                        <span class="text-2xl">{{ $flag }}</span>
+                                        <div>
+                                            <div class="font-medium text-gray-900">{{ $zone->name }}</div>
+                                            <div class="text-sm text-gray-500">{{ $firstCountry }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-sm font-medium text-gray-900">${{ number_format($shippingCost, 2) }}</div>
+                                        <div class="text-xs text-gray-500">{{ $rate->name ?? 'Standard shipping' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             </div>
         </div>
@@ -822,6 +927,165 @@ function setupNavigation() {
     // Initial state
     updateButtonStates();
 }
+
+// Delivery Modal Functions
+function openDeliveryModal() {
+    const modal = document.getElementById('deliveryModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeDeliveryModal() {
+    const modal = document.getElementById('deliveryModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function selectCountry(countryCode, countryName, shippingCost) {
+    // Update display
+    document.getElementById('delivery-country-text').textContent = `Deliver to ${countryName}`;
+    document.getElementById('delivery-zone-text').textContent = countryName;
+    
+    // Close modal
+    closeDeliveryModal();
+    
+    // Update shipping cost based on country
+    updateShippingForCountry(countryCode, countryName, shippingCost);
+}
+
+async function updateShippingForCountry(countryCode, countryName, shippingCost) {
+    // Show loading state
+    const shippingCostElement = document.getElementById('shippingCost');
+    if (shippingCostElement) {
+        shippingCostElement.innerHTML = '<span class="text-gray-500">Calculating...</span>';
+    }
+    
+    try {
+        // Calculate actual shipping cost via API
+        const response = await fetch('/checkout/calculate-shipping', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ country: countryCode })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.shipping) {
+            const newShipping = parseFloat(data.shipping.total_shipping);
+            const subtotal = {{ $subtotal }};
+            const qualifiesForFreeShipping = subtotal >= 100;
+            const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
+            const newTotal = subtotal + actualShipping;
+            
+            // Update shipping cost display
+            if (shippingCostElement) {
+                if (qualifiesForFreeShipping) {
+                    shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+                } else {
+                    shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
+                }
+            }
+            
+            // Update total
+            const totalElement = document.querySelector('.text-\\[\\#005366\\]');
+            if (totalElement) {
+                totalElement.textContent = `$${newTotal.toFixed(2)}`;
+            }
+            
+            // Update freeship messages
+            updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping);
+            
+            console.log('Shipping updated:', {
+                country: countryCode,
+                originalShipping: newShipping,
+                actualShipping: actualShipping,
+                qualifiesForFreeShipping: qualifiesForFreeShipping
+            });
+        } else {
+            // Fallback to static cost if API fails
+            const newShipping = parseFloat(shippingCost) || 0;
+            const subtotal = {{ $subtotal }};
+            const qualifiesForFreeShipping = subtotal >= 100;
+            const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
+            const newTotal = subtotal + actualShipping;
+            
+            if (shippingCostElement) {
+                if (qualifiesForFreeShipping) {
+                    shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+                } else {
+                    shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
+                }
+            }
+            
+            const totalElement = document.querySelector('.text-\\[\\#005366\\]');
+            if (totalElement) {
+                totalElement.textContent = `$${newTotal.toFixed(2)}`;
+            }
+            
+            updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping);
+        }
+    } catch (error) {
+        console.error('Shipping calculation error:', error);
+        
+        // Fallback to static cost
+        const newShipping = parseFloat(shippingCost) || 0;
+        const subtotal = {{ $subtotal }};
+        const qualifiesForFreeShipping = subtotal >= 100;
+        const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
+        const newTotal = subtotal + actualShipping;
+        
+        if (shippingCostElement) {
+            if (qualifiesForFreeShipping) {
+                shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+            } else {
+                shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
+            }
+        }
+        
+        const totalElement = document.querySelector('.text-\\[\\#005366\\]');
+        if (totalElement) {
+            totalElement.textContent = `$${newTotal.toFixed(2)}`;
+        }
+        
+        updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping);
+    }
+}
+
+function updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping) {
+    const shippingSection = document.querySelector('.border-t.pt-3');
+    if (shippingSection) {
+        // Remove existing freeship messages
+        const existingFreeshipMsg = shippingSection.querySelector('.freeship-message');
+        const existingProgressMsg = shippingSection.querySelector('.freeship-progress');
+        
+        if (existingFreeshipMsg) existingFreeshipMsg.remove();
+        if (existingProgressMsg) existingProgressMsg.remove();
+        
+        if (qualifiesForFreeShipping) {
+            // Add success message
+            const successMsg = document.createElement('div');
+            successMsg.className = 'freeship-message text-xs text-green-600 bg-green-50 p-2 rounded mt-2';
+            successMsg.innerHTML = '🎉 You qualify for free shipping on orders $100+!';
+            shippingSection.insertBefore(successMsg, shippingSection.querySelector('.border-t.pt-3'));
+        } else {
+            // Add progress message
+            const remainingAmount = (100 - subtotal).toFixed(2);
+            const progressMsg = document.createElement('div');
+            progressMsg.className = 'freeship-progress text-xs text-blue-600 mt-2';
+            progressMsg.textContent = `Add $${remainingAmount} more for free shipping!`;
+            shippingSection.insertBefore(progressMsg, shippingSection.querySelector('.border-t.pt-3'));
+        }
+    }
+}
+
+// Close modal on backdrop click
+document.getElementById('deliveryModal').addEventListener('click', function(e) {
+    if (e.target === this) closeDeliveryModal();
+});
 
 // Track InitiateCheckout when clicking Proceed to Checkout
 function trackInitiateCheckout(event) {

@@ -566,6 +566,43 @@ document.addEventListener('DOMContentLoaded', function() {
             <div>
                 <h1 class="text-4xl font-bold text-gray-900 mb-4">{{ $product->name }}</h1>
                 
+                <!-- Engagement Metrics -->
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-4">
+                        <!-- Stock Status Badge -->
+                        <div id="stock-status-badge" class="flex items-center space-x-2 bg-green-100 rounded-full px-3 py-1.5">
+                            <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <span class="text-sm font-medium text-green-700">In Stock</span>
+                        </div>
+                        
+                        <!-- Viewing Count -->
+                        <div class="flex items-center space-x-2 bg-gray-100 rounded-full px-3 py-1.5">
+                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            <span class="text-sm font-medium text-gray-700">{{ rand(20, 100) }} viewing</span>
+                        </div>
+                        
+                        <!-- Cart Count -->
+                        <div class="flex items-center space-x-2 bg-red-50 rounded-full px-3 py-1.5">
+                            <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01"></path>
+                            </svg>
+                            <span class="text-sm font-medium text-red-700">In {{ rand(10, 50) }}+ carts</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Share Button -->
+                    <button onclick="openShareModal()" class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
+                        </svg>
+                    </button>
+                </div>
+                
                 <!-- Seller Info -->
                 <div class="flex items-center space-x-3 mb-4">
                     <span class="text-gray-600">Sold by:</span>
@@ -2086,6 +2123,10 @@ document.addEventListener('DOMContentLoaded', function() {
             selectedAttributes = { ...firstVariant.attributes };
             updateAllAttributeButtons();
             updateVariantSelection();
+        } else {
+            // No variants, check product stock
+            const productStock = {{ $product->quantity ?? 0 }};
+            updateStockStatusBadge(productStock);
         }
     }
     
@@ -2692,6 +2733,9 @@ function updateVariantSelection() {
             }
         }
         
+        // Update stock status badge
+        updateStockStatusBadge(matchingVariant.quantity);
+        
         // Update description
         const descElement = document.getElementById('selected-variant-description');
         if (descElement) {
@@ -2755,6 +2799,31 @@ function updateVariantSelection() {
             cartText.textContent = 'Add to Cart';
             addToCartBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         }
+        
+        // Update stock status badge to out of stock
+        updateStockStatusBadge(0);
+    }
+}
+
+function updateStockStatusBadge(quantity) {
+    const stockBadge = document.getElementById('stock-status-badge');
+    const stockText = stockBadge.querySelector('span');
+    const stockIcon = stockBadge.querySelector('svg');
+    
+    if (quantity === null || quantity > 0) {
+        // In Stock
+        stockBadge.className = 'flex items-center space-x-2 bg-green-100 rounded-full px-3 py-1.5';
+        stockText.className = 'text-sm font-medium text-green-700';
+        stockText.textContent = 'In Stock';
+        stockIcon.className = 'w-4 h-4 text-green-600';
+        stockIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>';
+    } else {
+        // Out of Stock
+        stockBadge.className = 'flex items-center space-x-2 bg-red-100 rounded-full px-3 py-1.5';
+        stockText.className = 'text-sm font-medium text-red-700';
+        stockText.textContent = 'Out of Stock';
+        stockIcon.className = 'w-4 h-4 text-red-600';
+        stockIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>';
     }
 }
 
@@ -4927,6 +4996,111 @@ document.getElementById('size-guide-modal').addEventListener('click', function(e
         </div>
     </div>
 </div>
+
+<!-- Share Modal -->
+<div id="share-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-2xl font-bold text-gray-900">Share product</h3>
+            <button onclick="closeShareModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center mb-6">
+            <a id="share-mail" target="_blank" rel="noopener" class="group">
+                <div class="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V8a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                <div class="text-sm font-medium">Mail</div>
+            </a>
+
+            <a id="share-facebook" target="_blank" rel="noopener" class="group">
+                <div class="w-14 h-14 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
+                    <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987H7.898v-2.89h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.463h-1.261c-1.243 0-1.63.772-1.63 1.562v1.875h2.773l-.443 2.89h-2.33V21.88C18.343 21.128 22 16.991 22 12"></path>
+                    </svg>
+                </div>
+                <div class="text-sm font-medium">Facebook</div>
+            </a>
+
+            <a id="share-pinterest" target="_blank" rel="noopener" class="group">
+                <div class="w-14 h-14 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
+                    <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12.04 2C6.58 2 4 5.64 4 8.94c0 1.89.72 3.57 2.27 4.2.25.11.47 0 .54-.27.05-.19.17-.67.22-.87.07-.27.04-.36-.15-.59-.44-.53-.73-1.22-.73-2.2 0-2.84 2.13-5.4 5.53-5.4 3.01 0 4.66 1.84 4.66 4.29 0 3.23-1.43 5.96-3.55 5.96-1.17 0-2.04-.97-1.76-2.16.34-1.44 1-2.99 1-4.03 0-.93-.5-1.7-1.54-1.7-1.22 0-2.2 1.26-2.2 2.95 0 1.08.36 1.81.36 1.81l-1.46 6.18c-.43 1.82-.06 4.05-.03 4.27.02.13.19.16.27.06.11-.14 1.5-1.86 1.97-3.57.13-.48.76-2.99.76-2.99.38.73 1.49 1.37 2.67 1.37 3.52 0 5.91-3.21 5.91-7.52C19.23 5.35 16.4 2 12.04 2z"></path>
+                    </svg>
+                </div>
+                <div class="text-sm font-medium">Pinterest</div>
+            </a>
+
+            <a id="share-twitter" target="_blank" rel="noopener" class="group">
+                <div class="w-14 h-14 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
+                    <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M22.46 6c-.77.35-1.6.59-2.46.7a4.27 4.27 0 001.87-2.36 8.51 8.51 0 01-2.7 1.03 4.25 4.25 0 00-7.24 3.88 12.07 12.07 0 01-8.76-4.44 4.24 4.24 0 001.32 5.67 4.22 4.22 0 01-1.93-.53v.05a4.25 4.25 0 003.41 4.17 4.26 4.26 0 01-1.92.07 4.25 4.25 0 003.97 2.95A8.53 8.53 0 012 19.54a12.04 12.04 0 006.53 1.92c7.84 0 12.13-6.5 12.13-12.13 0-.18-.01-.36-.02-.54A8.64 8.64 0 0022.46 6z"></path>
+                    </svg>
+                </div>
+                <div class="text-sm font-medium">Twitter</div>
+            </a>
+        </div>
+
+        <div class="text-center text-gray-500 mb-3">or copy this link</div>
+        <div class="flex gap-2">
+            <input id="share-link" type="text" readonly class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" value="{{ route('products.show', $product->slug) }}">
+            <button onclick="copyShareLink()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium">Copy</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function openShareModal() {
+    const url = `{{ route('products.show', $product->slug) }}`;
+    const title = `{{ addslashes($product->name) }}`;
+    const image = @json(($media && count($media) > 0) ? (is_string($media[0]) ? $media[0] : ($media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? '')) : '');
+
+    // Build share links
+    document.getElementById('share-mail').href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(url)}`;
+    document.getElementById('share-facebook').href = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+    const pinParams = new URLSearchParams({ url, media: image || url, description: title });
+    document.getElementById('share-pinterest').href = `https://pinterest.com/pin/create/button/?${pinParams.toString()}`;
+    document.getElementById('share-twitter').href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`;
+
+    // Set input value
+    const input = document.getElementById('share-link');
+    if (input) input.value = url;
+
+    // Show modal
+    const modal = document.getElementById('share-modal');
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeShareModal() {
+    const modal = document.getElementById('share-modal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = 'auto';
+}
+
+function copyShareLink() {
+    const input = document.getElementById('share-link');
+    input.select();
+    input.setSelectionRange(0, 99999);
+    try {
+        document.execCommand('copy');
+    } catch (e) {
+        navigator.clipboard?.writeText(input.value);
+    }
+    showCartSuccess('Copied link to clipboard');
+}
+
+// Close on backdrop click
+document.getElementById('share-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeShareModal();
+});
+</script>
 
 <script>
 // Cart Popup Shipping Calculator
