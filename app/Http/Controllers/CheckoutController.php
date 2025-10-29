@@ -62,6 +62,7 @@ class CheckoutController extends Controller
 
         // Calculate default shipping for US if not in session
         if (!$shippingDetails) {
+            // Prepare items for calculator
             $items = $cartItems->map(function ($item) {
                 return [
                     'product_id' => $item->product_id,

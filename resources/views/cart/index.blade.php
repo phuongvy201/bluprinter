@@ -164,22 +164,22 @@
                                 <span class="font-semibold">${{ number_format($subtotal, 2) }}</span>
                             </div>
                             
-                            <!-- Delivery Information -->
-                            <div class="border-t pt-3">
-                                <div class="flex justify-between items-center text-gray-600 mb-3">
-                                    <span id="delivery-country-text">Deliver to United Kingdom</span>
-                                    <button onclick="openDeliveryModal()" class="text-orange-500 hover:text-orange-600 text-sm font-medium">
-                                        Change
-                                    </button>
-                                </div>
-                                
-                                <div class="text-xs text-gray-500">
-                                    <div class="flex justify-between">
-                                        <span>Zone:</span>
-                                        <span id="delivery-zone-text">United Kingdom</span>
-                                    </div>
+                        <!-- Delivery Information -->
+                        <div class="border-t pt-3">
+                            <div class="flex justify-between items-center text-gray-600 mb-3">
+                                <span id="delivery-country-text">Deliver to United States</span>
+                                <button onclick="openDeliveryModal()" class="text-orange-500 hover:text-orange-600 text-sm font-medium">
+                                    Change
+                                </button>
+                            </div>
+                            
+                            <div class="text-xs text-gray-500">
+                                <div class="flex justify-between">
+                                    <span>Zone:</span>
+                                    <span id="delivery-zone-text">United States</span>
                                 </div>
                             </div>
+                        </div>
                             
                             @php
                                 $qualifiesForFreeShipping = $subtotal >= 100;
@@ -352,7 +352,14 @@
                 </div>
                 <div class="p-6">
                     <div class="space-y-3">
-                        @foreach($shippingZones as $zone)
+                        @php
+                            // Sort zones to put US first
+                            $sortedZones = $shippingZones->sortBy(function($zone) {
+                                $firstCountry = $zone->countries[0] ?? 'US';
+                                return $firstCountry === 'US' ? 0 : 1;
+                            });
+                        @endphp
+                        @foreach($sortedZones as $zone)
                             @php
                                 $firstCountry = $zone->countries[0] ?? 'US';
                                 $countryFlags = [
@@ -362,8 +369,19 @@
                                     'BR' => '🇧🇷', 'MX' => '🇲🇽', 'RU' => '🇷🇺', 'ZA' => '🇿🇦'
                                 ];
                                 $flag = $countryFlags[$firstCountry] ?? '🌍';
-                                $rate = $zone->activeShippingRates->first();
-                                $shippingCost = $rate ? $rate->first_item_cost : 0;
+                                
+                                // Calculate actual shipping cost for this zone based on cart items
+                                $calculator = new \App\Services\ShippingCalculator();
+                                $cartItemsForCalc = $cartItems->map(function ($item) {
+                                    return [
+                                        'product_id' => $item->product_id,
+                                        'quantity' => $item->quantity,
+                                        'price' => $item->price,
+                                    ];
+                                });
+                                $shippingResult = $calculator->calculateShipping($cartItemsForCalc, $firstCountry);
+                                $shippingCost = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
+                                $rateName = $shippingResult['success'] && !empty($shippingResult['items']) ? $shippingResult['items'][0]['shipping_rate_name'] : 'Standard shipping';
                             @endphp
                             <div class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors" 
                                  onclick="selectCountry('{{ $firstCountry }}', '{{ $zone->name }}', {{ $shippingCost }})">
@@ -377,7 +395,7 @@
                                     </div>
                                     <div class="text-right">
                                         <div class="text-sm font-medium text-gray-900">${{ number_format($shippingCost, 2) }}</div>
-                                        <div class="text-xs text-gray-500">{{ $rate->name ?? 'Standard shipping' }}</div>
+                                        <div class="text-xs text-gray-500">{{ $rateName }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -949,11 +967,11 @@ function selectCountry(countryCode, countryName, shippingCost) {
     // Close modal
     closeDeliveryModal();
     
-    // Update shipping cost based on country
-    updateShippingForCountry(countryCode, countryName, shippingCost);
+    // Update shipping cost based on country (use API calculation)
+    updateShippingForCountry(countryCode, countryName);
 }
 
-async function updateShippingForCountry(countryCode, countryName, shippingCost) {
+async function updateShippingForCountry(countryCode, countryName) {
     // Show loading state
     const shippingCostElement = document.getElementById('shippingCost');
     if (shippingCostElement) {
@@ -1006,52 +1024,20 @@ async function updateShippingForCountry(countryCode, countryName, shippingCost) 
                 qualifiesForFreeShipping: qualifiesForFreeShipping
             });
         } else {
-            // Fallback to static cost if API fails
-            const newShipping = parseFloat(shippingCost) || 0;
-            const subtotal = {{ $subtotal }};
-            const qualifiesForFreeShipping = subtotal >= 100;
-            const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
-            const newTotal = subtotal + actualShipping;
-            
+            // Fallback: show error message
             if (shippingCostElement) {
-                if (qualifiesForFreeShipping) {
-                    shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
-                } else {
-                    shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
-                }
+                shippingCostElement.innerHTML = '<span class="text-red-500">Error calculating</span>';
             }
             
-            const totalElement = document.querySelector('.text-\\[\\#005366\\]');
-            if (totalElement) {
-                totalElement.textContent = `$${newTotal.toFixed(2)}`;
-            }
-            
-            updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping);
+            console.error('Shipping calculation failed:', data.message);
         }
     } catch (error) {
         console.error('Shipping calculation error:', error);
         
-        // Fallback to static cost
-        const newShipping = parseFloat(shippingCost) || 0;
-        const subtotal = {{ $subtotal }};
-        const qualifiesForFreeShipping = subtotal >= 100;
-        const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
-        const newTotal = subtotal + actualShipping;
-        
+        // Show error message
         if (shippingCostElement) {
-            if (qualifiesForFreeShipping) {
-                shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
-            } else {
-                shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
-            }
+            shippingCostElement.innerHTML = '<span class="text-red-500">Error calculating</span>';
         }
-        
-        const totalElement = document.querySelector('.text-\\[\\#005366\\]');
-        if (totalElement) {
-            totalElement.textContent = `$${newTotal.toFixed(2)}`;
-        }
-        
-        updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping);
     }
 }
 

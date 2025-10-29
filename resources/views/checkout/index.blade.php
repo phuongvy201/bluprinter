@@ -2784,11 +2784,11 @@ function selectCountry(countryCode, countryName, shippingCost) {
     // Close modal
     closeDeliveryModal();
     
-    // Update shipping cost based on country
-    updateCheckoutShippingForCountry(countryCode, countryName, shippingCost);
+    // Update shipping cost based on country (use API calculation)
+    updateCheckoutShippingForCountry(countryCode, countryName);
 }
 
-async function updateCheckoutShippingForCountry(countryCode, countryName, shippingCost) {
+async function updateCheckoutShippingForCountry(countryCode, countryName) {
     // Show loading state
     const shippingCostElement = document.querySelector('.shipping-cost-display');
     if (shippingCostElement) {
@@ -2838,47 +2838,19 @@ async function updateCheckoutShippingForCountry(countryCode, countryName, shippi
                 qualifiesForFreeShipping: qualifiesForFreeShipping
             });
         } else {
-            // Fallback to static cost if API fails
-            const newShipping = parseFloat(shippingCost) || 0;
-            const subtotal = parseFloat('{{ $subtotal }}');
-            const qualifiesForFreeShipping = subtotal >= 100;
-            const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
-            const newTotal = subtotal + actualShipping;
-            
+            // Fallback: show error message
             if (shippingCostElement) {
-                if (qualifiesForFreeShipping) {
-                    shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
-                } else {
-                    shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
-                }
+                shippingCostElement.innerHTML = '<span class="text-red-500">Error calculating</span>';
             }
             
-            const totalElement = document.querySelector('.total-display');
-            if (totalElement) {
-                totalElement.textContent = `$${newTotal.toFixed(2)}`;
-            }
+            console.error('Checkout shipping calculation failed:', data.message);
         }
     } catch (error) {
         console.error('Checkout shipping calculation error:', error);
         
-        // Fallback to static cost
-        const newShipping = parseFloat(shippingCost) || 0;
-        const subtotal = parseFloat('{{ $subtotal }}');
-        const qualifiesForFreeShipping = subtotal >= 100;
-        const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
-        const newTotal = subtotal + actualShipping;
-        
+        // Show error message
         if (shippingCostElement) {
-            if (qualifiesForFreeShipping) {
-                shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
-            } else {
-                shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
-            }
-        }
-        
-        const totalElement = document.querySelector('.total-display');
-        if (totalElement) {
-            totalElement.textContent = `$${newTotal.toFixed(2)}`;
+            shippingCostElement.innerHTML = '<span class="text-red-500">Error calculating</span>';
         }
     }
 }
@@ -2907,7 +2879,14 @@ document.getElementById('deliveryModal').addEventListener('click', function(e) {
         </div>
         <div class="p-6">
             <div class="space-y-3">
-                @foreach($shippingZones as $zone)
+                @php
+                    // Sort zones to put US first
+                    $sortedZones = $shippingZones->sortBy(function($zone) {
+                        $firstCountry = $zone->countries[0] ?? 'US';
+                        return $firstCountry === 'US' ? 0 : 1;
+                    });
+                @endphp
+                @foreach($sortedZones as $zone)
                     @php
                         $firstCountry = $zone->countries[0] ?? 'US';
                         $countryFlags = [
@@ -2917,8 +2896,19 @@ document.getElementById('deliveryModal').addEventListener('click', function(e) {
                             'BR' => '🇧🇷', 'MX' => '🇲🇽', 'RU' => '🇷🇺', 'ZA' => '🇿🇦'
                         ];
                         $flag = $countryFlags[$firstCountry] ?? '🌍';
-                        $rate = $zone->activeShippingRates->first();
-                        $shippingCost = $rate ? $rate->first_item_cost : 0;
+                        
+                        // Calculate actual shipping cost for this zone based on cart items
+                        $calculator = new \App\Services\ShippingCalculator();
+                        $cartItemsForCalc = collect($products)->map(function ($item) {
+                            return [
+                                'product_id' => $item['product']->id,
+                                'quantity' => $item['quantity'],
+                                'price' => $item['product']->base_price,
+                            ];
+                        });
+                        $shippingResult = $calculator->calculateShipping($cartItemsForCalc, $firstCountry);
+                        $shippingCost = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
+                        $rateName = $shippingResult['success'] && !empty($shippingResult['items']) ? $shippingResult['items'][0]['shipping_rate_name'] : 'Standard shipping';
                     @endphp
                     <div class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors" 
                          onclick="selectCountry('{{ $firstCountry }}', '{{ $zone->name }}', {{ $shippingCost }})">
@@ -2932,7 +2922,7 @@ document.getElementById('deliveryModal').addEventListener('click', function(e) {
                             </div>
                             <div class="text-right">
                                 <div class="text-sm font-medium text-gray-900">${{ number_format($shippingCost, 2) }}</div>
-                                <div class="text-xs text-gray-500">{{ $rate->name ?? 'Standard shipping' }}</div>
+                                <div class="text-xs text-gray-500">{{ $rateName }}</div>
                             </div>
                         </div>
                     </div>
