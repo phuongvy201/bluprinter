@@ -632,6 +632,10 @@ Route::prefix('api/custom-files')->name('api.custom-files.')->group(function () 
 Route::prefix('api/upload')->name('api.upload.')->group(function () {
     Route::post('/presigned-urls', [UploadController::class, 'generatePresignedUrls'])->name('presigned-urls');
     Route::post('/confirm', [UploadController::class, 'confirmUpload'])->name('confirm');
+    // Multipart upload endpoints
+    Route::post('/multipart/init', [UploadController::class, 'initMultipart'])->name('multipart.init');
+    Route::post('/multipart/part-urls', [UploadController::class, 'getMultipartPartUrls'])->name('multipart.part-urls');
+    Route::post('/multipart/complete', [UploadController::class, 'completeMultipart'])->name('multipart.complete');
 });
 
 // Test route for variant removal logic

@@ -13,6 +13,22 @@ use Illuminate\Support\Facades\Log;
 class UploadController extends Controller
 {
     /**
+     * Create S3 client with acceleration enabled
+     */
+    private function createAcceleratedS3Client(): S3Client
+    {
+        return new S3Client([
+            'version' => 'latest',
+            'region' => config('filesystems.disks.s3.region', 'us-east-1'),
+            'credentials' => [
+                'key' => config('filesystems.disks.s3.key'),
+                'secret' => config('filesystems.disks.s3.secret'),
+            ],
+            'use_accelerate_endpoint' => true,
+        ]);
+    }
+
+    /**
      * Generate presigned URLs for direct upload to S3
      */
     public function generatePresignedUrls(Request $request)
@@ -43,15 +59,8 @@ class UploadController extends Controller
         }
 
         try {
-            // Initialize S3 client
-            $s3Client = new S3Client([
-                'version' => 'latest',
-                'region' => config('filesystems.disks.s3.region', 'us-east-1'),
-                'credentials' => [
-                    'key' => config('filesystems.disks.s3.key'),
-                    'secret' => config('filesystems.disks.s3.secret'),
-                ],
-            ]);
+            // Initialize S3 client (accelerated)
+            $s3Client = $this->createAcceleratedS3Client();
 
             $bucket = config('filesystems.disks.s3.bucket');
             $presignedUrls = [];
@@ -97,8 +106,8 @@ class UploadController extends Controller
                     'expires_at' => now()->addSeconds($expiresIn)->toISOString()
                 ]);
 
-                // Generate public URL for after upload
-                $publicUrl = "https://s3.us-east-1.amazonaws.com/{$bucket}/{$key}";
+                // Generate accelerated public URL for after upload
+                $publicUrl = "https://{$bucket}.s3-accelerate.amazonaws.com/{$key}";
 
                 $presignedUrls[] = [
                     'index' => $index,
@@ -197,6 +206,189 @@ class UploadController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to confirm upload: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Initialize multipart upload (returns UploadId and key)
+     */
+    public function initMultipart(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'file.name' => 'required_without:file.filename|string|max:255',
+            'file.filename' => 'required_without:file.name|string|max:255',
+            'file.type' => 'required_without:file.content_type|string',
+            'file.content_type' => 'required_without:file.type|string',
+            'file.size' => 'required|integer|min:1',
+            'product_id' => 'nullable|exists:products,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+        }
+
+        try {
+            $s3 = $this->createAcceleratedS3Client();
+            $bucket = config('filesystems.disks.s3.bucket');
+
+            $originalName = data_get($request->all(), 'file.filename') ?? data_get($request->all(), 'file.name');
+            $contentType = data_get($request->all(), 'file.content_type') ?? data_get($request->all(), 'file.type');
+            $size = (int) data_get($request->all(), 'file.size');
+
+            $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+            $filename = time() . '_' . uniqid() . '.' . $extension;
+            $folder = strpos($contentType, 'video/') === 0 ? 'products/videos' : 'products/images';
+            $key = $folder . '/' . $filename;
+
+            $result = $s3->createMultipartUpload([
+                'Bucket' => $bucket,
+                'Key' => $key,
+                'ContentType' => $contentType,
+            ]);
+
+            $uploadId = $result['UploadId'] ?? null;
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Multipart upload initialized',
+                'data' => [
+                    'bucket' => $bucket,
+                    'key' => $key,
+                    'upload_id' => $uploadId,
+                    'accelerate_url' => "https://{$bucket}.s3-accelerate.amazonaws.com/{$key}",
+                    'suggested_part_size' => max(5 * 1024 * 1024, min(15 * 1024 * 1024, (int) ceil($size / 8))),
+                ],
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+        } catch (AwsException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to init multipart: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate presigned URLs for multipart parts
+     */
+    public function getMultipartPartUrls(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'key' => 'required|string',
+            'upload_id' => 'required|string',
+            'parts' => 'required|integer|min:1|max:10000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+        }
+
+        try {
+            $s3 = $this->createAcceleratedS3Client();
+            $bucket = config('filesystems.disks.s3.bucket');
+            $key = $request->input('key');
+            $uploadId = $request->input('upload_id');
+            $parts = (int) $request->input('parts');
+
+            $urls = [];
+            for ($partNumber = 1; $partNumber <= $parts; $partNumber++) {
+                $cmd = $s3->getCommand('UploadPart', [
+                    'Bucket' => $bucket,
+                    'Key' => $key,
+                    'UploadId' => $uploadId,
+                    'PartNumber' => $partNumber,
+                ]);
+                $presigned = $s3->createPresignedRequest($cmd, '+15 minutes');
+                $urls[] = [
+                    'part_number' => $partNumber,
+                    'url' => (string) $presigned->getUri(),
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Multipart part URLs generated',
+                'data' => [
+                    'parts' => $urls,
+                ],
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+        } catch (AwsException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate part URLs: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Complete multipart upload
+     */
+    public function completeMultipart(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'key' => 'required|string',
+            'upload_id' => 'required|string',
+            'parts' => 'required|array|min:1',
+            'parts.*.PartNumber' => 'required|integer|min:1',
+            'parts.*.ETag' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+        }
+
+        try {
+            $s3 = $this->createAcceleratedS3Client();
+            $bucket = config('filesystems.disks.s3.bucket');
+
+            $result = $s3->completeMultipartUpload([
+                'Bucket' => $bucket,
+                'Key' => $request->input('key'),
+                'UploadId' => $request->input('upload_id'),
+                'MultipartUpload' => [
+                    'Parts' => $request->input('parts'),
+                ],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Multipart upload completed',
+                'data' => $result->toArray(),
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+        } catch (AwsException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to complete multipart: ' . $e->getMessage()
             ], 500);
         }
     }
