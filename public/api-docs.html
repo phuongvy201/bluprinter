@@ -48,35 +48,28 @@
                             description: "Local Development Server",
                         },
                     ],
-                    security: [
-                        {
-                            ApiToken: [],
-                        },
-                    ],
+                    // Public API: no authentication required
                     paths: {
                         "/api/products/create": {
                             post: {
                                 tags: ["Products"],
                                 summary: "Create a new product",
                                 description:
-                                    "Create a new product with media using URLs.\n\n**How it works:**\n1. Provide image/video URLs in media_urls array\n2. API downloads files from URLs\n3. API uploads files to AWS S3\n4. Product is created with S3 URLs\n\n**Supported formats:** Images (jpg, png, gif, webp), Videos (mp4, avi, mov, webm)",
+                                    "Create a new product with media using URLs.\n\n**How it works:**\n1. Provide image/video URLs in `media_urls` array (no limit)\n2. API downloads files from URLs\n3. API uploads files to AWS S3\n4. Product is created with S3 URLs\n\n**Supported formats:** Images (jpg, png, gif, webp), Videos (mp4, avi, mov, webm)",
                                 operationId: "createProduct",
-                                security: [
-                                    {
-                                        ApiToken: [],
-                                    },
-                                ],
                                 requestBody: {
                                     required: true,
                                     content: {
-                                        "multipart/form-data": {
+                                        "application/json": {
                                             schema: {
                                                 type: "object",
                                                 required: [
                                                     "name",
                                                     "template_id",
+                                                    "media_urls",
                                                 ],
                                                 properties: {
+                                                    
                                                     name: {
                                                         type: "string",
                                                         description:
@@ -97,26 +90,18 @@
                                                             "Product template ID (1 for T-Shirt, 2 for Hoodie, etc.)",
                                                         example: 1,
                                                     },
-                                                    "media_urls[0]": {
-                                                        type: "string",
-                                                        format: "uri",
-                                                        description:
-                                                            "First image/video URL - API will download and upload to S3",
-                                                        example: "https://picsum.photos/800/600?random=1",
-                                                    },
-                                                    "media_urls[1]": {
-                                                        type: "string",
-                                                        format: "uri",
-                                                        description:
-                                                            "Second image/video URL (optional)",
-                                                        example: "https://picsum.photos/800/600?random=2",
-                                                    },
-                                                    "media_urls[2]": {
-                                                        type: "string",
-                                                        format: "uri",
-                                                        description:
-                                                            "Third image/video URL (optional)",
-                                                        example: "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
+                                                    media_urls: {
+                                                        type: "array",
+                                                        description: "Array of image/video URLs (no maximum)",
+                                                        items: {
+                                                            type: "string",
+                                                            format: "uri",
+                                                        },
+                                                        example: [
+                                                            "https://picsum.photos/800/600?random=1",
+                                                            "https://picsum.photos/800/600?random=2",
+                                                            "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4",
+                                                        ],
                                                     },
                                                     price: {
                                                         type: "number",
@@ -277,11 +262,6 @@
                                 description:
                                     "Generate presigned URLs for direct upload to S3. Use these URLs to upload files directly to S3, then use the returned URLs in product creation.",
                                 operationId: "getPresignedUrls",
-                                security: [
-                                    {
-                                        ApiToken: [],
-                                    },
-                                ],
                                 requestBody: {
                                     required: true,
                                     content: {
@@ -290,6 +270,7 @@
                                                 type: "object",
                                                 required: ["files"],
                                                 properties: {
+                                                    
                                                     files: {
                                                         type: "array",
                                                         items: {
@@ -520,15 +501,6 @@
                         },
                     },
                     components: {
-                        securitySchemes: {
-                            ApiToken: {
-                                type: "apiKey",
-                                in: "header",
-                                name: "X-API-Token",
-                                description:
-                                    "API Token for authentication. Format: `bluprinter_xxxxx...`\n\nĐể lấy token, đăng nhập với tài khoản admin và truy cập: https://bluprinter.com/admin/api-token",
-                            },
-                        },
                         schemas: {
                             Product: {
                                 type: "object",

@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\ApiToken;
+// use App\Models\ApiToken; // Public endpoints: no token required
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Aws\S3\S3Client;
 use Aws\Exception\AwsException;
+use Illuminate\Support\Facades\Log;
 
 class UploadController extends Controller
 {
@@ -16,28 +17,7 @@ class UploadController extends Controller
      */
     public function generatePresignedUrls(Request $request)
     {
-        // Validate API token
-        $token = $this->validateApiToken($request);
-        if (!$token) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid or expired API token'
-            ], 401)
-                ->header('Access-Control-Allow-Origin', '*')
-                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
-        }
-
-        // Check permissions
-        if (!$token->hasPermission('product:create')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Insufficient permissions'
-            ], 403)
-                ->header('Access-Control-Allow-Origin', '*')
-                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
-        }
+        // Public endpoint: no API token or permission checks
 
         // Validate request - support both old and new field names
         $validator = Validator::make($request->all(), [
@@ -59,7 +39,7 @@ class UploadController extends Controller
             ], 422)
                 ->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
         }
 
         try {
@@ -78,7 +58,7 @@ class UploadController extends Controller
             $expiresIn = 15 * 60; // 15 minutes
 
             // Debug: Log current time
-            \Log::info('Current server time', [
+            Log::info('Current server time', [
                 'now' => now()->toISOString(),
                 'timestamp' => time(),
                 'expires_in' => $expiresIn
@@ -109,7 +89,7 @@ class UploadController extends Controller
                 $presignedUrl = (string) $presignedRequest->getUri();
 
                 // Debug: Log presigned URL details
-                \Log::info('Generated presigned URL', [
+                Log::info('Generated presigned URL', [
                     'key' => $key,
                     'expires_in' => $expiresIn,
                     'url' => $presignedUrl,
@@ -144,7 +124,7 @@ class UploadController extends Controller
             ], 200)
                 ->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
         } catch (AwsException $e) {
             return response()->json([
                 'success' => false,
@@ -152,7 +132,7 @@ class UploadController extends Controller
             ], 500)
                 ->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -160,7 +140,7 @@ class UploadController extends Controller
             ], 500)
                 ->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
         }
     }
 
@@ -169,14 +149,7 @@ class UploadController extends Controller
      */
     public function confirmUpload(Request $request)
     {
-        // Validate API token
-        $token = $this->validateApiToken($request);
-        if (!$token) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid or expired API token'
-            ], 401);
-        }
+        // Public endpoint: no API token required
 
         // Validate request
         $validator = Validator::make($request->all(), [
@@ -228,23 +201,5 @@ class UploadController extends Controller
         }
     }
 
-    /**
-     * Validate API token
-     */
-    private function validateApiToken(Request $request)
-    {
-        $tokenValue = $request->header('X-API-Token') ?? $request->input('api_token');
-
-        if (!$tokenValue) {
-            return null;
-        }
-
-        $token = ApiToken::where('token', $tokenValue)->first();
-
-        if (!$token || !$token->isValid()) {
-            return null;
-        }
-
-        return $token;
-    }
+    // Token validation removed
 }

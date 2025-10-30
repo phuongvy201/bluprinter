@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 
 class ProductController extends Controller
 {
@@ -18,28 +19,7 @@ class ProductController extends Controller
      */
     public function create(Request $request)
     {
-        // Validate API token
-        $token = $this->validateApiToken($request);
-        if (!$token) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid or expired API token'
-            ], 401)
-                ->header('Access-Control-Allow-Origin', '*')
-                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
-        }
-
-        // Check permissions
-        if (!$token->hasPermission('product:create')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Insufficient permissions'
-            ], 403)
-                ->header('Access-Control-Allow-Origin', '*')
-                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
-        }
+        // Public endpoint: no API token required
 
         // Validate request data - support multipart form data with URLs
         $validationRules = [
@@ -79,7 +59,7 @@ class ProductController extends Controller
             ], 422)
                 ->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
         }
 
         // Validate each URL
@@ -94,22 +74,10 @@ class ProductController extends Controller
                 ], 422)
                     ->header('Access-Control-Allow-Origin', '*')
                     ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                    ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
             }
         }
-
-        if (count($mediaUrls) > 10) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Too many media URLs',
-                'errors' => [
-                    'media_urls' => ['Maximum 10 media URLs allowed']
-                ]
-            ], 422)
-                ->header('Access-Control-Allow-Origin', '*')
-                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
-        }
+        // No upper-limit for media URLs (can send any number)
 
         $validator = Validator::make($request->all(), $validationRules);
 
@@ -121,7 +89,7 @@ class ProductController extends Controller
             ], 422)
                 ->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
         }
 
         try {
@@ -146,7 +114,7 @@ class ProductController extends Controller
                     // Download file from URL
                     $fileContent = file_get_contents($url);
                     if ($fileContent === false) {
-                        \Log::warning("Failed to download file from URL: $url");
+                        Log::warning("Failed to download file from URL: $url");
                         continue;
                     }
 
@@ -171,26 +139,23 @@ class ProductController extends Controller
                     if ($uploaded) {
                         $imageUrl = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $filePath;
                         $processedMediaUrls[] = $imageUrl;
-                        \Log::info("Successfully uploaded URL to S3", [
+                        Log::info("Successfully uploaded URL to S3", [
                             'original_url' => $url,
                             's3_url' => $imageUrl,
                             'file_path' => $filePath
                         ]);
                     }
                 } catch (\Exception $e) {
-                    \Log::warning("Failed to process URL: $url - " . $e->getMessage());
+                    Log::warning("Failed to process URL: $url - " . $e->getMessage());
                     continue;
                 }
             }
 
-            // Determine shop_id with priority order:
-            // 1. Explicit shop_id in request (highest priority)
-            // 2. API token's default_shop_id
-            // 3. Template's shop_id
-            // 4. System default shop from config
-            // 5. Fallback to shop ID 1
+            // Determine shop_id with priority order (no token):
+            // 1. Explicit shop_id in request
+            // 2. Template's shop_id
+            // 3. System default shop from config (fallback 1)
             $shopId = $request->shop_id
-                ?? $token->default_shop_id
                 ?? $template->shop_id
                 ?? config('api.default_shop_id', 1);
 
@@ -202,7 +167,6 @@ class ProductController extends Controller
                 'shop_id' => $shopId,
                 'status' => 'active',
                 'created_by' => 'api',
-                'api_token_id' => $token->id,
 
                 // Copy từ template nếu không được cung cấp
                 'description' => $request->description ?? $template->description,
@@ -256,8 +220,7 @@ class ProductController extends Controller
                 }
             }
 
-            // Update token usage
-            $token->markAsUsed();
+            // No token usage tracking (public endpoint)
 
             return response()->json([
                 'success' => true,
@@ -267,7 +230,7 @@ class ProductController extends Controller
             ], 201)
                 ->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -275,7 +238,7 @@ class ProductController extends Controller
             ], 500)
                 ->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
         }
     }
 
@@ -310,16 +273,8 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $token = $this->validateApiToken($request);
-        if (!$token) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid or expired API token'
-            ], 401);
-        }
-
-        $products = Product::where('api_token_id', $token->id)
-            ->with(['shop', 'template.category'])
+        // Public listing of products (no token filter)
+        $products = Product::with(['shop', 'template.category'])
             ->orderBy('created_at', 'desc')
             ->paginate(20);
 
@@ -338,22 +293,7 @@ class ProductController extends Controller
     /**
      * Validate API token
      */
-    private function validateApiToken(Request $request)
-    {
-        $tokenValue = $request->header('X-API-Token') ?? $request->input('api_token');
-
-        if (!$tokenValue) {
-            return null;
-        }
-
-        $token = ApiToken::where('token', $tokenValue)->first();
-
-        if (!$token || !$token->isValid()) {
-            return null;
-        }
-
-        return $token;
-    }
+    // API token validation removed (public endpoints)
 
     /**
      * Get content type from file extension

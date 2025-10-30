@@ -4,19 +4,19 @@
 <div class="min-h-screen bg-gray-50 py-8">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Page Header -->
-        <div class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-900">My Orders</h1>
-            <p class="text-gray-600 mt-2">Track and manage your orders</p>
+        <div class="mb-6 sm:mb-8">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">My Orders</h1>
+            <p class="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">Track and manage your orders</p>
         </div>
 
         <!-- Order Statistics -->
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
             <!-- Total Orders -->
             <a href="{{ route('customer.orders.index') }}" 
-               class="group bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 {{ !request('status') ? 'ring-2 ring-[#005366] bg-gradient-to-br from-[#005366]/5 to-[#005366]/10' : 'hover:bg-gray-50' }}">
-                <div class="flex items-center justify-between mb-3">
-                    <div class="w-12 h-12 bg-[#005366]/10 rounded-xl flex items-center justify-center group-hover:bg-[#005366]/20 transition-colors">
-                        <svg class="w-6 h-6 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               class="group bg-white rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-lg transition-all duration-300 {{ !request('status') ? 'ring-2 ring-[#005366] bg-gradient-to-br from-[#005366]/5 to-[#005366]/10' : 'hover:bg-gray-50' }}">
+                <div class="flex items-center justify-between mb-2 sm:mb-3">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 bg-[#005366]/10 rounded-xl flex items-center justify-center group-hover:bg-[#005366]/20 transition-colors">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
                         </svg>
                     </div>
@@ -24,16 +24,16 @@
                         <div class="w-2 h-2 bg-[#005366] rounded-full"></div>
                     @endif
                 </div>
-                <div class="text-3xl font-bold text-[#005366] mb-1">{{ $stats['total'] }}</div>
-                <div class="text-sm font-medium text-gray-600">Total Orders</div>
+                <div class="text-2xl sm:text-3xl font-bold text-[#005366] mb-1">{{ $stats['total'] }}</div>
+                <div class="text-xs sm:text-sm font-medium text-gray-600">Total Orders</div>
             </a>
             
             <!-- Pending Orders -->
             <a href="{{ route('customer.orders.index', ['status' => 'pending']) }}" 
-               class="group bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 {{ request('status') == 'pending' ? 'ring-2 ring-yellow-500 bg-gradient-to-br from-yellow-50 to-yellow-100' : 'hover:bg-gray-50' }}">
-                <div class="flex items-center justify-between mb-3">
-                    <div class="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
-                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               class="group bg-white rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-lg transition-all duration-300 {{ request('status') == 'pending' ? 'ring-2 ring-yellow-500 bg-gradient-to-br from-yellow-50 to-yellow-100' : 'hover:bg-gray-50' }}">
+                <div class="flex items-center justify-between mb-2 sm:mb-3">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-100 rounded-xl flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </div>
@@ -41,16 +41,16 @@
                         <div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
                     @endif
                 </div>
-                <div class="text-3xl font-bold text-yellow-600 mb-1">{{ $stats['pending'] }}</div>
-                <div class="text-sm font-medium text-gray-600">Pending</div>
+                <div class="text-2xl sm:text-3xl font-bold text-yellow-600 mb-1">{{ $stats['pending'] }}</div>
+                <div class="text-xs sm:text-sm font-medium text-gray-600">Pending</div>
             </a>
             
             <!-- Processing Orders -->
             <a href="{{ route('customer.orders.index', ['status' => 'processing']) }}" 
-               class="group bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 {{ request('status') == 'processing' ? 'ring-2 ring-blue-500 bg-gradient-to-br from-blue-50 to-blue-100' : 'hover:bg-gray-50' }}">
-                <div class="flex items-center justify-between mb-3">
-                    <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               class="group bg-white rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-lg transition-all duration-300 {{ request('status') == 'processing' ? 'ring-2 ring-blue-500 bg-gradient-to-br from-blue-50 to-blue-100' : 'hover:bg-gray-50' }}">
+                <div class="flex items-center justify-between mb-2 sm:mb-3">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                         </svg>
                     </div>
@@ -58,16 +58,16 @@
                         <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
                     @endif
                 </div>
-                <div class="text-3xl font-bold text-blue-600 mb-1">{{ $stats['processing'] }}</div>
-                <div class="text-sm font-medium text-gray-600">Processing</div>
+                <div class="text-2xl sm:text-3xl font-bold text-blue-600 mb-1">{{ $stats['processing'] }}</div>
+                <div class="text-xs sm:text-sm font-medium text-gray-600">Processing</div>
             </a>
             
             <!-- Completed Orders -->
             <a href="{{ route('customer.orders.index', ['status' => 'completed']) }}" 
-               class="group bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 {{ request('status') == 'completed' ? 'ring-2 ring-green-500 bg-gradient-to-br from-green-50 to-green-100' : 'hover:bg-gray-50' }}">
-                <div class="flex items-center justify-between mb-3">
-                    <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center group-hover:bg-green-200 transition-colors">
-                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               class="group bg-white rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-lg transition-all duration-300 {{ request('status') == 'completed' ? 'ring-2 ring-green-500 bg-gradient-to-br from-green-50 to-green-100' : 'hover:bg-gray-50' }}">
+                <div class="flex items-center justify-between mb-2 sm:mb-3">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-xl flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </div>
@@ -75,16 +75,16 @@
                         <div class="w-2 h-2 bg-green-500 rounded-full"></div>
                     @endif
                 </div>
-                <div class="text-3xl font-bold text-green-600 mb-1">{{ $stats['completed'] }}</div>
-                <div class="text-sm font-medium text-gray-600">Completed</div>
+                <div class="text-2xl sm:text-3xl font-bold text-green-600 mb-1">{{ $stats['completed'] }}</div>
+                <div class="text-xs sm:text-sm font-medium text-gray-600">Completed</div>
             </a>
             
             <!-- Cancelled Orders -->
             <a href="{{ route('customer.orders.index', ['status' => 'cancelled']) }}" 
-               class="group bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 {{ request('status') == 'cancelled' ? 'ring-2 ring-red-500 bg-gradient-to-br from-red-50 to-red-100' : 'hover:bg-gray-50' }}">
-                <div class="flex items-center justify-between mb-3">
-                    <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center group-hover:bg-red-200 transition-colors">
-                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               class="group bg-white rounded-2xl p-4 sm:p-6 shadow-sm hover:shadow-lg transition-all duration-300 {{ request('status') == 'cancelled' ? 'ring-2 ring-red-500 bg-gradient-to-br from-red-50 to-red-100' : 'hover:bg-gray-50' }}">
+                <div class="flex items-center justify-between mb-2 sm:mb-3">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-xl flex items-center justify-center group-hover:bg-red-200 transition-colors">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
                     </div>
@@ -92,15 +92,15 @@
                         <div class="w-2 h-2 bg-red-500 rounded-full"></div>
                     @endif
                 </div>
-                <div class="text-3xl font-bold text-red-600 mb-1">{{ $stats['cancelled'] }}</div>
-                <div class="text-sm font-medium text-gray-600">Cancelled</div>
+                <div class="text-2xl sm:text-3xl font-bold text-red-600 mb-1">{{ $stats['cancelled'] }}</div>
+                <div class="text-xs sm:text-sm font-medium text-gray-600">Cancelled</div>
             </a>
         </div>
 
         <!-- Search and Filter -->
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-900">Search & Filter</h3>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 mb-6 sm:mb-8">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <h3 class="text-base sm:text-lg font-semibold text-gray-900">Search & Filter</h3>
                 @if($search || $status)
                     <a href="{{ route('customer.orders.index') }}" 
                        class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
@@ -112,7 +112,7 @@
                 @endif
             </div>
             
-            <form method="GET" action="{{ route('customer.orders.index') }}" class="flex flex-col lg:flex-row gap-4">
+            <form method="GET" action="{{ route('customer.orders.index') }}" class="flex flex-col lg:flex-row gap-3 sm:gap-4">
                 <div class="flex-1 relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -123,11 +123,11 @@
                            name="search" 
                            value="{{ $search ?? '' }}"
                            placeholder="Search by order number, customer name, or email..." 
-                           class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#005366] focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white">
+                           class="w-full pl-10 pr-3 py-2.5 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#005366] focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white text-sm sm:text-base">
                 </div>
                 
                 <button type="submit" 
-                        class="inline-flex items-center justify-center px-6 py-3 bg-[#005366] text-white font-medium rounded-xl hover:bg-[#003d4d] transition-all duration-200 shadow-sm hover:shadow-md">
+                        class="inline-flex items-center justify-center px-5 sm:px-6 py-2.5 sm:py-3 bg-[#005366] text-white font-medium rounded-xl hover:bg-[#003d4d] transition-all duration-200 shadow-sm hover:shadow-md text-sm sm:text-base">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>

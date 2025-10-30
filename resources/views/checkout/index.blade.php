@@ -1426,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Load LianLian SDK
             if (!window.LLP) {
                 const script = document.createElement('script');
-                script.src = 'https://gacashier.lianlianpay-inc.com/sandbox2/llpay.min.js';
+                script.src = 'https://secure-checkout.lianlianpay.com/v2/llpay.min.js';
                 script.async = true;
                 
                 await new Promise((resolve, reject) => {
