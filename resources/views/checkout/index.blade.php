@@ -285,46 +285,67 @@ function buildCheckoutCustomizationInputs(customizations) {
     }
 </style>
 
+<style>
+    /* Responsive tweaks for small screens */
+    @media (max-width: 640px) {
+        /* Reduce inner padding blocks */
+        .checkout-container .p-8 { padding: 1rem /* 16px */; }
+        .order-summary-container { padding: 1rem /* 16px */; }
+
+        /* Payment option card spacing */
+        label.payment-option { padding: 1rem /* 16px */ !important; }
+        label.payment-option .mr-5 { margin-right: 0.75rem /* 12px */; }
+        label.payment-option .p-4 { padding: 0.5rem /* 8px */; }
+        label.payment-option .text-xl { font-size: 1rem; }
+        label.payment-option .w-10.h-10 { width: 1.75rem; height: 1.75rem; }
+
+        /* LianLian iframe height */
+        #llpay-card-element { min-height: 220px; }
+        #llpay-card-element iframe { height: 220px; }
+
+        /* PayPal/Stripe containers */
+        #paypal-button-container, #stripe-card-container { padding: 1rem /* 16px */; }
+
+        /* Submit button a bit thinner */
+        button[type="submit"].w-full { padding-top: 0.9rem; padding-bottom: 0.9rem; }
+
+        /* Reduce gaps */
+        .gap-8 { gap: 1rem; }
+        .space-y-8 > * + * { margin-top: 1rem; }
+    }
+
+    /* Tablet adjustments */
+    @media (min-width: 641px) and (max-width: 1024px) {
+        .checkout-container .p-8 { padding: 1.5rem /* 24px */; }
+        label.payment-option { padding: 1.25rem /* 20px */ !important; }
+        #llpay-card-element { min-height: 250px; }
+        #llpay-card-element iframe { height: 250px; }
+    }
+</style>
+
 <div class="min-h-screen bg-gray-50 py-8">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <!-- Progress Steps -->
-        <div class="mb-12 animate-fadeInUp">
-            <div class="flex items-center justify-center space-x-8">
-                <div class="flex items-center">
-                    <div class="step-indicator completed">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                        </svg>
-                    </div>
-                    <span class="ml-4 font-semibold text-gray-700 text-lg">Cart</span>
-                </div>
-                <div class="w-16 h-2 bg-gradient-to-r from-green-500 to-blue-500 rounded-full shadow-sm"></div>
-                <div class="flex items-center">
-                    <div class="step-indicator active">2</div>
-                    <span class="ml-4 font-bold text-gray-900 text-lg">Checkout</span>
-                </div>
-                <div class="w-16 h-2 bg-gray-300 rounded-full"></div>
-                <div class="flex items-center">
-                    <div class="w-10 h-10 rounded-full bg-gray-300 text-white font-semibold text-sm flex items-center justify-center shadow-md">3</div>
-                    <span class="ml-4 font-medium text-gray-500 text-lg">Complete</span>
-                </div>
-            </div>
-        </div>
+        
 
         <!-- Header -->
-        <div class="text-center mb-12 animate-fadeInUp">
-            <div class="inline-block p-6 bg-white rounded-2xl shadow-lg mb-6">
-                <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
-                    </svg>
-                </div>
-                <h1 class="text-5xl font-bold text-gray-900 mb-3">
-                    Complete Your 
-                    <span class="gradient-text">Order</span>
-                </h1>
-                <p class="text-xl text-gray-600">Secure checkout with multiple payment options</p>
-            </div>
+
+        <!-- Breadcrumb -->
+        <div class="mb-6 sm:mb-8">
+            <nav class="text-xs sm:text-sm" aria-label="Breadcrumb">
+                <ol class="flex items-center space-x-2 overflow-x-auto whitespace-nowrap">
+                    <li>
+                        <a href="{{ route('cart.index') }}" class="text-[#005366] hover:underline font-medium">Cart</a>
+                    </li>
+                    <li class="text-gray-300">/</li>
+                    <li>
+                        <span class="text-gray-900 font-semibold">Order Information</span>
+                    </li>
+                    <li class="text-gray-300 hidden xs:inline sm:inline">/</li>
+                    <li class="hidden xs:inline sm:inline">
+                        <span class="text-gray-500">Complete</span>
+                    </li>
+                </ol>
+            </nav>
         </div>
 
         <div class="flex flex-col lg:grid lg:grid-cols-3 gap-8">
@@ -1405,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Load LianLian SDK
             if (!window.LLP) {
                 const script = document.createElement('script');
-                script.src = 'https://secure-checkout.lianlianpay.com/v2/llpay.min.js';
+                script.src = 'https://gacashier.lianlianpay-inc.com/sandbox2/llpay.min.js';
                 script.async = true;
                 
                 await new Promise((resolve, reject) => {

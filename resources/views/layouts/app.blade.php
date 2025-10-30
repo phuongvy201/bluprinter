@@ -334,16 +334,17 @@
                             Secret privileges for your purchase will be delivered straight to your inbox.
                         </p>
                         
-                        <form class="flex" action="#" method="POST" id="newsletter-form">
+                        <form class="flex" id="newsletter-form">
                             @csrf
-                            <input type="email" name="email" placeholder="Your email address" required
+                            <input type="email" name="email" id="newsletter-email" placeholder="Your email address" required
                                    class="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400">
-                            <button type="submit" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-r-lg transition-colors">
+                            <button type="submit" id="newsletter-submit" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-r-lg transition-colors">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
                             </button>
                         </form>
+                        <div id="newsletter-message" class="mt-2 text-sm hidden"></div>
                         <p class="text-xs text-gray-400">
                             By clicking Subscribe, you agree to our 
                             <a href="/page/privacy-policy" class="text-blue-400 hover:text-blue-300">Privacy Policy</a> 
@@ -403,13 +404,14 @@
         document.getElementById('newsletter-form').addEventListener('submit', function(e) {
             e.preventDefault();
             
-            const email = this.email.value;
-            const button = this.querySelector('button');
+            const email = document.getElementById('newsletter-email').value;
+            const button = document.getElementById('newsletter-submit');
+            const messageDiv = document.getElementById('newsletter-message');
             const originalText = button.innerHTML;
             
             // Validate email
             if (!email || !/\S+@\S+\.\S+/.test(email)) {
-                alert('Please enter a valid email address');
+                showMessage('Please enter a valid email address', 'error');
                 return;
             }
             
@@ -417,14 +419,46 @@
             button.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
             button.disabled = true;
             
-            // Simulate API call (replace with actual endpoint)
-            setTimeout(() => {
-                alert('Thank you for subscribing to our newsletter!');
-                this.email.value = '';
+            // Make API call
+            fetch('{{ route("newsletter.subscribe") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ email: email })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    document.getElementById('newsletter-email').value = '';
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Newsletter subscription error:', error);
+                showMessage('Something went wrong. Please try again later.', 'error');
+            })
+            .finally(() => {
                 button.innerHTML = originalText;
                 button.disabled = false;
-            }, 2000);
+            });
         });
+        
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('newsletter-message');
+            messageDiv.textContent = message;
+            messageDiv.className = `mt-2 text-sm ${type === 'success' ? 'text-green-400' : 'text-red-400'}`;
+            messageDiv.classList.remove('hidden');
+            
+            // Hide message after 5 seconds
+            setTimeout(() => {
+                messageDiv.classList.add('hidden');
+            }, 5000);
+        }
     </script>
     
     <!-- Wishlist JavaScript -->

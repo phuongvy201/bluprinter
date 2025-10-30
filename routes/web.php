@@ -34,6 +34,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SupportController;
 use App\Http\Controllers\BulkOrderController;
 use App\Http\Controllers\PromoCodeController;
+use App\Http\Controllers\NewsletterController;
 
 // Public routes
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -637,12 +638,18 @@ Route::prefix('api/upload')->name('api.upload.')->group(function () {
 Route::get('/test-remove-variant', [ProductTemplateController::class, 'testRemoveVariant'])
     ->name('test.remove.variant');
 
+// Newsletter routes
+Route::post('/newsletter/subscribe', [NewsletterController::class, 'subscribe'])->name('newsletter.subscribe');
+Route::get('/newsletter/unsubscribe/{email}', [NewsletterController::class, 'showUnsubscribe'])->name('newsletter.unsubscribe');
+Route::post('/newsletter/unsubscribe/{email}', [NewsletterController::class, 'unsubscribe'])->name('newsletter.unsubscribe.post');
+Route::get('/newsletter/status', [NewsletterController::class, 'status'])->name('newsletter.status');
+
 // Test page for variant removal
 Route::get('/test-variant-removal-page', function () {
     return view('test-variant-removal');
 })->name('test.variant.removal.page');
 
 // Page routes - Must be at the end to avoid conflicts
-Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller).*$');
+Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller|newsletter).*$');
 
 require __DIR__ . '/auth.php';

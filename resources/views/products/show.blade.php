@@ -197,6 +197,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     @endif
                     
+                    <!-- Stock Status Badge for Mobile/Tablet -->
+                    <div id="mobile-stock-badge" class="absolute top-3 left-3 bg-green-100 rounded-full px-3 py-1.5 items-center space-x-2 pointer-events-none z-10 lg:hidden mobile-stock-badge">
+                        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        <span class="text-sm font-medium text-green-700">In Stock</span>
+                    </div>
+                    
                     <!-- Loading Spinner -->
                     <div id="image-loading" class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center hidden">
                         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#005366]"></div>
@@ -372,7 +380,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             @endif
-
             <!-- Reviews Section (Desktop Only) -->
             <div class="space-y-6 hidden lg:block">
                 <!-- Reviews Header -->
@@ -560,7 +567,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
         </div>
-
         <!-- Product Info -->
         <div class="space-y-6">
             <div>
@@ -569,22 +575,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 <!-- Engagement Metrics -->
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center space-x-4">
-                        <!-- Stock Status Badge -->
-                        <div id="stock-status-badge" class="flex items-center space-x-2 bg-green-100 rounded-full px-3 py-1.5">
+                        <!-- Stock Status Badge (Desktop only) -->
+                        <div class="hidden lg:flex items-center space-x-2 bg-green-100 rounded-full px-3 py-1.5">
                             <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                             </svg>
                             <span class="text-sm font-medium text-green-700">In Stock</span>
                         </div>
-                        
-                        <!-- Viewing Count -->
-                        <div class="flex items-center space-x-2 bg-gray-100 rounded-full px-3 py-1.5">
-                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                            </svg>
-                            <span class="text-sm font-medium text-gray-700">{{ rand(20, 100) }} viewing</span>
-                        </div>
+                         <!-- Viewing Count -->
+                         <div class="flex items-center space-x-2 bg-gray-100 rounded-full px-3 py-1.5">
+                             <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                             </svg>
+                             <span class="text-sm font-medium text-gray-700">{{ rand(20, 100) }} viewing</span>
+                         </div>
                         
                         <!-- Cart Count -->
                         <div class="flex items-center space-x-2 bg-red-50 rounded-full px-3 py-1.5">
@@ -806,7 +811,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     </div>
                 @endif
-
                 <!-- Product Options -->
                 @if($product->variants()->count() > 0)
                     @php
@@ -1032,10 +1036,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 @endif
 
                 <!-- Action Buttons -->
-                <div class="flex space-x-4">
+                <div class="flex space-x-3 md:space-x-4">
                     <button id="add-to-cart-btn" 
                             onclick="addToCart()"
-                            class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 px-6 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-semibold py-3 md:py-4 px-4 md:px-6 rounded-lg md:rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base min-h-[44px]">
                             <svg id="cart-icon" class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
                             </svg>
@@ -1044,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                             </div>
                         </button>
-                        <button onclick="buyNow()" class="flex-1 bg-[#E2150C] hover:bg-[#c0120a] text-white font-bold py-4 px-6 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2">
+                        <button onclick="buyNow()" class="flex-1 bg-[#E2150C] hover:bg-[#c0120a] text-white font-semibold py-3 md:py-4 px-4 md:px-6 rounded-lg md:rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 text-sm md:text-base min-h-[44px]">
                             <span>Buy Now</span>
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
@@ -1135,7 +1139,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             </div>
-
             <!-- Product Details -->
             <div class="space-y-6">
                 <div>
@@ -1293,7 +1296,6 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 @endif
-
 <!-- Reviews Section (Mobile & Tablet Only) -->
 <div class="lg:hidden bg-white py-8 border-t border-gray-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1783,12 +1785,10 @@ document.addEventListener('DOMContentLoaded', function() {
         transform: scale(1.02);
     }
 }
-
 /* Returns Info Popup */
 #returns-info-popup {
     animation: fadeInScale 0.2s ease-out;
 }
-
 @keyframes fadeInScale {
     from {
         opacity: 0;
@@ -1911,6 +1911,47 @@ video[poster] {
 
 #image-container:has(video):hover #video-play-overlay .w-20 {
     transform: scale(1.15);
+}
+
+/* Mobile Stock Badge Responsive */
+.mobile-stock-badge {
+    display: none;
+}
+
+@media (max-width: 1023px) {
+    .mobile-stock-badge {
+        display: flex;
+        background-color: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.2);
+        backdrop-filter: blur(4px);
+    }
+    
+    .mobile-stock-badge svg {
+        width: 0.875rem;
+        height: 0.875rem;
+    }
+    
+    .mobile-stock-badge span {
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+}
+
+@media (max-width: 640px) {
+    .mobile-stock-badge {
+        top: 0.5rem;
+        left: 0.5rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    .mobile-stock-badge svg {
+        width: 0.75rem;
+        height: 0.75rem;
+    }
+    
+    .mobile-stock-badge span {
+        font-size: 0.6875rem;
+    }
 }
 </style>
 
@@ -2229,7 +2270,6 @@ function initializeImageEffects() {
         });
     }
 }
-
 function changeMainImage(mediaUrl, index = null) {
     const mainImage = document.getElementById('main-image');
     const mainVideo = document.getElementById('main-video');
@@ -2387,7 +2427,6 @@ function changeMainImage(mediaUrl, index = null) {
         }
     });
 }
-
 // Gallery Modal Functions
 function openGalleryModal() {
     const modal = document.getElementById('gallery-modal');
@@ -2654,7 +2693,6 @@ function updateColorButtons() {
 function updateSizeButtons() {
     updateAllAttributeButtons();
 }
-
 function updateVariantSelection() {
     // Find matching variant based on selected attributes
     const matchingVariant = variants.find(variant => {
@@ -3036,7 +3074,6 @@ function scrollRecentlyViewed(direction) {
         }
     }
 }
-
 function updateRecentlyViewedNavigation(totalProducts) {
     const prevBtn = document.getElementById('recentlyViewedPrevBtn');
     const nextBtn = document.getElementById('recentlyViewedNextBtn');
@@ -3136,8 +3173,6 @@ function toggleDescription() {
         toggleIcon.style.transform = 'rotate(0deg)';
     }
 }
-
-
 // IP-based Location Detection and Shipping Calculation
 async function detectLocationAndCalculateShipping() {
     try {
@@ -3631,7 +3666,6 @@ function showCartSuccess(message = 'Added to cart successfully!') {
         notification.remove();
     }, 3000);
 }
-
 function showCartPopup(addedProduct) {
     console.log('showCartPopup called with:', addedProduct);
     
@@ -4094,7 +4128,6 @@ function generateCartPopupItems(cartItems) {
         `;
     }).join('');
 }
-
 function updateCartItemQuantity(e, cartItemId, newQuantity) {
     if (newQuantity < 1) {
         removeCartItemById(cartItemId);
@@ -4234,7 +4267,6 @@ function removeCartItemById(cartItemId) {
         });
     });
 }
-
 function refreshCartPopupContent() {
     // Fetch latest cart data and update popup
     fetch('/api/cart/get', {
@@ -4585,7 +4617,6 @@ function removeCartItem(index) {
     // Refresh the popup to get correct IDs
     refreshCartPopupContent();
 }
-
 function syncLocalStorageWithBackend() {
     // Fetch current cart from backend
     fetch('/api/cart/get', {
@@ -4860,7 +4891,6 @@ function selectUnit(unit) {
     
     updateSizeTable();
 }
-
 function updateSizeTable() {
     const productType = document.getElementById('product-type-selector').value;
     const tableBody = document.getElementById('size-table-body');
@@ -5083,7 +5113,6 @@ function closeShareModal() {
     modal.classList.add('hidden');
     document.body.style.overflow = 'auto';
 }
-
 function copyShareLink() {
     const input = document.getElementById('share-link');
     input.select();
