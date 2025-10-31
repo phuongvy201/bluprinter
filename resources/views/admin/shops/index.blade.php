@@ -22,9 +22,10 @@
     <div class="bg-white shadow-md rounded-xl border border-gray-200 overflow-hidden w-full max-w-full">
         <div class="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] scrollbar-custom" 
              style="overscroll-behavior: contain;">
-            <table class="min-w-[1200px] w-full divide-y divide-gray-200">
+            <table class="min-w-[1400px] w-full divide-y divide-gray-200">
                 <thead class="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-10">
                     <tr>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">ID</th>
                         <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Shop</th>
                         <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Owner</th>
                         <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Status</th>
@@ -37,6 +38,9 @@
                 <tbody class="bg-white divide-y divide-gray-200">
                     @foreach($shops as $shop)
                     <tr class="hover:bg-green-50 transition">
+                        <td class="px-6 py-4">
+                            <p class="font-mono font-bold text-blue-600">#{{ $shop->id }}</p>
+                        </td>
                         <td class="px-6 py-4">
                             <div class="flex items-center space-x-3">
                                 @if($shop->shop_logo)

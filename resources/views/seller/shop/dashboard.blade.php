@@ -16,7 +16,9 @@
                         </span>
                     @endif
                 </h1>
-                <p class="text-blue-100 mt-2">Manage your shop</p>
+                <p class="text-blue-100 mt-2">
+                    Manage your shop • Shop ID: <span class="font-mono font-bold">#{{ $shop->id }}</span>
+                </p>
             </div>
             <div class="flex items-center space-x-4">
                 <a href="{{ route('seller.shop.edit') }}" 
