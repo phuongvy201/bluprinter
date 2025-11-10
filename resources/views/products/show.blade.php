@@ -1960,6 +1960,15 @@ video[poster] {
 let selectedAttributes = {};
 let variants = [];
 
+// Helpers to ensure consistent attribute/value comparisons
+const normalizeAttributeKey = (key) => {
+    return (key ?? '').toString().trim();
+};
+
+const normalizeAttributeValue = (value) => {
+    return (value ?? '').toString().trim();
+};
+
 // Gallery variables
 let currentImageIndex = 0;
 let allImages = [
@@ -2582,16 +2591,23 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-        function selectAttribute(attributeName, value) {
-            selectedAttributes[attributeName] = value;
+function selectAttribute(attributeName, value) {
+            const normalizedAttribute = normalizeAttributeKey(attributeName);
+            const normalizedValue = normalizeAttributeValue(value);
+            
+            if (normalizedAttribute !== attributeName) {
+                delete selectedAttributes[attributeName];
+            }
+            
+            selectedAttributes[normalizedAttribute] = normalizedValue;
             updateVariantSelection();
             updateAllAttributeButtons();
             
             // Update selected color name display if it's a color attribute
-            if (attributeName === 'Color' || attributeName === 'Colour') {
+            if (normalizedAttribute === 'Color' || normalizedAttribute === 'Colour') {
                 const selectedColorName = document.getElementById('selected-color-name');
                 if (selectedColorName) {
-                    selectedColorName.textContent = value;
+                    selectedColorName.textContent = normalizedValue;
                 }
             }
         }
@@ -2612,10 +2628,11 @@ document.addEventListener('keydown', function(e) {
 function updateAllAttributeButtons() {
     // Update color swatches
     document.querySelectorAll('.color-swatch').forEach(btn => {
-        const attribute = btn.dataset.attribute;
-        const value = btn.dataset.value;
+        const attribute = normalizeAttributeKey(btn.dataset.attribute);
+        const value = normalizeAttributeValue(btn.dataset.value);
+        const selectedValue = normalizeAttributeValue(selectedAttributes[attribute]);
         
-        if (selectedAttributes[attribute] === value) {
+        if (selectedValue && selectedValue === value) {
             btn.classList.add('border-[#005366]', 'ring-2', 'ring-[#005366]', 'ring-offset-2');
             btn.classList.remove('border-gray-300', 'hover:border-gray-400');
             // Add checkmark
@@ -2639,10 +2656,11 @@ function updateAllAttributeButtons() {
     
     // Update attribute buttons
     document.querySelectorAll('.attribute-option').forEach(btn => {
-        const attribute = btn.dataset.attribute;
-        const value = btn.dataset.value;
+        const attribute = normalizeAttributeKey(btn.dataset.attribute);
+        const value = normalizeAttributeValue(btn.dataset.value);
+        const selectedValue = normalizeAttributeValue(selectedAttributes[attribute]);
         
-        if (selectedAttributes[attribute] === value) {
+        if (selectedValue && selectedValue === value) {
             btn.classList.add('border-[#005366]', 'bg-[#005366]', 'text-white');
             btn.classList.remove('border-gray-300', 'text-gray-700');
         } else {
@@ -2652,10 +2670,11 @@ function updateAllAttributeButtons() {
     });
     
     // Update dropdowns
-    Object.keys(selectedAttributes).forEach(attribute => {
-        const selector = document.getElementById(`${attribute.toLowerCase()}-selector`);
+    Object.keys(selectedAttributes).forEach(attributeKey => {
+        const normalizedAttribute = normalizeAttributeKey(attributeKey);
+        const selector = document.getElementById(`${normalizedAttribute.toLowerCase()}-selector`);
         if (selector) {
-            selector.value = selectedAttributes[attribute] || '';
+            selector.value = normalizeAttributeValue(selectedAttributes[attributeKey]) || '';
         }
     });
 }
@@ -2700,14 +2719,24 @@ function updateVariantSelection() {
         
         // Check if all selected attributes match
         for (const [attribute, value] of Object.entries(selectedAttributes)) {
-            if (variant.attributes[attribute] !== value) {
+            const normalizedAttribute = normalizeAttributeKey(attribute);
+            const normalizedSelectedValue = normalizeAttributeValue(value);
+            const variantValueRaw = variant.attributes[normalizedAttribute] ?? variant.attributes[attribute];
+            const normalizedVariantValue = normalizeAttributeValue(variantValueRaw);
+            
+            if (normalizedSelectedValue && normalizedVariantValue !== normalizedSelectedValue) {
                 return false;
             }
         }
         
         // Check if variant has attributes that are not selected (should not match)
         for (const [attribute, value] of Object.entries(variant.attributes)) {
-            if (selectedAttributes[attribute] && selectedAttributes[attribute] !== value) {
+            const normalizedAttribute = normalizeAttributeKey(attribute);
+            const normalizedVariantValue = normalizeAttributeValue(value);
+            const selectedValueRaw = selectedAttributes[normalizedAttribute] ?? selectedAttributes[attribute];
+            const normalizedSelectedValue = normalizeAttributeValue(selectedValueRaw);
+            
+            if (normalizedSelectedValue && normalizedSelectedValue !== normalizedVariantValue) {
                 return false;
             }
         }
@@ -2845,8 +2874,16 @@ function updateVariantSelection() {
 
 function updateStockStatusBadge(quantity) {
     const stockBadge = document.getElementById('stock-status-badge');
+    if (!stockBadge) {
+        return;
+    }
+    
     const stockText = stockBadge.querySelector('span');
     const stockIcon = stockBadge.querySelector('svg');
+    
+    if (!stockText || !stockIcon) {
+        return;
+    }
     
     if (quantity === null || quantity > 0) {
         // In Stock

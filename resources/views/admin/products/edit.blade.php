@@ -185,8 +185,11 @@
             <div class="p-6">
                 @if($product->media && count($product->media) > 0)
                 <div class="mb-6">
-                    <h4 class="text-sm font-semibold text-gray-700 mb-4">Current Media:</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-sm font-semibold text-gray-700">Current Media</h4>
+                        <span class="text-xs text-gray-500 italic">Kéo và thả để thay đổi thứ tự</span>
+                    </div>
+                    <div id="current-media-list" class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         @foreach($product->media as $mediaItem)
                             @php
                                 // Get media URL safely
@@ -200,7 +203,9 @@
                             @endphp
                             
                             @if($mediaUrl)
-                            <div class="relative bg-white rounded-lg border-2 border-gray-200 p-2">
+                            <div class="current-media-item relative bg-white rounded-lg border-2 border-gray-200 p-2 cursor-move"
+                                 draggable="true"
+                                 data-media-key="{{ $loop->index }}">
                                 @if(str_contains($mediaUrl, '.mp4') || str_contains($mediaUrl, '.mov') || str_contains($mediaUrl, '.avi'))
                                     <div class="aspect-square rounded-lg bg-purple-100 flex items-center justify-center">
                                         <svg class="w-12 h-12 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,6 +215,7 @@
                                 @else
                                     <img src="{{ $mediaUrl }}" class="w-full aspect-square object-cover rounded-lg">
                                 @endif
+                                <input type="hidden" name="current_media_order[]" value="{{ $mediaUrl }}">
                             </div>
                             @endif
                         @endforeach
@@ -229,7 +235,10 @@
                 </div>
                 
                 <div id="media-preview" class="mt-6 hidden">
-                    <h5 class="text-sm font-semibold text-gray-700 mb-4">New Files Selected:</h5>
+                    <div class="flex items-center justify-between mb-2">
+                        <h5 class="text-sm font-semibold text-gray-700">New Files Selected</h5>
+                        <span class="text-xs text-gray-500 italic">Có thể kéo để sắp xếp thứ tự tải lên</span>
+                    </div>
                     <div id="media-preview-list" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
                 </div>
             </div>
@@ -251,27 +260,47 @@
 
 <script>
 let selectedMediaFiles = [];
+let draggedElement = null;
 
 function handleMediaFiles(files) {
-    selectedMediaFiles = Array.from(files);
+    const timestamp = Date.now();
+    selectedMediaFiles = Array.from(files).map((file, index) => ({
+        file,
+        id: `${timestamp}-${index}-${file.name.replace(/\s+/g, '_')}`
+    }));
+    refreshMediaInput();
     displayMediaPreview();
+}
+
+function refreshMediaInput() {
+    const input = document.getElementById('media');
+    if (!input) return;
+    const dt = new DataTransfer();
+    selectedMediaFiles.forEach(item => dt.items.add(item.file));
+    input.files = dt.files;
 }
 
 function displayMediaPreview() {
     const previewContainer = document.getElementById('media-preview');
     const previewList = document.getElementById('media-preview-list');
     
+    if (!previewContainer || !previewList) return;
+    
     if (selectedMediaFiles.length === 0) {
         previewContainer.classList.add('hidden');
+        previewList.innerHTML = '';
         return;
     }
     
     previewContainer.classList.remove('hidden');
     previewList.innerHTML = '';
     
-    selectedMediaFiles.forEach((file, index) => {
+    selectedMediaFiles.forEach((item) => {
+        const { file, id } = item;
         const previewItem = document.createElement('div');
-        previewItem.className = 'relative bg-white rounded-lg border-2 border-gray-200 p-2';
+        previewItem.className = 'media-preview-item relative bg-white rounded-lg border-2 border-gray-200 p-2 cursor-move';
+        previewItem.dataset.fileId = id;
+        previewItem.setAttribute('draggable', 'true');
         
         if (file.type.startsWith('image/')) {
             const reader = new FileReader();
@@ -279,7 +308,7 @@ function displayMediaPreview() {
                 previewItem.innerHTML = `
                     <img src="${e.target.result}" class="w-full aspect-square object-cover rounded-lg mb-2">
                     <p class="text-xs text-gray-700 truncate">${file.name}</p>
-                    <button type="button" onclick="removeMediaFile(${index})" 
+                    <button type="button" onclick="removeMediaFile('${id}')" 
                             class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600">×</button>
                 `;
             };
@@ -292,39 +321,121 @@ function displayMediaPreview() {
                     </svg>
                 </div>
                 <p class="text-xs text-gray-700 truncate">${file.name}</p>
-                <button type="button" onclick="removeMediaFile(${index})" 
+                <button type="button" onclick="removeMediaFile('${id}')" 
+                        class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600">×</button>
+            `;
+        } else {
+            previewItem.innerHTML = `
+                <div class="aspect-square rounded-lg bg-gray-100 flex items-center justify-center mb-2">
+                    <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4-4 4 4m2-4.5a2.5 2.5 0 115 0 2.5 2.5 0 01-5 0z"></path>
+                    </svg>
+                </div>
+                <p class="text-xs text-gray-700 truncate">${file.name}</p>
+                <button type="button" onclick="removeMediaFile('${id}')" 
                         class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600">×</button>
             `;
         }
         
         previewList.appendChild(previewItem);
     });
+    
+    initDragAndDrop('#media-preview-list', '.media-preview-item', syncSelectedFilesWithPreview);
 }
 
-function removeMediaFile(index) {
-    selectedMediaFiles.splice(index, 1);
-    
-    const input = document.getElementById('media');
-    const dt = new DataTransfer();
-    selectedMediaFiles.forEach(file => dt.items.add(file));
-    input.files = dt.files;
-    
+function removeMediaFile(id) {
+    selectedMediaFiles = selectedMediaFiles.filter(item => item.id !== id);
+    refreshMediaInput();
     displayMediaPreview();
+}
+
+function syncSelectedFilesWithPreview(container = null) {
+    const scope = container || document.getElementById('media-preview-list');
+    if (!scope) return;
+    const items = scope.querySelectorAll('.media-preview-item');
+    if (!items.length) return;
+    
+    const orderedIds = Array.from(items).map(item => item.dataset.fileId);
+    selectedMediaFiles.sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id));
+    refreshMediaInput();
+}
+
+function initDragAndDrop(containerSelector, itemSelector, onDropCallback = null) {
+    const container = document.querySelector(containerSelector);
+    if (!container) return;
+    
+    const items = container.querySelectorAll(itemSelector);
+    items.forEach(item => {
+        if (item.dataset.dragBound === '1') return;
+        item.dataset.dragBound = '1';
+        
+        item.addEventListener('dragstart', (event) => {
+            draggedElement = item;
+            item.classList.add('opacity-60');
+            event.dataTransfer.effectAllowed = 'move';
+        });
+        
+        item.addEventListener('dragend', () => {
+            item.classList.remove('opacity-60', 'ring-2', 'ring-purple-400');
+            draggedElement = null;
+        });
+        
+        item.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            item.classList.add('ring-2', 'ring-purple-400');
+        });
+        
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('ring-2', 'ring-purple-400');
+        });
+        
+        item.addEventListener('drop', (event) => {
+            item.classList.remove('ring-2', 'ring-purple-400');
+            handleDrop(event, item, container, itemSelector, onDropCallback);
+        });
+    });
+}
+
+function handleDrop(event, target, container, itemSelector, onDropCallback) {
+    event.preventDefault();
+    if (!draggedElement || draggedElement === target) return;
+    
+    const items = Array.from(container.querySelectorAll(itemSelector));
+    const draggedIndex = items.indexOf(draggedElement);
+    const targetIndex = items.indexOf(target);
+    
+    if (draggedIndex < targetIndex) {
+        container.insertBefore(draggedElement, target.nextSibling);
+    } else {
+        container.insertBefore(draggedElement, target);
+    }
+    
+    if (typeof onDropCallback === 'function') {
+        onDropCallback(container);
+    }
 }
 
 function updateDescriptionValue() {
     const editor = document.getElementById('description-editor');
     const hiddenInput = document.getElementById('description');
+    if (!editor || !hiddenInput) return;
     hiddenInput.value = editor.innerHTML;
+}
+
+function initCurrentMediaDrag() {
+    initDragAndDrop('#current-media-list', '.current-media-item');
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     const editor = document.getElementById('description-editor');
     const hiddenInput = document.getElementById('description');
     
-    if (hiddenInput.value) {
+    if (hiddenInput && hiddenInput.value) {
         editor.innerHTML = hiddenInput.value;
     }
+    
+    initCurrentMediaDrag();
 });
 </script>
 @endsection

@@ -350,20 +350,63 @@ class ProductController extends Controller
                 'status' => 'required|in:active,inactive,draft',
                 'shop_id' => $user->hasRole('admin') ? 'nullable|exists:shops,id' : 'nullable',
                 'media.*' => 'nullable|mimes:jpeg,png,jpg,gif,mp4,mov,avi|max:10240',
+                'current_media_order' => 'nullable|array',
             ]);
 
-            $data = $request->all();
+            $data = $request->only([
+                'name',
+                'price',
+                'description',
+                'quantity',
+                'status',
+                'shop_id',
+            ]);
+
             $data['slug'] = $this->generateUniqueSlug($request->name);
 
-            // Handle media upload
+            // Preserve and reorder current media based on submitted order
+            $existingMediaOrder = $request->input('current_media_order', []);
+            $orderedExistingMedia = [];
+
+            if (is_array($existingMediaOrder) && !empty($existingMediaOrder)) {
+                foreach ($existingMediaOrder as $mediaUrl) {
+                    $mediaUrl = trim($mediaUrl);
+                    if (!empty($mediaUrl)) {
+                        $orderedExistingMedia[] = $mediaUrl;
+                    }
+                }
+            } else {
+                // Fallback to current product media if no order provided
+                if (is_array($product->media)) {
+                    $orderedExistingMedia = $product->media;
+                } elseif (!empty($product->media)) {
+                    $orderedExistingMedia = is_string($product->media)
+                        ? json_decode($product->media, true) ?? []
+                        : (array) $product->media;
+                }
+            }
+
+            // Handle uploaded media
             if ($request->hasFile('media')) {
-                $mediaUrls = [];
                 foreach ($request->file('media') as $file) {
+                    if (!$file->isValid()) {
+                        continue;
+                    }
+
                     $fileName = time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
                     $filePath = Storage::disk('s3')->putFileAs('products', $file, $fileName);
-                    $mediaUrls[] = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/products/' . $fileName;
+
+                    if ($filePath) {
+                        $orderedExistingMedia[] = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $filePath;
+                    }
                 }
-                $data['media'] = $mediaUrls;
+            }
+
+            if (!empty($orderedExistingMedia)) {
+                // Re-index array to ensure clean JSON encoding
+                $data['media'] = array_values($orderedExistingMedia);
+            } else {
+                $data['media'] = [];
             }
 
             $product->update($data);
