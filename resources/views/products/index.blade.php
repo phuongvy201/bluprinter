@@ -4,8 +4,14 @@
 
 @section('content')
 @php
-    $gtagItems = $products->map(function ($product, $loopIndex) use ($products) {
-        $primaryCategory = optional($product->categories->first())->name;
+    $gtagItems = collect($products->items())->map(function ($product, $loopIndex) use ($products) {
+        $categories = $product->categories ?? collect();
+        if (!($categories instanceof \Illuminate\Support\Collection)) {
+            $categories = collect($categories);
+        }
+
+        $primaryCategory = optional($categories->first())->name ?? null;
+
         return [
             'item_id' => $product->sku ?? $product->id,
             'item_name' => $product->name,

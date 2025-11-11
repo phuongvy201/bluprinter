@@ -8,7 +8,11 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
 @php
-    $primaryCategory = optional($product->categories->first())->name ?? null;
+    $categories = $product->categories ?? collect();
+    if (!($categories instanceof \Illuminate\Support\Collection)) {
+        $categories = collect($categories);
+    }
+    $primaryCategory = optional($categories->first())->name ?? null;
 @endphp
 
 <script>
