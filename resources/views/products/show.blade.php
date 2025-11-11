@@ -5641,6 +5641,36 @@ function buyNow() {
             items: [gaItem]
         });
     }
+
+    if (typeof window !== 'undefined' && window.ttq) {
+        const tiktokAddToCartPayload = {
+            contents: [{
+                content_id: TIKTOK_PRODUCT_ID,
+                content_type: 'product',
+                content_name: productData.name,
+                quantity: productData.quantity || 1,
+                price: totalPriceValue
+            }],
+            value: totalPriceValue,
+            currency: 'USD'
+        };
+
+        if (TIKTOK_PRIMARY_CATEGORY) {
+            tiktokAddToCartPayload.contents[0].content_category = TIKTOK_PRIMARY_CATEGORY;
+        }
+
+        if (selectedVariant && selectedVariant.attributes) {
+            const variantLabel = Object.values(selectedVariant.attributes)
+                .filter(Boolean)
+                .join(' / ')
+                .trim();
+            if (variantLabel) {
+                tiktokAddToCartPayload.contents[0].content_variant = variantLabel;
+            }
+        }
+
+        window.ttq.track('AddToCart', tiktokAddToCartPayload);
+    }
     
     // Sync with backend
     syncCartToBackend(productData)
@@ -5689,6 +5719,36 @@ function buyNow() {
                 console.log('✅ Google Tag: begin_checkout tracked from buyNow', {
                     value: totalPriceValue
                 });
+            }
+
+            if (typeof window !== 'undefined' && window.ttq) {
+                const tiktokCheckoutPayload = {
+                    contents: [{
+                        content_id: TIKTOK_PRODUCT_ID,
+                        content_type: 'product',
+                        content_name: productData.name,
+                        quantity: productData.quantity || 1,
+                        price: totalPriceValue
+                    }],
+                    value: totalPriceValue,
+                    currency: 'USD'
+                };
+
+                if (TIKTOK_PRIMARY_CATEGORY) {
+                    tiktokCheckoutPayload.contents[0].content_category = TIKTOK_PRIMARY_CATEGORY;
+                }
+
+                if (selectedVariant && selectedVariant.attributes) {
+                    const variantLabel = Object.values(selectedVariant.attributes)
+                        .filter(Boolean)
+                        .join(' / ')
+                        .trim();
+                    if (variantLabel) {
+                        tiktokCheckoutPayload.contents[0].content_variant = variantLabel;
+                    }
+                }
+
+                window.ttq.track('InitiateCheckout', tiktokCheckoutPayload);
             }
             
             // Redirect to checkout
