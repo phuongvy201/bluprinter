@@ -36,6 +36,33 @@ document.addEventListener('DOMContentLoaded', function() {
         // Dispatch cart updated event to update header
         window.dispatchEvent(new CustomEvent('cartUpdated'));
     }
+
+    if (typeof gtag === 'function') {
+        const gaItems = @json($order->items->map(function($item, $index) {
+            return [
+                'item_id' => (string) $item->product_id,
+                'item_name' => $item->product_name,
+                'price' => (float) $item->unit_price,
+                'quantity' => (int) $item->quantity,
+                'index' => $index + 1,
+            ];
+        })->values());
+
+        gtag('event', 'purchase', {
+            currency: 'USD',
+            transaction_id: '{{ $order->order_number }}',
+            value: Number('{{ $order->total_amount }}'),
+            tax: Number('{{ $order->tax_amount }}'),
+            shipping: Number('{{ $order->shipping_cost }}'),
+            items: gaItems
+        });
+
+        console.log('✅ Google Tag: purchase tracked', {
+            order: '{{ $order->order_number }}',
+            total: '{{ $order->total_amount }}',
+            items: gaItems.length
+        });
+    }
 });
 </script>
 <style>

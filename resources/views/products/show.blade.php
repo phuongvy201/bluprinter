@@ -3377,7 +3377,10 @@ function addToCart() {
     if (cartLoading) cartLoading.classList.remove('hidden');
     if (cartText) cartText.textContent = 'Adding...';
     
-    const variantPrice = selectedVariant && selectedVariant.price ? selectedVariant.price : {{ $product->base_price }};
+    const rawVariantPrice = selectedVariant && selectedVariant.price != null
+        ? selectedVariant.price
+        : {{ (float)($product->price ?? $product->base_price ?? 0) }};
+    const variantPrice = Number(rawVariantPrice) || 0;
     
     // Calculate customization total
     const customizations = getSelectedCustomizations();
@@ -3388,13 +3391,14 @@ function addToCart() {
     
     // Total price including customizations
     const totalPrice = variantPrice + customizationTotal;
+    const totalPriceValue = Math.round((totalPrice + Number.EPSILON) * 100) / 100;
     
     // Get current product data
     const productData = {
         id: {{ $product->id }},
         name: '{{ addslashes($product->name) }}',
         slug: '{{ $product->slug }}',
-        price: totalPrice,
+        price: totalPriceValue,
         image: '@php
             if ($media && count($media) > 0) {
                 if (is_string($media[0])) {
@@ -3407,7 +3411,7 @@ function addToCart() {
         shop: '{{ $product->shop->name ?? "Unknown Shop" }}',
         quantity: 1,
         selectedVariant: selectedVariant,
-        customizations: getSelectedCustomizations(),
+        customizations: customizations,
         addedAt: Date.now()
     };
     
@@ -3420,7 +3424,7 @@ function addToCart() {
             content_name: productData.name,
             content_ids: [productData.id],
             content_type: 'product',
-            value: totalPrice,
+            value: totalPriceValue,
             currency: 'USD'
         });
     }
@@ -3431,7 +3435,7 @@ function addToCart() {
             item_name: '{{ addslashes($product->name) }}',
             item_category: @json($primaryCategory),
             item_variant: selectedVariant && selectedVariant.attributes ? Object.values(selectedVariant.attributes).join(' / ') : undefined,
-            price: Number(totalPrice.toFixed(2)),
+            price: totalPriceValue,
             quantity: 1
         };
         if (!gaItem.item_variant) {
@@ -3439,7 +3443,7 @@ function addToCart() {
         }
         gtag('event', 'add_to_cart', {
             currency: 'USD',
-            value: Number(totalPrice.toFixed(2)),
+            value: totalPriceValue,
             items: [gaItem]
         });
     }
@@ -3947,7 +3951,7 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
         <div class="p-6 bg-white">
             <!-- Checkout Buttons -->
             <div class="flex space-x-3 mb-3">
-                <button onclick="closeCartPopup(); window.location.href='{{ route('checkout.index') }}'" 
+                <button onclick="goToCheckoutFromPopup()" 
                         class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 px-6 rounded-xl transition-colors">
                     Checkout
                 </button>
@@ -4525,6 +4529,75 @@ function closeCartPopup() {
             overlay.remove();
         }
     }
+}
+
+function triggerCheckoutTrackingFromLocalCart() {
+    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+
+    if (cart.length === 0) {
+        return;
+    }
+
+    let cartTotal = 0;
+    const productIds = [];
+
+    const gaItems = cart.map((item, index) => {
+        const quantity = parseInt(item.quantity, 10) || 1;
+        const unitPrice = parseFloat(item.price) || 0;
+        cartTotal += unitPrice * quantity;
+        productIds.push(item.id);
+
+        const gaItem = {
+            item_id: (item.selectedVariant && item.selectedVariant.id) ? String(item.selectedVariant.id) : String(item.id),
+            item_name: item.name || `Cart Item ${index + 1}`,
+            price: Number(unitPrice.toFixed(2)),
+            quantity
+        };
+
+        if (item.selectedVariant && item.selectedVariant.attributes) {
+            const variantAttributes = Object.values(item.selectedVariant.attributes || {}).filter(Boolean);
+            if (variantAttributes.length > 0) {
+                gaItem.item_variant = variantAttributes.join(' / ');
+            }
+        }
+
+        return gaItem;
+    });
+
+    if (typeof fbq !== 'undefined') {
+        fbq('track', 'InitiateCheckout', {
+            content_ids: productIds,
+            content_type: 'product',
+            value: cartTotal.toFixed(2),
+            currency: 'USD',
+            num_items: cart.length
+        });
+
+        console.log('✅ Facebook Pixel: InitiateCheckout tracked from popup/cart', {
+            items: cart.length,
+            total: cartTotal.toFixed(2),
+            ids: productIds
+        });
+    }
+
+    if (typeof gtag === 'function') {
+        gtag('event', 'begin_checkout', {
+            currency: 'USD',
+            value: Number(cartTotal.toFixed(2)),
+            items: gaItems
+        });
+
+        console.log('✅ Google Tag: begin_checkout tracked from popup/cart', {
+            items: gaItems.length,
+            value: cartTotal.toFixed(2)
+        });
+    }
+}
+
+function goToCheckoutFromPopup() {
+    triggerCheckoutTrackingFromLocalCart();
+    closeCartPopup();
+    window.location.href = '{{ route("checkout.index") }}';
 }
 
 @php
@@ -5446,7 +5519,10 @@ function buyNow() {
         return;
     }
     
-    const variantPrice = selectedVariant && selectedVariant.price ? selectedVariant.price : {{ $product->base_price }};
+    const rawVariantPrice = selectedVariant && selectedVariant.price != null
+        ? selectedVariant.price
+        : {{ (float)($product->price ?? $product->base_price ?? 0) }};
+    const variantPrice = Number(rawVariantPrice) || 0;
     
     // Get product data
     const customizations = getSelectedCustomizations();
@@ -5455,12 +5531,13 @@ function buyNow() {
         customizationTotal += parseFloat(customization.price) || 0;
     });
     const totalPrice = variantPrice + customizationTotal;
+    const totalPriceValue = Math.round((totalPrice + Number.EPSILON) * 100) / 100;
 
     const productData = {
         id: {{ $product->id }},
         name: '{{ addslashes($product->name) }}',
         slug: '{{ $product->slug }}',
-        price: totalPrice,
+        price: totalPriceValue,
         image: '@php
             if ($media && count($media) > 0) {
                 if (is_string($media[0])) {
@@ -5486,7 +5563,7 @@ function buyNow() {
             content_name: productData.name,
             content_ids: [productData.id],
             content_type: 'product',
-            value: totalPrice,
+            value: totalPriceValue,
             currency: 'USD'
         });
     }
@@ -5497,7 +5574,7 @@ function buyNow() {
             item_name: '{{ addslashes($product->name) }}',
             item_category: @json($primaryCategory),
             item_variant: selectedVariant && selectedVariant.attributes ? Object.values(selectedVariant.attributes).join(' / ') : undefined,
-            price: Number(totalPrice.toFixed(2)),
+            price: totalPriceValue,
             quantity: 1
         };
         if (!gaItem.item_variant) {
@@ -5505,7 +5582,7 @@ function buyNow() {
         }
         gtag('event', 'add_to_cart', {
             currency: 'USD',
-            value: Number(totalPrice.toFixed(2)),
+            value: totalPriceValue,
             items: [gaItem]
         });
     }
@@ -5527,12 +5604,36 @@ function buyNow() {
                 fbq('track', 'InitiateCheckout', {
                     content_ids: [productData.id],
                     content_type: 'product',
-                    value: totalPrice,
+                    value: totalPriceValue,
                     currency: 'USD',
                     num_items: 1
                 });
                 
                 console.log('✅ Facebook Pixel: Buy Now - AddToCart & InitiateCheckout tracked');
+            }
+
+            if (typeof gtag === 'function') {
+                const gaItem = {
+                    item_id: '{{ $product->sku ?? $product->id }}',
+                    item_name: '{{ addslashes($product->name) }}',
+                    item_category: @json($primaryCategory),
+                    item_variant: selectedVariant && selectedVariant.attributes ? Object.values(selectedVariant.attributes).join(' / ') : undefined,
+                    price: totalPriceValue,
+                    quantity: 1
+                };
+                if (!gaItem.item_variant) {
+                    delete gaItem.item_variant;
+                }
+
+                gtag('event', 'begin_checkout', {
+                    currency: 'USD',
+                    value: totalPriceValue,
+                    items: [gaItem]
+                });
+
+                console.log('✅ Google Tag: begin_checkout tracked from buyNow', {
+                    value: totalPriceValue
+                });
             }
             
             // Redirect to checkout

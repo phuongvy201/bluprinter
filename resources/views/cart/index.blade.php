@@ -1107,6 +1107,47 @@ function trackInitiateCheckout(event) {
             });
         }
     }
+
+    if (typeof gtag === 'function') {
+        const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+
+        if (cart.length > 0) {
+            let cartTotal = 0;
+
+            const gaItems = cart.map((item, index) => {
+                const quantity = parseInt(item.quantity, 10) || 1;
+                const unitPrice = parseFloat(item.price) || 0;
+                cartTotal += unitPrice * quantity;
+
+                const gaItem = {
+                    item_id: (item.selectedVariant && item.selectedVariant.id) ? String(item.selectedVariant.id) : String(item.id),
+                    item_name: item.name || `Cart Item ${index + 1}`,
+                    price: Number(unitPrice.toFixed(2)),
+                    quantity
+                };
+
+                if (item.selectedVariant && item.selectedVariant.attributes) {
+                    const variantAttributes = Object.values(item.selectedVariant.attributes || {}).filter(Boolean);
+                    if (variantAttributes.length > 0) {
+                        gaItem.item_variant = variantAttributes.join(' / ');
+                    }
+                }
+
+                return gaItem;
+            });
+
+            gtag('event', 'begin_checkout', {
+                currency: 'USD',
+                value: Number(cartTotal.toFixed(2)),
+                items: gaItems
+            });
+
+            console.log('✅ Google Tag: begin_checkout tracked from cart', {
+                items: gaItems.length,
+                value: cartTotal.toFixed(2)
+            });
+        }
+    }
     // Let the link navigate normally
     return true;
 }

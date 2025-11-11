@@ -12,6 +12,64 @@
 <script src="https://js.stripe.com/v3/"></script>
 
 @section('content')
+@php
+    use Illuminate\Support\Collection;
+
+    $gtagItems = [];
+    foreach ($products as $index => $item) {
+        $product = $item['product'];
+        $quantity = max(1, (int) ($item['quantity'] ?? 1));
+        $lineTotal = (float) ($item['total'] ?? ($product->price ?? $product->base_price ?? 0) * $quantity);
+        $unitPrice = $quantity > 0 ? $lineTotal / $quantity : 0;
+
+        $categories = $product->categories ?? collect();
+        if (!($categories instanceof Collection)) {
+            $categories = collect($categories);
+        }
+        $primaryCategory = optional($categories->first())->name ?? null;
+
+        $variantAttributes = null;
+        $selectedVariant = $item['cart_item']->selected_variant ?? null;
+        if (is_array($selectedVariant) && isset($selectedVariant['attributes']) && is_array($selectedVariant['attributes'])) {
+            $variantAttributes = implode(' / ', $selectedVariant['attributes']);
+        }
+
+        $gtagItem = [
+            'item_id' => $product->sku ?? $product->id,
+            'item_name' => $product->name,
+            'item_category' => $primaryCategory,
+            'price' => round($unitPrice, 2),
+            'quantity' => $quantity,
+            'index' => $index + 1,
+        ];
+
+        if (!empty($variantAttributes)) {
+            $gtagItem['item_variant'] = $variantAttributes;
+        }
+
+        $gtagItems[] = $gtagItem;
+    }
+
+    $checkoutTotal = round((float) ($total ?? 0), 2);
+@endphp
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof gtag === 'function') {
+        const checkoutItems = @json($gtagItems);
+        gtag('event', 'begin_checkout', {
+            currency: 'USD',
+            value: {{ $checkoutTotal }},
+            items: checkoutItems
+        });
+        console.log('✅ Google Tag: begin_checkout tracked', {
+            items: checkoutItems.length,
+            value: {{ $checkoutTotal }}
+        });
+    }
+});
+</script>
+
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
