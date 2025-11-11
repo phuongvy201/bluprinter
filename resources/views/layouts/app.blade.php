@@ -51,6 +51,70 @@
     }(window, document, 'ttq');
     </script>
     <!-- TikTok Pixel Code End -->
+
+    @auth
+    <script>
+    (function () {
+        const rawData = {
+            email: {!! json_encode(strtolower(trim(auth()->user()->email ?? ''))) !!},
+            phone: {!! json_encode(auth()->user()->phone ?? auth()->user()->phone_number ?? '') !!},
+            externalId: {!! json_encode((string) auth()->user()->id) !!}
+        };
+
+        const canHash = typeof window !== 'undefined'
+            && window.crypto
+            && window.crypto.subtle
+            && typeof TextEncoder !== 'undefined';
+
+        if (!canHash) {
+            console.warn('TikTok identify skipped: SubtleCrypto/TextEncoder unavailable');
+            return;
+        }
+
+        const encoder = new TextEncoder();
+
+        const hashSHA256 = async (value) => {
+            const data = encoder.encode(value);
+            const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+        };
+
+        (async () => {
+            try {
+                const payload = {};
+
+                if (rawData.email) {
+                    const normalizedEmail = rawData.email.trim().toLowerCase();
+                    if (normalizedEmail) {
+                        payload.email = await hashSHA256(normalizedEmail);
+                    }
+                }
+
+                if (rawData.phone) {
+                    const normalizedPhone = String(rawData.phone).replace(/\D+/g, '');
+                    if (normalizedPhone) {
+                        payload.phone_number = await hashSHA256(normalizedPhone);
+                    }
+                }
+
+                if (rawData.externalId) {
+                    const normalizedId = String(rawData.externalId).trim();
+                    if (normalizedId) {
+                        payload.external_id = await hashSHA256(normalizedId);
+                    }
+                }
+
+                if (Object.keys(payload).length > 0 && window.ttq && typeof window.ttq.identify === 'function') {
+                    window.ttq.identify(payload);
+                }
+            } catch (error) {
+                console.error('TikTok identify error:', error);
+            }
+        })();
+    })();
+    </script>
+    @endauth
     
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">

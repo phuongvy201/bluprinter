@@ -16,6 +16,7 @@
     use Illuminate\Support\Collection;
 
     $gtagItems = [];
+    $tiktokContents = [];
     foreach ($products as $index => $item) {
         $product = $item['product'];
         $quantity = max(1, (int) ($item['quantity'] ?? 1));
@@ -48,12 +49,28 @@
         }
 
         $gtagItems[] = $gtagItem;
+
+        $tiktokContents[] = [
+            'content_id' => (string) ($product->id ?? $product->sku ?? ''),
+            'content_type' => 'product',
+            'content_name' => $product->name,
+            'quantity' => $quantity,
+            'price' => round($unitPrice, 2),
+        ];
     }
+
+    $tiktokContents = array_values(array_filter($tiktokContents, function ($item) {
+        return !empty($item['content_id']) && !empty($item['content_name']);
+    }));
 
     $checkoutTotal = round((float) ($total ?? 0), 2);
 @endphp
 
 <script>
+const TIKTOK_CHECKOUT_CONTENTS = {!! json_encode($tiktokContents, JSON_UNESCAPED_UNICODE) !!};
+const TIKTOK_CHECKOUT_VALUE = {{ $checkoutTotal }};
+const TIKTOK_CHECKOUT_CURRENCY = 'USD';
+
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof gtag === 'function') {
         const checkoutItems = @json($gtagItems);
@@ -66,6 +83,18 @@ document.addEventListener('DOMContentLoaded', function() {
             items: checkoutItems.length,
             value: {{ $checkoutTotal }}
         });
+    }
+
+    if (typeof window !== 'undefined') {
+        window.tiktokCheckoutPayload = {
+            contents: Array.isArray(TIKTOK_CHECKOUT_CONTENTS) ? TIKTOK_CHECKOUT_CONTENTS : [],
+            value: Number(TIKTOK_CHECKOUT_VALUE) || 0,
+            currency: TIKTOK_CHECKOUT_CURRENCY
+        };
+
+        if (window.ttq) {
+            window.ttq.track('InitiateCheckout', window.tiktokCheckoutPayload);
+        }
     }
 });
 </script>
@@ -1162,6 +1191,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     };
     
+    let tikTokAddPaymentTracked = false;
+    const trackTikTokAddPayment = (paymentMethod) => {
+        if (tikTokAddPaymentTracked || typeof window === 'undefined' || !window.ttq) {
+            return;
+        }
+
+        tikTokAddPaymentTracked = true;
+
+        const basePayload = window.tiktokCheckoutPayload || {};
+        const payload = {
+            contents: Array.isArray(basePayload.contents) ? basePayload.contents : [],
+            value: Number(basePayload.value) || 0,
+            currency: basePayload.currency || 'USD'
+        };
+
+        if (paymentMethod) {
+            payload.payment_method = paymentMethod;
+        }
+
+        try {
+            window.ttq.track('AddPaymentInfo', payload);
+        } catch (error) {
+            console.error('TikTok AddPaymentInfo error:', error);
+        }
+    };
+    
     // Check if this is a 3DS return
     const threeDSInfo = sessionStorage.getItem('lianlian_3ds_info');
     const pending3DS = sessionStorage.getItem('pending_3ds_transaction');
@@ -2108,6 +2163,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             console.log('🚀 Processing Stripe payment...');
             showLoading(true);
+            trackTikTokAddPayment('stripe');
             
             if (!stripeInstance || !stripeCardElement) {
                 throw new Error('Stripe not initialized. Please refresh and try again.');
@@ -2270,6 +2326,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             console.log('🚀 Processing LianLian Pay payment via iframe...');
             showLoading(true);
+            trackTikTokAddPayment('lianlian_pay');
             
             if (!lianLianCardInstance || !window.LLP) {
                 throw new Error('Payment form not initialized. Please refresh and try again.');
@@ -2354,6 +2411,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             console.log('🔄 Processing PayPal payment...');
             showLoading(true);
+            trackTikTokAddPayment('paypal');
             
             // Double-check form validation before submitting
             const requiredFields = ['customer_name', 'customer_email', 'shipping_address', 'city', 'postal_code', 'country'];

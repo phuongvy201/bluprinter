@@ -3,6 +3,21 @@
 @section('title', 'Search Results' . ($query ? ' for "' . $query . '"' : ''))
 
 @section('content')
+@php
+    $tiktokSearchContents = collect($products ?? [])
+        ->take(5)
+        ->map(function ($product) {
+            return [
+                'content_id' => (string) ($product->id ?? $product->slug ?? ''),
+                'content_type' => 'product',
+                'content_name' => $product->name ?? '',
+            ];
+        })
+        ->filter(function ($item) {
+            return !empty($item['content_id']) && !empty($item['content_name']);
+        })
+        ->values();
+@endphp
 <script>
 // Track Facebook Pixel Search event
 document.addEventListener('DOMContentLoaded', function() {
@@ -18,6 +33,20 @@ document.addEventListener('DOMContentLoaded', function() {
             content_name: 'Search Results',
             content_type: 'search'
         });
+    }
+
+    if (typeof window !== 'undefined' && window.ttq) {
+        const tiktokSearchPayload = {
+            contents: {!! $tiktokSearchContents->isEmpty() ? '[]' : $tiktokSearchContents->toJson(JSON_UNESCAPED_UNICODE) !!},
+            value: 0,
+            currency: 'USD'
+        };
+
+        @if($query)
+        tiktokSearchPayload.search_string = {!! json_encode($query) !!};
+        @endif
+
+        window.ttq.track('Search', tiktokSearchPayload);
     }
 });
 </script>

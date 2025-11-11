@@ -16,6 +16,11 @@
 @endphp
 
 <script>
+const TIKTOK_PRODUCT_ID = {!! json_encode((string) $product->id) !!};
+const TIKTOK_PRODUCT_NAME = {!! json_encode($product->name) !!};
+const TIKTOK_PRIMARY_CATEGORY = @json($primaryCategory);
+const TIKTOK_PRODUCT_PRICE = {{ (float) ($product->base_price ?? 0) }};
+
 // Track Facebook Pixel ViewContent for product detail page
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof fbq !== 'undefined') {
@@ -40,6 +45,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 quantity: 1
             }]
         });
+    }
+
+    if (typeof window !== 'undefined' && window.ttq) {
+        const tiktokViewContent = {
+            contents: [{
+                content_id: TIKTOK_PRODUCT_ID,
+                content_type: 'product',
+                content_name: TIKTOK_PRODUCT_NAME,
+                quantity: 1,
+                price: TIKTOK_PRODUCT_PRICE
+            }],
+            value: TIKTOK_PRODUCT_PRICE,
+            currency: 'USD'
+        };
+
+        if (TIKTOK_PRIMARY_CATEGORY) {
+            tiktokViewContent.contents[0].content_category = TIKTOK_PRIMARY_CATEGORY;
+        }
+
+        window.ttq.track('ViewContent', tiktokViewContent);
     }
 });
 </script>
@@ -3446,6 +3471,36 @@ function addToCart() {
             value: totalPriceValue,
             items: [gaItem]
         });
+    }
+
+    if (typeof window !== 'undefined' && window.ttq) {
+        const tiktokAddToCartPayload = {
+            contents: [{
+                content_id: TIKTOK_PRODUCT_ID,
+                content_type: 'product',
+                content_name: productData.name,
+                quantity: productData.quantity || 1,
+                price: totalPriceValue
+            }],
+            value: totalPriceValue,
+            currency: 'USD'
+        };
+
+        if (TIKTOK_PRIMARY_CATEGORY) {
+            tiktokAddToCartPayload.contents[0].content_category = TIKTOK_PRIMARY_CATEGORY;
+        }
+
+        if (selectedVariant && selectedVariant.attributes) {
+            const variantLabel = Object.values(selectedVariant.attributes)
+                .filter(Boolean)
+                .join(' / ')
+                .trim();
+            if (variantLabel) {
+                tiktokAddToCartPayload.contents[0].content_variant = variantLabel;
+            }
+        }
+
+        window.ttq.track('AddToCart', tiktokAddToCartPayload);
     }
     
     // Try to sync with backend

@@ -78,6 +78,39 @@ class WishlistManager {
                         });
                     }
 
+                    if (
+                        data.action === "added" &&
+                        typeof window !== "undefined" &&
+                        window.ttq
+                    ) {
+                        const productName =
+                            button.getAttribute("data-product-name") || "";
+                        const rawPrice =
+                            button.getAttribute("data-product-price") || "0";
+                        const numericPrice = Number(rawPrice) || 0;
+
+                        const tiktokWishlistPayload = {
+                            contents: [
+                                {
+                                    content_id: String(productId),
+                                    content_type: "product",
+                                    content_name: productName,
+                                },
+                            ],
+                            value: numericPrice,
+                            currency: "USD",
+                        };
+
+                        if (numericPrice) {
+                            tiktokWishlistPayload.contents[0].price = numericPrice;
+                        }
+
+                        window.ttq.track(
+                            "AddToWishlist",
+                            tiktokWishlistPayload
+                        );
+                    }
+
                     // Show success message
                     this.showMessage(data.message, "success");
 

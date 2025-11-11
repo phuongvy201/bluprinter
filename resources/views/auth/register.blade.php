@@ -28,7 +28,7 @@
                 <p class="text-gray-600">Create your account to get started</p>
             </div>
 
-            <form method="POST" action="{{ route('register') }}">
+            <form id="register-form" method="POST" action="{{ route('register') }}">
                 @csrf
 
                 <!-- Name -->
@@ -187,6 +187,33 @@
                 `;
             }
         }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const registerForm = document.getElementById('register-form');
+            if (!registerForm) {
+                return;
+            }
+
+            let tiktokRegistrationTracked = false;
+            registerForm.addEventListener('submit', function () {
+                if (tiktokRegistrationTracked) {
+                    return;
+                }
+                tiktokRegistrationTracked = true;
+
+                if (typeof window !== 'undefined' && window.ttq) {
+                    window.ttq.track('CompleteRegistration', {
+                        contents: [{
+                            content_id: 'account_registration',
+                            content_type: 'user',
+                            content_name: 'Account Registration'
+                        }],
+                        value: 0,
+                        currency: 'USD'
+                    });
+                }
+            });
+        });
     </script>
 </body>
 </html>

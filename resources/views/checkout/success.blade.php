@@ -63,6 +63,38 @@ document.addEventListener('DOMContentLoaded', function() {
             items: gaItems.length
         });
     }
+
+    if (typeof window !== 'undefined' && window.ttq) {
+        const tiktokOrderContents = {!! $order->items->map(function($item) {
+            return [
+                'content_id' => (string) $item->product_id,
+                'content_type' => 'product',
+                'content_name' => $item->product_name,
+                'quantity' => (int) $item->quantity,
+                'price' => (float) $item->unit_price,
+            ];
+        })->values()->toJson(JSON_UNESCAPED_UNICODE) !!};
+
+        const tiktokOrderValue = Number('{{ $order->total_amount }}') || 0;
+        const tiktokPayloadBase = {
+            contents: Array.isArray(tiktokOrderContents) ? tiktokOrderContents : [],
+            value: tiktokOrderValue,
+            currency: 'USD',
+            order_id: '{{ $order->order_number }}'
+        };
+
+        const paymentMethod = {!! json_encode($order->payment_method ?? null) !!};
+        if (paymentMethod) {
+            tiktokPayloadBase.payment_method = paymentMethod;
+        }
+
+        try {
+            window.ttq.track('PlaceAnOrder', tiktokPayloadBase);
+            window.ttq.track('Purchase', Object.assign({}, tiktokPayloadBase));
+        } catch (error) {
+            console.error('TikTok Purchase tracking error:', error);
+        }
+    }
 });
 </script>
 <style>
