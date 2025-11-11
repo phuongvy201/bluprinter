@@ -9,6 +9,17 @@
     })(window,document,'script','dataLayer','GTM-5T5M2NG4');</script>
     <!-- End Google Tag Manager -->
     
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17718009492"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'AW-17718009492');
+    </script>
+    <!-- End Google tag -->
+    
     <!-- Meta Pixel Code -->
     <script>
     !function(f,b,e,v,n,t,s)

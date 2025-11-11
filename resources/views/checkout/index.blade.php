@@ -617,10 +617,76 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 <h3 class="text-lg font-bold text-gray-800">Payment Method</h3>
                             </div>
                             <div class="space-y-4">
+                                <!-- Stripe -->
+                                <div class="relative">
+                                    <label for="payment_stripe" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-blue-500 hover:shadow-xl transition-all duration-300 payment-option bg-white">
+                                        <input type="radio" id="payment_stripe" name="payment_method" value="stripe" class="w-6 h-6 text-blue-600 border-gray-300 focus:ring-blue-500 mr-5" checked>
+                                        <div class="flex items-center flex-1">
+                                            <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-4 mr-5 shadow-lg">
+                                                <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                                    <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.274 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.386-2.061 1.386-1.705 0-3.888-.921-5.811-1.758L4.443 24c2.254.893 5.18 1.758 7.83 1.758 2.532 0 4.633-.624 6.123-1.844 1.543-1.271 2.346-3.116 2.346-5.342 0-3.896-2.467-5.76-6.476-7.219z"/>
+                                                </svg>
+                                            </div>
+                                            <div class="flex-1">
+                                                <div class="flex items-center space-x-3">
+                                                    <span class="font-bold text-gray-900 text-xl">Credit Card (Stripe)</span>
+                                                    <span class="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-bold rounded-full shadow-md">SECURE</span>
+                                                </div>
+                                                <p class="text-sm text-gray-600 mt-2">Direct credit card processing</p>
+                                                <div class="flex items-center mt-3 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                    <span class="font-medium">PCI-DSS compliant & 3D Secure</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </label>
+                                    
+                                    <!-- Stripe Card Element -->
+                                    <div id="stripe-card-container" class="mt-4 p-6 border-2 border-purple-200 rounded-xl bg-gradient-to-r from-purple-50 to-blue-50">
+                                        <div class="flex items-center mb-4">
+                                            <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mr-3">
+                                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                                                </svg>
+                                            </div>
+                                            <h4 class="font-bold text-purple-900 text-lg">💳 Credit Card Details</h4>
+                                        </div>
+                                        
+                                        <!-- Card Type Logos -->
+                                        <div class="flex gap-3 mb-4 justify-center">
+                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded text-white text-xs font-bold flex items-center justify-center">VISA</div>
+                                            <div class="w-12 h-8 bg-gradient-to-r from-red-500 to-red-700 rounded text-white text-xs font-bold flex items-center justify-center">MC</div>
+                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-400 to-blue-600 rounded text-white text-xs font-bold flex items-center justify-center">AMEX</div>
+                                            <div class="w-12 h-8 bg-gradient-to-r from-orange-400 to-orange-600 rounded text-white text-xs font-bold flex items-center justify-center">DISC</div>
+                                        </div>
+
+                                        <!-- Stripe Card Element Container -->
+                                        <div id="stripe-card-element" class="p-4 border-2 border-gray-200 rounded-xl bg-white">
+                                            <!-- Stripe Elements will be inserted here -->
+                                        </div>
+                                        <div id="stripe-card-errors" class="text-red-500 text-sm mt-2" role="alert"></div>
+
+                                        <!-- Security Notice -->
+                                        <div class="mt-4 p-3 bg-white/60 rounded-lg border border-purple-200">
+                                            <div class="flex items-start">
+                                                <svg class="w-5 h-5 text-green-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                <div class="text-sm text-purple-800">
+                                                    <p class="font-semibold mb-1">🔒 100% Secure Payment</p>
+                                                    <p>Your payment information is encrypted and processed securely by Stripe. We never store your card details.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- LianLian Pay -->
                                 <div class="relative">
                                     <label for="payment_lianlian" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-blue-500 hover:shadow-xl transition-all duration-300 payment-option bg-white">
-                                        <input type="radio" id="payment_lianlian" name="payment_method" value="lianlian_pay" class="w-6 h-6 text-blue-600 border-gray-300 focus:ring-blue-500 mr-5" checked>
+                                        <input type="radio" id="payment_lianlian" name="payment_method" value="lianlian_pay" class="w-6 h-6 text-blue-600 border-gray-300 focus:ring-blue-500 mr-5">
                                         <div class="flex items-center flex-1">
                                             <div class="bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl p-4 mr-5 shadow-lg">
                                                 <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -727,71 +793,6 @@ function buildCheckoutCustomizationInputs(customizations) {
                                     </div>
                                 </div>
                                 
-                                <!-- Stripe -->
-                                <div class="relative">
-                                    <label for="payment_stripe" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-blue-500 hover:shadow-xl transition-all duration-300 payment-option bg-white">
-                                        <input type="radio" id="payment_stripe" name="payment_method" value="stripe" class="w-6 h-6 text-blue-600 border-gray-300 focus:ring-blue-500 mr-5">
-                                        <div class="flex items-center flex-1">
-                                            <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-4 mr-5 shadow-lg">
-                                                <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                                    <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.274 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.386-2.061 1.386-1.705 0-3.888-.921-5.811-1.758L4.443 24c2.254.893 5.18 1.758 7.83 1.758 2.532 0 4.633-.624 6.123-1.844 1.543-1.271 2.346-3.116 2.346-5.342 0-3.896-2.467-5.76-6.476-7.219z"/>
-                                                </svg>
-                                            </div>
-                                            <div class="flex-1">
-                                                <div class="flex items-center space-x-3">
-                                                    <span class="font-bold text-gray-900 text-xl">Credit Card (Stripe)</span>
-                                                    <span class="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-bold rounded-full shadow-md">SECURE</span>
-                                                </div>
-                                                <p class="text-sm text-gray-600 mt-2">Direct credit card processing</p>
-                                                <div class="flex items-center mt-3 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
-                                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                    </svg>
-                                                    <span class="font-medium">PCI-DSS compliant & 3D Secure</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </label>
-                                    
-                                    <!-- Stripe Card Element -->
-                                    <div id="stripe-card-container" class="hidden mt-4 p-6 border-2 border-purple-200 rounded-xl bg-gradient-to-r from-purple-50 to-blue-50">
-                                        <div class="flex items-center mb-4">
-                                            <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mr-3">
-                                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
-                                                </svg>
-                                            </div>
-                                            <h4 class="font-bold text-purple-900 text-lg">💳 Credit Card Details</h4>
-                                        </div>
-                                        
-                                        <!-- Card Type Logos -->
-                                        <div class="flex gap-3 mb-4 justify-center">
-                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded text-white text-xs font-bold flex items-center justify-center">VISA</div>
-                                            <div class="w-12 h-8 bg-gradient-to-r from-red-500 to-red-700 rounded text-white text-xs font-bold flex items-center justify-center">MC</div>
-                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-400 to-blue-600 rounded text-white text-xs font-bold flex items-center justify-center">AMEX</div>
-                                            <div class="w-12 h-8 bg-gradient-to-r from-orange-400 to-orange-600 rounded text-white text-xs font-bold flex items-center justify-center">DISC</div>
-                                        </div>
-
-                                        <!-- Stripe Card Element Container -->
-                                        <div id="stripe-card-element" class="p-4 border-2 border-gray-200 rounded-xl bg-white">
-                                            <!-- Stripe Elements will be inserted here -->
-                                        </div>
-                                        <div id="stripe-card-errors" class="text-red-500 text-sm mt-2" role="alert"></div>
-
-                                        <!-- Security Notice -->
-                                        <div class="mt-4 p-3 bg-white/60 rounded-lg border border-purple-200">
-                                            <div class="flex items-start">
-                                                <svg class="w-5 h-5 text-green-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                                </svg>
-                                                <div class="text-sm text-purple-800">
-                                                    <p class="font-semibold mb-1">🔒 100% Secure Payment</p>
-                                                    <p>Your payment information is encrypted and processed securely by Stripe. We never store your card details.</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                             @error('payment_method')
                                 <p class="text-red-500 text-sm mt-2">{{ $message }}</p>
@@ -1939,17 +1940,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Set default selection to LianLian Pay
-    const defaultPaymentRadio = document.querySelector('input[value="lianlian_pay"]');
+    // Set default selection to Stripe
+    const defaultPaymentRadio = document.querySelector('input[value="stripe"]');
     if (defaultPaymentRadio) {
-        console.log('🎯 Setting default to LianLian Pay');
+        console.log('🎯 Setting default payment method to Stripe');
         // Ensure it's checked
         defaultPaymentRadio.checked = true;
         
-        // Handle payment method change (will show LianLian form and initialize)
+        // Handle payment method change (will prepare the Stripe UI)
         handlePaymentMethodChange();
         
-        console.log('✅ Default payment method set to LianLian Pay');
+        console.log('✅ Stripe is now the default payment method');
     }
     
     // Initialize PayPal SDK when ready
@@ -1984,7 +1985,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // Initialize Stripe Elements
-    const initializeStripeElements = async () => {
+    async function initializeStripeElements() {
         try {
             console.log('🚀 Initializing Stripe Elements...');
             
@@ -2042,7 +2043,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('❌ Stripe Elements initialization error:', error);
             showToast('error', 'Payment Error', 'Failed to initialize Stripe: ' + error.message);
         }
-    };
+    }
     
     // Handle Stripe Payment
     const handleStripePayment = async () => {

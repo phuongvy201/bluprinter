@@ -3,6 +3,20 @@
 @section('title', 'All Products')
 
 @section('content')
+@php
+    $gtagItems = $products->map(function ($product, $loopIndex) use ($products) {
+        $primaryCategory = optional($product->categories->first())->name;
+        return [
+            'item_id' => $product->sku ?? $product->id,
+            'item_name' => $product->name,
+            'item_list_name' => 'All Products',
+            'item_category' => $primaryCategory,
+            'price' => (float) ($product->price ?? $product->base_price ?? 0),
+            'index' => ($products->perPage() * max($products->currentPage() - 1, 0)) + $loopIndex + 1,
+        ];
+    })->values()->toArray();
+@endphp
+
 <script>
 // Track Facebook Pixel ViewContent for products listing page
 document.addEventListener('DOMContentLoaded', function() {
@@ -10,6 +24,13 @@ document.addEventListener('DOMContentLoaded', function() {
         fbq('track', 'ViewContent', {
             content_type: 'product_list',
             content_name: 'All Products'
+        });
+    }
+
+    if (typeof gtag === 'function') {
+        gtag('event', 'view_item_list', {
+            item_list_name: 'All Products',
+            items: @json($gtagItems)
         });
     }
 });

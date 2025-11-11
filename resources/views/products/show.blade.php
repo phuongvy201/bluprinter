@@ -7,6 +7,10 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
+@php
+    $primaryCategory = optional($product->categories->first())->name ?? null;
+@endphp
+
 <script>
 // Track Facebook Pixel ViewContent for product detail page
 document.addEventListener('DOMContentLoaded', function() {
@@ -17,6 +21,20 @@ document.addEventListener('DOMContentLoaded', function() {
             content_type: 'product',
             value: {{ $product->base_price }},
             currency: 'USD'
+        });
+    }
+
+    if (typeof gtag === 'function') {
+        gtag('event', 'view_item', {
+            currency: 'USD',
+            value: {{ $product->base_price }},
+            items: [{
+                item_id: '{{ $product->sku ?? $product->id }}',
+                item_name: '{{ addslashes($product->name) }}',
+                item_category: @json($primaryCategory),
+                price: {{ $product->base_price }},
+                quantity: 1
+            }]
         });
     }
 });
@@ -3402,6 +3420,25 @@ function addToCart() {
             currency: 'USD'
         });
     }
+
+    if (typeof gtag === 'function') {
+        const gaItem = {
+            item_id: '{{ $product->sku ?? $product->id }}',
+            item_name: '{{ addslashes($product->name) }}',
+            item_category: @json($primaryCategory),
+            item_variant: selectedVariant && selectedVariant.attributes ? Object.values(selectedVariant.attributes).join(' / ') : undefined,
+            price: Number(totalPrice.toFixed(2)),
+            quantity: 1
+        };
+        if (!gaItem.item_variant) {
+            delete gaItem.item_variant;
+        }
+        gtag('event', 'add_to_cart', {
+            currency: 'USD',
+            value: Number(totalPrice.toFixed(2)),
+            items: [gaItem]
+        });
+    }
     
     // Try to sync with backend
     syncCartToBackend(productData)
@@ -5408,11 +5445,18 @@ function buyNow() {
     const variantPrice = selectedVariant && selectedVariant.price ? selectedVariant.price : {{ $product->base_price }};
     
     // Get product data
+    const customizations = getSelectedCustomizations();
+    let customizationTotal = 0;
+    Object.values(customizations).forEach(customization => {
+        customizationTotal += parseFloat(customization.price) || 0;
+    });
+    const totalPrice = variantPrice + customizationTotal;
+
     const productData = {
         id: {{ $product->id }},
         name: '{{ addslashes($product->name) }}',
         slug: '{{ $product->slug }}',
-        price: variantPrice,
+        price: totalPrice,
         image: '@php
             if ($media && count($media) > 0) {
                 if (is_string($media[0])) {
@@ -5425,7 +5469,7 @@ function buyNow() {
         shop: '{{ $product->shop->name ?? "Unknown Shop" }}',
         quantity: 1,
         selectedVariant: selectedVariant,
-        customizations: getSelectedCustomizations(),
+        customizations: customizations,
         addedAt: Date.now()
     };
     
@@ -5438,8 +5482,27 @@ function buyNow() {
             content_name: productData.name,
             content_ids: [productData.id],
             content_type: 'product',
-            value: productData.price,
+            value: totalPrice,
             currency: 'USD'
+        });
+    }
+    
+    if (typeof gtag === 'function') {
+        const gaItem = {
+            item_id: '{{ $product->sku ?? $product->id }}',
+            item_name: '{{ addslashes($product->name) }}',
+            item_category: @json($primaryCategory),
+            item_variant: selectedVariant && selectedVariant.attributes ? Object.values(selectedVariant.attributes).join(' / ') : undefined,
+            price: Number(totalPrice.toFixed(2)),
+            quantity: 1
+        };
+        if (!gaItem.item_variant) {
+            delete gaItem.item_variant;
+        }
+        gtag('event', 'add_to_cart', {
+            currency: 'USD',
+            value: Number(totalPrice.toFixed(2)),
+            items: [gaItem]
         });
     }
     
@@ -5460,7 +5523,7 @@ function buyNow() {
                 fbq('track', 'InitiateCheckout', {
                     content_ids: [productData.id],
                     content_type: 'product',
-                    value: productData.price,
+                    value: totalPrice,
                     currency: 'USD',
                     num_items: 1
                 });
