@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Shop;
+use App\Services\TikTokEventsService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
@@ -113,7 +115,7 @@ class ProductController extends Controller
      * @param  string  $slug
      * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
      */
-    public function show($slug)
+    public function show(Request $request, $slug)
     {
         // Get product and require all display conditions
         $product = Product::where('slug', $slug)
@@ -147,6 +149,50 @@ class ProductController extends Controller
         }
         $breadcrumbs[] = ['name' => $product->name, 'url' => ''];
 
+        $this->trackTikTokViewContent($request, $product);
+
         return view('products.show', compact('product', 'relatedProducts', 'breadcrumbs', 'shopAvailable'));
+    }
+
+    private function trackTikTokViewContent(Request $request, Product $product): void
+    {
+        /** @var TikTokEventsService $tikTok */
+        $tikTok = app(TikTokEventsService::class);
+
+        if (!$tikTok->enabled()) {
+            return;
+        }
+
+        $user = Auth::user();
+
+        $tikTok->track(
+            'ViewContent',
+            [
+                'value' => round($product->price ?? $product->base_price ?? 0, 2),
+                'currency' => 'USD',
+                'content_type' => 'product',
+                'content_id' => (string) $product->id,
+                'content_name' => $product->name,
+                'contents' => [[
+                    'content_id' => (string) $product->id,
+                    'content_type' => 'product',
+                    'content_name' => $product->name,
+                    'price' => round($product->price ?? $product->base_price ?? 0, 2),
+                    'quantity' => 1,
+                ]],
+                'description' => optional($product->template)->description ?? $product->description,
+            ],
+            $request,
+            [
+                'email' => $user?->email,
+                'phone' => $user?->phone,
+                'external_id' => $user?->id,
+            ],
+            [
+                'page' => [
+                    'url' => $request->fullUrl(),
+                ],
+            ]
+        );
     }
 }

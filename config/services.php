@@ -47,4 +47,16 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    'tiktok' => [
+        'pixel_id' => env('TIKTOK_PIXEL_ID'),
+        'access_token' => env('TIKTOK_ACCESS_TOKEN'),
+        'test_event_code' => env('TIKTOK_TEST_EVENT_CODE'),
+        'endpoint' => env('TIKTOK_EVENTS_ENDPOINT', 'https://business-api.tiktok.com/open_api/v1.3/event/track/'),
+    ],
+
+    'recaptcha' => [
+        'site_key' => env('RECAPTCHA_SITE_KEY'),
+        'secret_key' => env('RECAPTCHA_SECRET_KEY'),
+    ],
+
 ];

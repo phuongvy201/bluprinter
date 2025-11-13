@@ -9,8 +9,10 @@ use App\Models\Cart;
 use App\Models\ShippingZone;
 use App\Services\PayPalService;
 use App\Services\ShippingCalculator;
+use App\Services\TikTokEventsService;
 use App\Mail\OrderConfirmation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Auth;
@@ -19,7 +21,7 @@ use Illuminate\Support\Facades\Mail;
 
 class CheckoutController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $sessionId = session()->getId();
         $userId = Auth::id();
@@ -97,6 +99,25 @@ class CheckoutController extends Controller
                 $query->ordered();
             }])
             ->get();
+
+        $eventItems = collect($products)->map(function ($item) {
+            return [
+                'id' => $item['product']->id,
+                'name' => $item['product']->name,
+                'quantity' => $item['quantity'],
+                'price' => $item['cart_item']->getUnitPriceWithCustomizations(),
+            ];
+        })->values()->toArray();
+
+        $this->trackTikTokCheckoutEvent(
+            $request,
+            'InitiateCheckout',
+            $eventItems,
+            $total,
+            [
+                'description' => sprintf('Checkout started - subtotal %.2f, shipping %.2f', $subtotal, $shippingCost),
+            ]
+        );
 
         return view('checkout.index', compact('products', 'subtotal', 'shippingCost', 'taxAmount', 'total', 'shippingDetails', 'shippingZones'));
     }
@@ -239,6 +260,30 @@ class CheckoutController extends Controller
             'total_amount' => $total
         ]);
 
+        $eventItems = collect($products)->map(function ($item) {
+            return [
+                'id' => $item['product']->id,
+                'name' => $item['product']->name,
+                'quantity' => $item['quantity'],
+                'price' => $item['cart_item']->getUnitPriceWithCustomizations(),
+            ];
+        })->values()->toArray();
+
+        $this->trackTikTokCheckoutEvent(
+            $request,
+            'AddPaymentInfo',
+            $eventItems,
+            $total,
+            [
+                'description' => sprintf('Payment info submitted via %s', $request->payment_method),
+            ],
+            [
+                'email' => $request->customer_email,
+                'phone' => $request->customer_phone,
+                'external_id' => $userId,
+            ]
+        );
+
         // Create order
         $order = Order::create([
             'order_number' => Order::generateOrderNumber(),
@@ -262,6 +307,23 @@ class CheckoutController extends Controller
             'payment_method' => $request->payment_method,
             'notes' => $request->notes,
         ]);
+
+        $this->trackTikTokCheckoutEvent(
+            $request,
+            'PlaceAnOrder',
+            $eventItems,
+            $total,
+            [
+                'content_id' => $order->order_number,
+                'content_name' => 'Order',
+                'description' => sprintf('Order %s placed via %s', $order->order_number, $request->payment_method),
+            ],
+            [
+                'email' => $order->customer_email,
+                'phone' => $order->customer_phone,
+                'external_id' => $order->user_id ?? $userId,
+            ]
+        );
 
         // Create order items with shipping details
         foreach ($products as $item) {
@@ -388,6 +450,23 @@ class CheckoutController extends Controller
                         'user_id' => $userId,
                         'session_id' => $sessionId
                     ]);
+
+                    $this->trackTikTokCheckoutEvent(
+                        $request,
+                        'Purchase',
+                        $eventItems,
+                        $total,
+                        [
+                            'content_id' => $order->order_number,
+                            'content_name' => 'Order',
+                            'description' => sprintf('Order %s purchased via PayPal SDK', $order->order_number),
+                        ],
+                        [
+                            'email' => $order->customer_email,
+                            'phone' => $order->customer_phone,
+                            'external_id' => $order->user_id ?? $userId,
+                        ]
+                    );
 
                     // Clear shipping session
                     Session::forget('shipping_details');
@@ -1097,6 +1176,16 @@ class CheckoutController extends Controller
                 'paid_at' => now()
             ]);
 
+            $order->load('items');
+            $purchaseItems = $order->items->map(function ($item) {
+                return [
+                    'id' => $item->product_id,
+                    'name' => $item->product_name,
+                    'quantity' => $item->quantity,
+                    'price' => $item->unit_price,
+                ];
+            })->toArray();
+
             // Clear session and cart from database
             $sessionId = session()->getId();
             $userId = Auth::id();
@@ -1124,6 +1213,23 @@ class CheckoutController extends Controller
                     'error' => $e->getMessage()
                 ]);
             }
+
+            $this->trackTikTokCheckoutEvent(
+                $request,
+                'Purchase',
+                $purchaseItems,
+                (float) $order->total_amount,
+                [
+                    'content_id' => $order->order_number,
+                    'content_name' => 'Order',
+                    'description' => sprintf('Order %s purchased via PayPal', $order->order_number),
+                ],
+                [
+                    'email' => $order->customer_email,
+                    'phone' => $order->customer_phone,
+                    'external_id' => $order->user_id,
+                ]
+            );
 
             return redirect()->route('checkout.success', $order->order_number)
                 ->with('success', 'Payment completed successfully!');
@@ -1158,6 +1264,16 @@ class CheckoutController extends Controller
                 'paid_at' => now()
             ]);
 
+            $order->load('items');
+            $purchaseItems = $order->items->map(function ($item) {
+                return [
+                    'id' => $item->product_id,
+                    'name' => $item->product_name,
+                    'quantity' => $item->quantity,
+                    'price' => $item->unit_price,
+                ];
+            })->toArray();
+
             // Clear session
             Session::forget('pending_order');
 
@@ -1186,6 +1302,23 @@ class CheckoutController extends Controller
                     'error' => $e->getMessage()
                 ]);
             }
+
+            $this->trackTikTokCheckoutEvent(
+                $request,
+                'Purchase',
+                $purchaseItems,
+                (float) $order->total_amount,
+                [
+                    'content_id' => $order->order_number,
+                    'content_name' => 'Order',
+                    'description' => sprintf('Order %s purchased via LianLian', $order->order_number),
+                ],
+                [
+                    'email' => $order->customer_email,
+                    'phone' => $order->customer_phone,
+                    'external_id' => $order->user_id,
+                ]
+            );
 
             return redirect()->route('checkout.success', $order->order_number)
                 ->with('success', 'Payment completed successfully!');
@@ -1262,6 +1395,60 @@ class CheckoutController extends Controller
             'success' => true,
             'shipping' => $shippingResult
         ]);
+    }
+
+    private function trackTikTokCheckoutEvent(
+        Request $request,
+        string $event,
+        array $items,
+        float $value,
+        array $additionalProperties = [],
+        array $userData = []
+    ): void {
+        /** @var TikTokEventsService $tikTok */
+        $tikTok = app(TikTokEventsService::class);
+
+        if (!$tikTok->enabled()) {
+            return;
+        }
+
+        $contents = collect($items)->map(function ($item) {
+            return array_filter([
+                'content_id' => (string) Arr::get($item, 'id'),
+                'content_type' => Arr::get($item, 'type', 'product'),
+                'content_name' => Arr::get($item, 'name'),
+                'quantity' => (int) Arr::get($item, 'quantity', 1),
+                'price' => round((float) Arr::get($item, 'price', 0), 2),
+            ], function ($value) {
+                return $value !== null && $value !== '';
+            });
+        })->values()->toArray();
+
+        $properties = array_merge([
+            'value' => round($value, 2),
+            'currency' => 'USD',
+            'content_type' => 'product',
+            'contents' => $contents,
+            'num_items' => collect($items)->sum(function ($item) {
+                return (int) Arr::get($item, 'quantity', 1);
+            }),
+        ], $additionalProperties);
+
+        $defaultUser = Auth::user();
+
+        $userPayload = array_filter([
+            'email' => $userData['email'] ?? $defaultUser?->email,
+            'phone' => $userData['phone'] ?? $defaultUser?->phone,
+            'external_id' => $userData['external_id'] ?? ($defaultUser?->id),
+        ], function ($value) {
+            return $value !== null && $value !== '';
+        });
+
+        // Merge additional user fields except core ones
+        $extras = Arr::except($userData, ['email', 'phone', 'external_id']);
+        $userPayload = array_merge($extras, $userPayload);
+
+        $tikTok->track($event, $properties, $request, $userPayload);
     }
 
     /**

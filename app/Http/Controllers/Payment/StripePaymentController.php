@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Payment;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\ShippingCalculator;
+use App\Services\TikTokEventsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -151,6 +152,17 @@ class StripePaymentController extends Controller
                 ];
             }
 
+            $eventContents = collect($orderItems)->map(function ($item) {
+                return [
+                    'content_id' => (string) $item['product_id'],
+                    'content_type' => 'product',
+                    'content_name' => $item['product_name'],
+                    'quantity' => (int) $item['quantity'],
+                    'price' => round((float) $item['unit_price'], 2),
+                ];
+            })->values()->toArray();
+            $itemsCount = collect($orderItems)->sum('quantity');
+
             // Calculate shipping using ShippingCalculator (same as CheckoutController)
             $items = $cartItems->map(function ($item) {
                 return [
@@ -184,6 +196,32 @@ class StripePaymentController extends Controller
                 ]);
             }
 
+            /** @var TikTokEventsService $tikTok */
+            $tikTok = app(TikTokEventsService::class);
+            $userPayload = [
+                'email' => $validated['customer_email'],
+                'phone' => $validated['customer_phone'] ?? null,
+                'external_id' => $userId,
+            ];
+            $commonProperties = [
+                'value' => round($totalAmount, 2),
+                'currency' => 'USD',
+                'content_type' => 'product',
+                'contents' => $eventContents,
+                'num_items' => $itemsCount,
+            ];
+
+            if ($tikTok->enabled()) {
+                $tikTok->track(
+                    'AddPaymentInfo',
+                    array_merge($commonProperties, [
+                        'description' => 'Payment info submitted via Stripe',
+                    ]),
+                    $request,
+                    $userPayload
+                );
+            }
+
             // Create order
             $order = Order::create([
                 'user_id' => $userId,
@@ -213,6 +251,30 @@ class StripePaymentController extends Controller
             // Create order items
             foreach ($orderItems as $itemData) {
                 $order->items()->create($itemData);
+            }
+
+            if ($tikTok->enabled()) {
+                $orderUserPayload = array_merge($userPayload, [
+                    'external_id' => $order->user_id ?? $userId,
+                ]);
+
+                $tikTok->track(
+                    'PlaceAnOrder',
+                    array_merge($commonProperties, [
+                        'description' => sprintf('Order %s placed via Stripe', $order->order_number),
+                    ]),
+                    $request,
+                    $orderUserPayload
+                );
+
+                $tikTok->track(
+                    'Purchase',
+                    array_merge($commonProperties, [
+                        'description' => sprintf('Order %s purchased via Stripe', $order->order_number),
+                    ]),
+                    $request,
+                    $orderUserPayload
+                );
             }
 
             // Clear cart from database (same as CheckoutController)

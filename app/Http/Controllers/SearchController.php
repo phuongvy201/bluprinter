@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Collection;
 use App\Models\Shop;
+use App\Services\TikTokEventsService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class SearchController extends Controller
 {
@@ -124,6 +126,8 @@ class SearchController extends Controller
             if ($type === 'all') {
                 $totalResults = $counts['products'] + $counts['collections'] + $counts['shops'];
             }
+
+            $this->trackTikTokSearchEvent($request, $query, $products, $counts['products'] ?? 0);
         }
 
         return view('search.index', compact(
@@ -135,6 +139,49 @@ class SearchController extends Controller
             'totalResults',
             'counts'
         ));
+    }
+
+    private function trackTikTokSearchEvent(Request $request, string $query, $products, int $productCount): void
+    {
+        $tikTok = app(TikTokEventsService::class);
+
+        if (!$tikTok->enabled()) {
+            return;
+        }
+
+        $items = collect($products instanceof \Illuminate\Contracts\Pagination\Paginator ? $products->items() : $products)
+            ->filter()
+            ->take(3)
+            ->map(function ($product) {
+                return [
+                    'content_id' => (string) $product->id,
+                    'content_type' => 'product',
+                    'content_name' => $product->name,
+                    'price' => round($product->price ?? $product->base_price ?? 0, 2),
+                ];
+            })
+            ->values()
+            ->toArray();
+
+        $user = Auth::user();
+
+        $tikTok->track(
+            'Search',
+            [
+                'value' => 0,
+                'currency' => 'USD',
+                'content_type' => 'product',
+                'contents' => $items,
+                'search_string' => $query,
+                'description' => sprintf('Search results count: %d', $productCount),
+            ],
+            $request,
+            [
+                'email' => $user?->email,
+                'phone' => $user?->phone,
+                'external_id' => $user?->id,
+            ]
+        );
     }
 
     /**

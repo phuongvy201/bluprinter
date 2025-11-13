@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\Product;
 use App\Services\ShippingCalculator;
+use App\Services\TikTokEventsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -76,6 +77,8 @@ class CartController extends Controller
                 'session_id' => $sessionId,
                 'quantity' => $cartItem->quantity
             ]);
+
+            $this->trackTikTokAddToCartEvent($request, $product, $cartItem->quantity, $request->price);
 
             return response()->json([
                 'success' => true,
@@ -442,5 +445,44 @@ class CartController extends Controller
         ksort($c2);
 
         return $c1 === $c2;
+    }
+
+    private function trackTikTokAddToCartEvent(Request $request, Product $product, int $quantity, float $unitPrice): void
+    {
+        /** @var TikTokEventsService $tikTok */
+        $tikTok = app(TikTokEventsService::class);
+
+        if (!$tikTok->enabled()) {
+            return;
+        }
+
+        $user = Auth::user();
+
+        $tikTok->track(
+            'AddToCart',
+            [
+                'value' => round($unitPrice * $quantity, 2),
+                'currency' => 'USD',
+                'contents' => [[
+                    'content_id' => (string) $product->id,
+                    'content_type' => 'product',
+                    'content_name' => $product->name,
+                    'quantity' => $quantity,
+                    'price' => round($unitPrice, 2),
+                ]],
+                'description' => optional($product->template)->name ?? $product->name,
+            ],
+            $request,
+            [
+                'email' => $user?->email,
+                'phone' => $user?->phone,
+                'external_id' => $user?->id,
+            ],
+            [
+                'page' => [
+                    'url' => $request->headers->get('referer'),
+                ],
+            ]
+        );
     }
 }

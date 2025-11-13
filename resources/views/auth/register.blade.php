@@ -118,6 +118,16 @@
                     @enderror
                 </div>
 
+                @error('captcha')
+                    <div class="mb-6">
+                        <p class="text-sm text-red-600">{{ $message }}</p>
+                    </div>
+                @enderror
+
+                <div class="mb-6">
+                    <div class="g-recaptcha" data-sitekey="{{ config('services.recaptcha.site_key') }}"></div>
+                </div>
+
                 <!-- Register Button -->
                 <button type="submit" 
                         class="w-full bg-[#DC170E] hover:bg-[#B8140C] text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl mb-6">
@@ -215,5 +225,9 @@
             });
         });
     </script>
+
+    @if(config('services.recaptcha.site_key'))
+        <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    @endif
 </body>
 </html>

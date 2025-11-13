@@ -31,6 +31,13 @@ use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\Admin\ShippingZoneController;
 use App\Http\Controllers\Admin\ShippingRateController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Cache\RateLimiting\Limit;
+
+RateLimiter::for('register', function (Request $request) {
+    return Limit::perMinute(5)->by($request->ip());
+});
+
 use App\Http\Controllers\SupportController;
 use App\Http\Controllers\BulkOrderController;
 use App\Http\Controllers\PromoCodeController;

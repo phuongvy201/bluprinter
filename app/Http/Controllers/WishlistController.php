@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Wishlist;
 use App\Models\Product;
+use App\Services\TikTokEventsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -61,6 +62,8 @@ class WishlistController extends Controller
         $wishlist = Wishlist::addToWishlist($productId, $userId, $sessionId);
 
         if ($wishlist) {
+            $this->trackTikTokWishlistAdd($request, $product);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Product added to wishlist successfully.',
@@ -140,6 +143,9 @@ class WishlistController extends Controller
             $added = Wishlist::addToWishlist($productId, $userId, $sessionId);
             $action = 'added';
             $message = 'Product added to wishlist successfully.';
+            if ($added) {
+                $this->trackTikTokWishlistAdd($request, $product);
+            }
         }
 
         return response()->json([
@@ -233,6 +239,42 @@ class WishlistController extends Controller
         }
 
         return $query->count();
+    }
+
+    private function trackTikTokWishlistAdd(Request $request, Product $product): void
+    {
+        /** @var TikTokEventsService $tikTok */
+        $tikTok = app(TikTokEventsService::class);
+
+        if (!$tikTok->enabled()) {
+            return;
+        }
+
+        $user = Auth::user();
+
+        $tikTok->track(
+            'AddToWishlist',
+            [
+                'value' => round($product->price ?? $product->base_price ?? 0, 2),
+                'currency' => 'USD',
+                'content_type' => 'product',
+                'content_id' => (string) $product->id,
+                'content_name' => $product->name,
+                'contents' => [[
+                    'content_id' => (string) $product->id,
+                    'content_type' => 'product',
+                    'content_name' => $product->name,
+                    'price' => round($product->price ?? $product->base_price ?? 0, 2),
+                    'quantity' => 1,
+                ]],
+            ],
+            $request,
+            [
+                'email' => $user?->email,
+                'phone' => $user?->phone,
+                'external_id' => $user?->id,
+            ]
+        );
     }
 
     /**
