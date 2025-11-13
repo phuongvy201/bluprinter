@@ -95,11 +95,13 @@ class TikTokEventsService
 
         $user = $this->formatUserData($userData, $request);
         $context = $this->formatContext($context, $request);
+
+        if (!array_key_exists('external_id', $context) && isset($user['external_id'][0])) {
+            $context['external_id'] = $user['external_id'][0];
+        }
         $properties = $this->formatProperties($properties);
 
-        $payload = array_filter([
-            'event_source' => 'web',
-            'event_source_id' => (string) $this->pixelId,
+        $eventPayload = array_filter([
             'event' => $event,
             'event_id' => $eventId,
             'timestamp' => $timestamp,
@@ -114,9 +116,18 @@ class TikTokEventsService
             return $value !== null;
         });
 
-        if ($this->testEventCode) {
-            $payload['test_event_code'] = $this->testEventCode;
-        }
+        $payload = array_filter([
+            'event_source' => 'web',
+            'event_source_id' => (string) $this->pixelId,
+            'data' => [$eventPayload],
+            'test_event_code' => $this->testEventCode,
+        ], function ($value) {
+            if (is_array($value)) {
+                return !empty($value);
+            }
+
+            return $value !== null;
+        });
 
         return $payload;
     }
@@ -201,16 +212,34 @@ class TikTokEventsService
     {
         $formatted = $context;
 
+        $pageContext = $formatted['page'] ?? [];
+
+        // Support shorthand keys on the incoming context payload.
+        if (isset($formatted['page_url']) && !isset($pageContext['url'])) {
+            $pageContext['url'] = $formatted['page_url'];
+        }
+
+        if (isset($formatted['referrer']) && !isset($pageContext['referrer'])) {
+            $pageContext['referrer'] = $formatted['referrer'];
+        }
+
         if ($request) {
-            $pageContext = $formatted['page'] ?? [];
             $pageContext['url'] = $pageContext['url'] ?? $request->fullUrl();
-            $referer = $request->headers->get('referer');
-            if ($referer) {
-                $pageContext['referrer'] = $pageContext['referrer'] ?? $referer;
+
+            $refererHeader = $request->headers->get('referer');
+            if ($refererHeader) {
+                $pageContext['referrer'] = $pageContext['referrer'] ?? $refererHeader;
             }
 
+            $formatted['ip'] = $formatted['ip'] ?? $request->ip();
+            $formatted['user_agent'] = $formatted['user_agent'] ?? $request->header('User-Agent');
+        }
+
+        if (!empty($pageContext)) {
             $formatted['page'] = $pageContext;
         }
+
+        unset($formatted['page_url'], $formatted['referrer']);
 
         return array_filter($formatted, function ($value) {
             if (is_array($value)) {
