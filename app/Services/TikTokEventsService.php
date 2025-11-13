@@ -98,7 +98,8 @@ class TikTokEventsService
         $properties = $this->formatProperties($properties);
 
         $payload = array_filter([
-            'pixel_code' => $this->pixelId,
+            'event_source' => 'web',
+            'event_source_id' => (string) $this->pixelId,
             'event' => $event,
             'event_id' => $eventId,
             'timestamp' => $timestamp,
@@ -231,4 +232,3 @@ class TikTokEventsService
         return hash('sha256', $normalized);
     }
 }
-
