@@ -126,6 +126,14 @@
                             </svg>
                             Roles
                         </a>
+
+                        <a href="{{ route('admin.settings.analytics.edit') }}" 
+                           class="group flex items-center px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 {{ request()->routeIs('admin.settings.analytics.*') ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                            <svg class="w-5 h-5 mr-3 flex-shrink-0 {{ request()->routeIs('admin.settings.analytics.*') ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3a1 1 0 012 0v1.268a2 2 0 011.106 3.73l-.894.447v2.11l.894.447a2 2 0 01-1.106 3.73V21a1 1 0 11-2 0v-1.268a2 2 0 01-1.106-3.73l.894-.447v-2.11l-.894-.447A2 2 0 0111 4.268V3z"></path>
+                            </svg>
+                            Analytics
+                        </a>
                     @endif
                     
                     <!-- Product Management Section - Admin and Seller Only -->

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\Settings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
@@ -17,10 +18,10 @@ class TikTokEventsService
 
     public function __construct()
     {
-        $this->pixelId = config('services.tiktok.pixel_id');
+        $this->pixelId = Settings::get('analytics.tiktok_pixel_id', config('services.tiktok.pixel_id'));
         $this->accessToken = config('services.tiktok.access_token');
         $this->endpoint = config('services.tiktok.endpoint', 'https://business-api.tiktok.com/open_api/v1.3/event/track/');
-        $this->testEventCode = config('services.tiktok.test_event_code');
+        $this->testEventCode = Settings::get('analytics.tiktok_test_event_code', config('services.tiktok.test_event_code'));
     }
 
     public function enabled(): bool
@@ -73,6 +74,17 @@ class TikTokEventsService
                     'status' => $response->status(),
                     'body' => $response->json(),
                 ]);
+            } else {
+                $body = $response->json();
+
+                Log::info('TikTok Events API request sent', [
+                    'event' => $event,
+                    'status' => $response->status(),
+                    'request_id' => Arr::get($body, 'request_id'),
+                    'response_code' => Arr::get($body, 'code'),
+                    'response_message' => Arr::get($body, 'message'),
+                    'test_event_code' => $this->testEventCode,
+                ]);
             }
         } catch (\Throwable $exception) {
             Log::error('TikTok Events API request exception', [
@@ -104,6 +116,7 @@ class TikTokEventsService
         $eventPayload = array_filter([
             'event' => $event,
             'event_id' => $eventId,
+            'event_time' => $timestamp,
             'timestamp' => $timestamp,
             'properties' => $properties,
             'user' => $user,

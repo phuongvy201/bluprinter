@@ -47,10 +47,19 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    'meta' => [
+        'pixel_id' => env('META_PIXEL_ID', '663127653502118'),
+    ],
+
+    'google' => [
+        'tag_manager_id' => env('GOOGLE_TAG_MANAGER_ID', 'GTM-5T5M2NG4'),
+        'ads_id' => env('GOOGLE_ADS_ID', 'AW-17718009492'),
+    ],
+
     'tiktok' => [
         'pixel_id' => env('TIKTOK_PIXEL_ID'),
-        'access_token' => env('TIKTOK_ACCESS_TOKEN'),
         'test_event_code' => env('TIKTOK_TEST_EVENT_CODE'),
+        'access_token' => env('TIKTOK_ACCESS_TOKEN'),
         'endpoint' => env('TIKTOK_EVENTS_ENDPOINT', 'https://business-api.tiktok.com/open_api/v1.3/event/track/'),
     ],
 

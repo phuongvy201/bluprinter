@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\ProductImportController;
 use App\Http\Controllers\Admin\CollectionController as AdminCollectionController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\SearchController;
+use App\Http\Controllers\Admin\AnalyticsSettingsController;
 use App\Http\Controllers\Admin\ShopController as AdminShopController;
 use App\Http\Controllers\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Seller\SellerDashboardController;
@@ -30,6 +31,8 @@ use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\Admin\ShippingZoneController;
 use App\Http\Controllers\Admin\ShippingRateController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -480,7 +483,13 @@ Route::get('/test-all-colors-display', function () {
 })->name('test.all-colors-display');
 
 Route::get('/dashboard', function () {
-    $user = auth()->user();
+    $user = Auth::user();
+
+    if (!$user) {
+        return redirect()->route('login');
+    }
+
+    /** @var \App\Models\User $user */
 
     // Redirect based on role
     if ($user->hasRole('admin')) {
@@ -516,6 +525,10 @@ Route::middleware('auth')->group(function () {
         // Shipping Management (Admin only)
         Route::resource('shipping-zones', ShippingZoneController::class);
         Route::resource('shipping-rates', ShippingRateController::class);
+
+        // Analytics settings
+        Route::get('settings/analytics', [AnalyticsSettingsController::class, 'edit'])->name('settings.analytics.edit');
+        Route::put('settings/analytics', [AnalyticsSettingsController::class, 'update'])->name('settings.analytics.update');
 
         // API Token (Admin only)
         Route::get('/api-token', [App\Http\Controllers\ApiDocController::class, 'tokenDashboard'])->name('api-token');
