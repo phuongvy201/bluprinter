@@ -50,3 +50,4 @@ class AnalyticsSettingsController extends Controller
             ->with('success', 'Đã cập nhật cấu hình tracking.');
     }
 }
+

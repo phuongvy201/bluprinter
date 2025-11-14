@@ -1,12 +1,40 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
+    <!-- Google Consent Mode -->
+    <script>
+        // Define dataLayer and the gtag function.
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        // IMPORTANT - DO NOT COPY/PASTE WITHOUT MODIFYING REGION LIST
+        // Set default consent for specific regions according to your requirements
+        gtag('consent', 'default', {
+          'ad_storage': 'denied',
+          'ad_user_data': 'denied',
+          'ad_personalization': 'denied',
+          'analytics_storage': 'denied',
+          'regions': ['US', 'GB']
+        });
+
+        // Set default consent for all other regions according to your requirements
+        gtag('consent', 'default', {
+          'ad_storage': 'denied',
+          'ad_user_data': 'denied',
+          'ad_personalization': 'denied',
+          'analytics_storage': 'denied'
+        });
+    </script>
+
     @php
         $metaPixelId = \App\Support\Settings::get('analytics.meta_pixel_id', config('services.meta.pixel_id'));
         $tiktokPixelId = \App\Support\Settings::get('analytics.tiktok_pixel_id', config('services.tiktok.pixel_id'));
         $googleTagManagerId = \App\Support\Settings::get('analytics.google_tag_manager_id', config('services.google.tag_manager_id'));
         $googleAdsId = \App\Support\Settings::get('analytics.google_ads_id', config('services.google.ads_id'));
     @endphp
+
+    <!-- Cookie Script -->
+    <script type="text/javascript" charset="UTF-8" src="//cdn.cookie-script.com/s/4a353d27e80af68f255e8b4bff37f75c.js"></script>
 
     @if($googleTagManagerId)
         <!-- Google Tag Manager -->
