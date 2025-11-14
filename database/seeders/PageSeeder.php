@@ -825,7 +825,7 @@ class PageSeeder extends Seeder
                     <div class="bg-white rounded-lg shadow-2xl overflow-hidden">
                         <!-- Hero Header -->
                         <div class="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 text-white px-8 py-12">
-                            <h1 class="text-5xl font-bold mb-4">Returns & Exchanges Policy</h1>
+                            <h1 class="text-5xl font-bold mb-4">Returns & Exchanges Policy – Bluprinter</h1>
                             <p class="text-emerald-100 text-xl mb-2">Your satisfaction is our priority - Easy returns within 30 days</p>
                             <p class="text-emerald-200 text-sm">Last updated: ' . now()->format('F d, Y') . '</p>
                         </div>
@@ -834,7 +834,7 @@ class PageSeeder extends Seeder
                             <!-- Introduction -->
                             <div class="bg-gradient-to-br from-blue-50 to-cyan-50 border-l-4 border-blue-500 rounded-r-lg p-6 mb-8">
                                 <p class="text-gray-800 leading-relaxed text-lg">
-                                    Bluprinter.com and most sellers on Bluprinter.com offer <strong>returns and exchanges for items within 30 days</strong> from the date of delivery. If you need to return an item, please <a href="mailto:support@bluprinter.com" class="text-blue-600 hover:text-blue-800 font-semibold underline">contact us here</a> to submit your request.
+                                    At <strong>Bluprinter</strong>, we offer returns and exchanges within <strong>30 days</strong> from the date you receive your order. If you need to return or exchange an item, please contact our customer support team to submit your request.
                                 </p>
                             </div>
 
@@ -849,9 +849,9 @@ class PageSeeder extends Seeder
                                                 </svg>
                                             </div>
                                         </div>
-                                        <h2 class="text-3xl font-bold text-green-900 mb-2">Restocking Fee</h2>
+                                        <h2 class="text-3xl font-bold text-green-900 mb-2">1. Restocking Fee</h2>
                                         <p class="text-5xl font-bold text-green-600">NO FEE</p>
-                                        <p class="text-gray-700 mt-2">We don\'t charge any restocking fees for returns</p>
+                                        <p class="text-gray-700 mt-2">Bluprinter does not charge any restocking fees.</p>
                                     </div>
                                 </div>
                             </div>
@@ -859,8 +859,8 @@ class PageSeeder extends Seeder
                             <!-- Return Criteria Section -->
                             <div class="mb-10">
                                 <div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-4 rounded-t-lg mb-0">
-                                    <h2 class="text-3xl font-bold">Return Permitted When:</h2>
-                                    <p class="text-purple-100 mt-2">Your purchase return is permitted ONLY when the goods delivered fall under the following criteria:</p>
+                                    <h2 class="text-3xl font-bold">2. Conditions Eligible for Returns & Exchanges</h2>
+                                    <p class="text-purple-100 mt-2">You may request a return or exchange only if your item falls under one of the following categories:</p>
                                 </div>
 
                                 <!-- Criteria Cards -->
@@ -870,8 +870,8 @@ class PageSeeder extends Seeder
                                         <div class="flex items-start mb-4">
                                             <div class="flex-shrink-0 w-14 h-14 bg-red-500 text-white rounded-full flex items-center justify-center mr-4 text-2xl font-bold">A</div>
                                             <div class="flex-1">
-                                                <h3 class="text-2xl font-bold text-red-800 mb-3">Wrong/Damaged/Faulty Items</h3>
-                                                <p class="text-gray-700 mb-4">We guarantee to assist with cases where customers receive wrong/damaged/faulty items. Includes these cases:</p>
+                                                <h3 class="text-2xl font-bold text-red-800 mb-3">a. Wrong / Damaged / Defective Products</h3>
+                                                <p class="text-gray-700 mb-4">Bluprinter will fully support cases where:</p>
                                             </div>
                                         </div>
                                         
@@ -881,7 +881,7 @@ class PageSeeder extends Seeder
                                                     <svg class="w-6 h-6 text-red-500 mr-3 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                                     </svg>
-                                                    <p class="text-gray-800"><strong>Wrong items:</strong> Product doesn\'t match website description, wrong material, wrong size</p>
+                                                    <p class="text-gray-800">The product does not match the description on the website: <strong>wrong item, wrong material, wrong size</strong>.</p>
                                                 </div>
                                             </div>
                                             
@@ -890,7 +890,7 @@ class PageSeeder extends Seeder
                                                     <svg class="w-6 h-6 text-red-500 mr-3 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                                     </svg>
-                                                    <p class="text-gray-800"><strong>Damaged condition:</strong> Torn, dirty, wet, or hairy fabric received</p>
+                                                    <p class="text-gray-800">The product arrives <strong>torn, dirty, wet, or covered with lint/hair</strong>.</p>
                                                 </div>
                                             </div>
                                             
@@ -899,7 +899,7 @@ class PageSeeder extends Seeder
                                                     <svg class="w-6 h-6 text-red-500 mr-3 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                                     </svg>
-                                                    <p class="text-gray-800"><strong>Print defects:</strong> Visible defects with print, blurred, or out of place</p>
+                                                    <p class="text-gray-800">The print has visible defects: <strong>blurred, misaligned, or incorrect placement</strong>.</p>
                                                 </div>
                                             </div>
                                             
@@ -908,7 +908,7 @@ class PageSeeder extends Seeder
                                                     <svg class="w-6 h-6 text-red-500 mr-3 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                                     </svg>
-                                                    <p class="text-gray-800"><strong>Damaged prints:</strong> Products with damaged or peeled prints after first wash</p>
+                                                    <p class="text-gray-800">Print damage occurs after the first wash (<strong>peeling, fading, etc.</strong>).</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -919,10 +919,10 @@ class PageSeeder extends Seeder
                                         <div class="flex items-start">
                                             <div class="flex-shrink-0 w-14 h-14 bg-orange-500 text-white rounded-full flex items-center justify-center mr-4 text-2xl font-bold">B</div>
                                             <div class="flex-1">
-                                                <h3 class="text-2xl font-bold text-orange-800 mb-3">Wrong Size Items</h3>
+                                                <h3 class="text-2xl font-bold text-orange-800 mb-3">b. Incorrect Size</h3>
                                                 <div class="bg-white rounded-lg p-4 shadow-sm border border-orange-200">
                                                     <p class="text-gray-800 leading-relaxed">
-                                                        We guarantee to assist with cases where customers receive the wrong size product. Specifically, these products have <strong>wrong measurements compared to the product\'s size guide</strong> (A difference of over <strong class="text-orange-600">1.5"</strong> from standard product measurements).
+                                                        Applicable when the item received differs from the size chart by <strong class="text-orange-600">over 1.5 inches</strong> in measurement.
                                                     </p>
                                                 </div>
                                             </div>
@@ -934,16 +934,11 @@ class PageSeeder extends Seeder
                                         <div class="flex items-start">
                                             <div class="flex-shrink-0 w-14 h-14 bg-yellow-500 text-white rounded-full flex items-center justify-center mr-4 text-2xl font-bold">C</div>
                                             <div class="flex-1">
-                                                <h3 class="text-2xl font-bold text-yellow-800 mb-3">Non-Fitting Items</h3>
+                                                <h3 class="text-2xl font-bold text-yellow-800 mb-3">c. Non-fitting Items</h3>
                                                 <div class="bg-white rounded-lg p-4 shadow-sm border border-yellow-200">
                                                     <p class="text-gray-800 leading-relaxed mb-2">
-                                                        We guarantee to assist with cases where customers receive non-fitting items.
+                                                        Only <strong>t-shirts and tank tops</strong> are eligible for returns/exchanges due to fitting issues.
                                                     </p>
-                                                    <div class="bg-yellow-100 border border-yellow-300 rounded-lg p-3">
-                                                        <p class="text-yellow-900 text-sm">
-                                                            <strong>⚠️ Please note:</strong> For this case, only <strong>t-shirts and tank tops</strong> are eligible for returns and exchanges.
-                                                        </p>
-                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -954,15 +949,19 @@ class PageSeeder extends Seeder
                                         <div class="flex items-start">
                                             <div class="flex-shrink-0 w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center mr-4 text-2xl font-bold">D</div>
                                             <div class="flex-1">
-                                                <h3 class="text-2xl font-bold text-blue-800 mb-3">Shipping Damage</h3>
+                                                <h3 class="text-2xl font-bold text-blue-800 mb-3">d. Shipping-related Damage or Errors</h3>
                                                 <div class="bg-white rounded-lg p-4 shadow-sm border border-blue-200">
                                                     <p class="text-gray-800 leading-relaxed mb-3">
-                                                        We guarantee to assist with cases where customers receive wrong/damaged/faulty items due to the shipping process.
+                                                        Bluprinter supports cases where the order is wrong, damaged, or faulty due to the shipping process.
                                                     </p>
                                                     <div class="bg-blue-100 border border-blue-300 rounded-lg p-3">
-                                                        <p class="text-blue-900 text-sm">
-                                                            <strong>💡 Important:</strong> Please double-check the package carefully when receiving your orders. If you find the products are wrong, defective, or damaged, please <strong>return them to the courier immediately</strong> or contact Bluprinter within <strong>30 days of delivery</strong> for quick response and support.
+                                                        <p class="text-blue-900 text-sm mb-2">
+                                                            <strong>💡 Please check your package carefully upon delivery.</strong> If you find any issues:
                                                         </p>
+                                                        <ul class="list-disc list-inside text-blue-900 space-y-1">
+                                                            <li>Refuse the package immediately, or</li>
+                                                            <li>Contact Bluprinter within <strong>30 days of delivery</strong> for assistance.</li>
+                                                        </ul>
                                                     </div>
                                                 </div>
                                             </div>
@@ -977,7 +976,7 @@ class PageSeeder extends Seeder
                                     <svg class="w-8 h-8 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     </svg>
-                                    Products Eligible for Return
+                                    3. Products Eligible for Return
                                 </h2>
                             </div>
                             <div class="bg-teal-50 border-2 border-teal-300 border-t-0 rounded-b-lg p-6 mb-10">
@@ -990,7 +989,7 @@ class PageSeeder extends Seeder
                                                 </svg>
                                             </div>
                                         </div>
-                                        <p class="text-gray-800 text-center">Products meet the <strong>eligibility criteria</strong> for support listed above</p>
+                                        <p class="text-gray-800 text-center">Items that meet the <strong>eligibility criteria</strong> listed above.</p>
                                     </div>
                                     
                                     <div class="bg-white rounded-lg p-5 shadow-md border border-teal-200">
@@ -1001,7 +1000,7 @@ class PageSeeder extends Seeder
                                                 </svg>
                                             </div>
                                         </div>
-                                        <p class="text-gray-800 text-center">Products with <strong>no sign of being used</strong>, have neck label intact and original packaging</p>
+                                        <p class="text-gray-800 text-center">Items that show <strong>no signs of use</strong>, have the <strong>neck label intact</strong>, and remain in the <strong>original packaging</strong>.</p>
                                     </div>
                                     
                                     <div class="bg-white rounded-lg p-5 shadow-md border border-teal-200">
@@ -1012,7 +1011,7 @@ class PageSeeder extends Seeder
                                                 </svg>
                                             </div>
                                         </div>
-                                        <p class="text-gray-800 text-center">Return requested <strong>within 30 days</strong> from date of delivery</p>
+                                        <p class="text-gray-800 text-center">Return/exchange requests submitted <strong>within 30 days</strong> from delivery.</p>
                                     </div>
                                 </div>
                             </div>
@@ -1024,91 +1023,74 @@ class PageSeeder extends Seeder
                                         <svg class="w-8 h-8 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
                                         </svg>
-                                        Product Return Process
+                                        4. Return & Exchange Process
                                     </h2>
                                 </div>
                                 <div class="bg-indigo-50 border-2 border-indigo-300 border-t-0 rounded-b-lg p-6">
-                                    <p class="text-gray-800 font-semibold mb-6 text-lg">Please make sure your product is eligible for the return policy at Bluprinter.com</p>
-                                    
                                     <!-- Step 1 -->
                                     <div class="mb-6">
                                         <div class="flex items-start">
-                                            <div class="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 text-white rounded-full flex items-center justify-center mr-4 text-2xl font-bold shadow-lg">1</div>
+                                            <div class="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 text-white rounded-full flex items-center justify-center mr-4 text-2xl font-bold shadow-lg">Step 1</div>
                                             <div class="flex-1 bg-white rounded-lg p-5 shadow-md border border-indigo-200">
-                                                <h3 class="text-xl font-bold text-indigo-900 mb-3">Contact Us</h3>
-                                                <p class="text-gray-700 mb-3">Contact us and clarify the issue with the products.</p>
-                                                <div class="bg-indigo-100 border border-indigo-300 rounded-lg p-4">
-                                                    <p class="text-indigo-900 mb-2"><strong>How to contact:</strong></p>
-                                                    <ul class="space-y-1 text-indigo-800">
-                                                        <li>• Send email to <a href="mailto:support@bluprinter.com" class="text-blue-600 hover:text-blue-800 font-semibold underline">support@bluprinter.com</a></li>
-                                                        <li>• Or contact us through our contact form</li>
-                                                    </ul>
+                                                <h3 class="text-xl font-bold text-indigo-900 mb-3">Contact Bluprinter</h3>
+                                                <p class="text-gray-700 mb-3">When contacting us, please provide:</p>
+                                                <div class="space-y-3">
+                                                    <div class="flex items-start bg-purple-50 rounded-lg p-3">
+                                                        <svg class="w-5 h-5 text-purple-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                        </svg>
+                                                        <p class="text-gray-800">Order information.</p>
+                                                    </div>
+                                                    <div class="flex items-start bg-purple-50 rounded-lg p-3">
+                                                        <svg class="w-5 h-5 text-purple-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                        </svg>
+                                                        <p class="text-gray-800">Photo of the shipping label.</p>
+                                                    </div>
+                                                    <div class="flex items-start bg-purple-50 rounded-lg p-3">
+                                                        <svg class="w-5 h-5 text-purple-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                        </svg>
+                                                        <p class="text-gray-800">Photos clearly showing the damaged/wrong/defective area.</p>
+                                                    </div>
+                                                    <div class="flex items-start bg-purple-50 rounded-lg p-3">
+                                                        <svg class="w-5 h-5 text-purple-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                        </svg>
+                                                        <p class="text-gray-800">Photos showing accurate width & length measurements (if the size is incorrect).</p>
+                                                    </div>
+                                                    <div class="flex items-start bg-purple-50 rounded-lg p-3">
+                                                        <svg class="w-5 h-5 text-purple-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                        </svg>
+                                                        <p class="text-gray-800">Information about the item you want to receive as a replacement.</p>
+                                                    </div>
+                                                </div>
+                                                <div class="mt-4 bg-pink-100 border border-pink-300 rounded-lg p-3">
+                                                    <p class="text-pink-900 text-sm">
+                                                        <strong>📸 Note:</strong> For orders with multiple items, please provide photos or videos of all items laid flat side by side.
+                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
 
                                     <!-- Step 2 -->
-                                    <div class="mb-6">
-                                        <div class="flex items-start">
-                                            <div class="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-full flex items-center justify-center mr-4 text-2xl font-bold shadow-lg">2</div>
-                                            <div class="flex-1 bg-white rounded-lg p-5 shadow-md border border-purple-200">
-                                                <h3 class="text-xl font-bold text-purple-900 mb-3">Provide Required Information</h3>
-                                                <p class="text-gray-700 mb-3">When you contact us, please provide the following information:</p>
-                                                <div class="space-y-3">
-                                                    <div class="flex items-start bg-purple-50 rounded-lg p-3">
-                                                        <svg class="w-5 h-5 text-purple-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                        </svg>
-                                                        <p class="text-gray-800">Order information to confirm the order</p>
-                                                    </div>
-                                                    <div class="flex items-start bg-purple-50 rounded-lg p-3">
-                                                        <svg class="w-5 h-5 text-purple-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                        </svg>
-                                                        <p class="text-gray-800">Photos of the packaging label</p>
-                                                    </div>
-                                                    <div class="flex items-start bg-purple-50 rounded-lg p-3">
-                                                        <svg class="w-5 h-5 text-purple-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                        </svg>
-                                                        <p class="text-gray-800">Photos of items clearly showing damaged/wrong/faulty parts different from website description</p>
-                                                    </div>
-                                                    <div class="flex items-start bg-purple-50 rounded-lg p-3">
-                                                        <svg class="w-5 h-5 text-purple-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                        </svg>
-                                                        <p class="text-gray-800">Photos showing actual measurements: width, length (if wrong size items)</p>
-                                                    </div>
-                                                    <div class="flex items-start bg-purple-50 rounded-lg p-3">
-                                                        <svg class="w-5 h-5 text-purple-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                        </svg>
-                                                        <p class="text-gray-800">Information of the item you want to be resent</p>
-                                                    </div>
-                                                </div>
-                                                <div class="mt-4 bg-pink-100 border border-pink-300 rounded-lg p-3">
-                                                    <p class="text-pink-900 text-sm">
-                                                        <strong>📸 Note:</strong> For orders with multiple items, please provide photos/videos of products placed side by side on a flat surface.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Step 3 -->
                                     <div>
                                         <div class="flex items-start">
-                                            <div class="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-pink-500 to-rose-500 text-white rounded-full flex items-center justify-center mr-4 text-2xl font-bold shadow-lg">3</div>
-                                            <div class="flex-1 bg-white rounded-lg p-5 shadow-md border border-pink-200">
-                                                <h3 class="text-xl font-bold text-pink-900 mb-3">Verification & Resolution</h3>
-                                                <p class="text-gray-700 mb-3">After confirming that your products are eligible for our exchange/return policy:</p>
+                                            <div class="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-full flex items-center justify-center mr-4 text-2xl font-bold shadow-lg">Step 2</div>
+                                            <div class="flex-1 bg-white rounded-lg p-5 shadow-md border border-purple-200">
+                                                <h3 class="text-xl font-bold text-purple-900 mb-3">Verification</h3>
+                                                <p class="text-gray-700 mb-3">After confirming that your item qualifies for return or exchange, Bluprinter will:</p>
                                                 <div class="bg-green-100 border-2 border-green-400 rounded-lg p-4 mb-3">
-                                                    <p class="text-green-900 font-semibold">
-                                                        ✓ You will receive a <strong>refund</strong> or a <strong>replacement</strong> resent to your address within <strong class="text-green-700">7 business days</strong>
+                                                    <p class="text-green-900 font-semibold mb-2">
+                                                        ✓ Issue a <strong>refund</strong>, or
                                                     </p>
-                                                    <p class="text-green-800 mt-2">
-                                                        ✓ You <strong>do NOT need to resend the package back</strong>
+                                                    <p class="text-green-900 font-semibold">
+                                                        ✓ Send a <strong>replacement</strong> within <strong class="text-green-700">7 business days</strong>.
+                                                    </p>
+                                                    <p class="text-green-800 mt-3 font-semibold">
+                                                        ✓ You <strong>do not need to send the item back</strong>.
                                                     </p>
                                                 </div>
                                             </div>
@@ -1128,12 +1110,12 @@ class PageSeeder extends Seeder
                                 <div class="space-y-3">
                                     <div class="bg-white rounded-lg p-4 border-l-4 border-amber-500">
                                         <p class="text-gray-800">
-                                            <strong class="text-amber-800">⚠️</strong> Products returned <strong>without our verification are ineligible</strong> for support. We appreciate your understanding.
+                                            <strong class="text-amber-800">⚠️</strong> Items returned <strong>without Bluprinter\'s prior verification will not be supported</strong>.
                                         </p>
                                     </div>
                                     <div class="bg-white rounded-lg p-4 border-l-4 border-amber-500">
                                         <p class="text-gray-800">
-                                            <strong class="text-amber-800">💱</strong> You only receive a replacement that has the <strong>same or higher price</strong> than the returned item. (Please pay extra cost if exchanged products have a higher price)
+                                            <strong class="text-amber-800">💱</strong> Replacements will be issued for items of <strong>equal or greater value</strong> (price differences may apply).
                                         </p>
                                     </div>
                                 </div>
@@ -1150,13 +1132,13 @@ class PageSeeder extends Seeder
                                 </div>
                                 <h3 class="text-2xl font-bold mb-3">International Orders</h3>
                                 <p class="text-xl text-blue-100 mb-2">
-                                    For all orders shipped <strong>outside the US</strong>
+                                    For <strong>international orders</strong>
                                 </p>
                                 <div class="bg-white bg-opacity-20 rounded-lg p-4 inline-block">
                                     <p class="text-2xl font-bold">60 DAYS</p>
                                     <p class="text-blue-100">support window from date of delivery</p>
                                 </div>
-                                <p class="mt-4 text-sm text-blue-100">We support all defective or unwanted orders within 60 days</p>
+                                <p class="mt-4 text-sm text-blue-100">For international orders, defective or unwanted items are supported within 60 days of delivery.</p>
                             </div>
                         </div>
                     </div>

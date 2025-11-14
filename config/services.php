@@ -54,6 +54,10 @@ return [
     'google' => [
         'tag_manager_id' => env('GOOGLE_TAG_MANAGER_ID', 'GTM-5T5M2NG4'),
         'ads_id' => env('GOOGLE_ADS_ID', 'AW-17718009492'),
+        'analytics' => [
+            'property_id' => env('GOOGLE_ANALYTICS_PROPERTY_ID'),
+            'credentials_path' => env('GOOGLE_ANALYTICS_CREDENTIALS_PATH', storage_path('app/google-analytics-credentials.json')),
+        ],
     ],
 
     'tiktok' => [

@@ -28,6 +28,7 @@ use App\Http\Controllers\BlogController;
 use App\Http\Controllers\Api\CartController as ApiCartController;
 use App\Http\Controllers\Api\CustomFileController;
 use App\Http\Controllers\Api\UploadController;
+use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\Admin\ShippingZoneController;
 use App\Http\Controllers\Admin\ShippingRateController;
@@ -443,6 +444,17 @@ Route::prefix('api/cart')->middleware('web')->group(function () {
     Route::post('/sync', [ApiCartController::class, 'sync'])->name('api.cart.sync');
 });
 
+// Analytics API routes
+Route::prefix('api/analytics')->middleware('web')->name('api.analytics.')->group(function () {
+    Route::get('/realtime', [AnalyticsController::class, 'realtime'])->name('realtime');
+    Route::get('/realtime/pages', [AnalyticsController::class, 'realtimePages'])->name('realtime.pages');
+    Route::get('/realtime/active-users', [AnalyticsController::class, 'realtimeActiveUsers'])->name('realtime.active-users');
+    Route::get('/realtime/locations', [AnalyticsController::class, 'realtimeLocations'])->name('realtime.locations');
+    Route::get('/realtime/sources', [AnalyticsController::class, 'realtimeSources'])->name('realtime.sources');
+    Route::get('/realtime/devices', [AnalyticsController::class, 'realtimeDevices'])->name('realtime.devices');
+    Route::get('/behavior', [AnalyticsController::class, 'behaviorReport'])->name('behavior');
+});
+
 // Product API routes for AI integration (with CORS support)
 Route::prefix('api/products')->middleware(['web'])->group(function () {
     // Add OPTIONS route for CORS preflight
@@ -529,6 +541,9 @@ Route::middleware('auth')->group(function () {
         // Analytics settings
         Route::get('settings/analytics', [AnalyticsSettingsController::class, 'edit'])->name('settings.analytics.edit');
         Route::put('settings/analytics', [AnalyticsSettingsController::class, 'update'])->name('settings.analytics.update');
+
+        // Analytics Dashboard
+        Route::get('analytics', [App\Http\Controllers\Admin\AnalyticsController::class, 'index'])->name('analytics.index');
 
         // API Token (Admin only)
         Route::get('/api-token', [App\Http\Controllers\ApiDocController::class, 'tokenDashboard'])->name('api-token');
