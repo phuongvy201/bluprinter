@@ -13,6 +13,7 @@
         "darkaonline/l5-swagger": "^9.0",
         "google/analytics-data": "^0.23.1",
         "laravel/framework": "^12.0",
+        "laravel/socialite": "^5.23",
         "laravel/tinker": "^2.10.1",
         "league/flysystem-aws-s3-v3": "^3.29",
         "lianlian_acquiring/sdkv3": "^1.0",

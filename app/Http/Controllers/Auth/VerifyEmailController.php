@@ -57,7 +57,7 @@ class VerifyEmailController extends Controller
 
             // Mark email as verified
             if ($user->hasVerifiedEmail()) {
-                return redirect()->intended(route('dashboard', absolute: false) . '?verified=1')
+                return $this->redirectAfterVerification($user)
                     ->with('success', 'Your email is already verified.');
             }
 
@@ -65,7 +65,7 @@ class VerifyEmailController extends Controller
                 event(new Verified($user));
             }
 
-            return redirect()->intended(route('dashboard', absolute: false) . '?verified=1')
+            return $this->redirectAfterVerification($user)
                 ->with('success', 'Your email has been verified successfully!');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return redirect()->route('login')
@@ -79,5 +79,23 @@ class VerifyEmailController extends Controller
             return redirect()->route('login')
                 ->with('error', 'An error occurred during email verification. Please try requesting a new verification email.');
         }
+    }
+
+    /**
+     * Redirect user to appropriate page based on their role after email verification
+     */
+    private function redirectAfterVerification(User $user): RedirectResponse
+    {
+        // Redirect based on role
+        if ($user->hasRole('admin')) {
+            return redirect()->route('admin.dashboard')->with('verified', '1');
+        } elseif ($user->hasRole('ad-partner')) {
+            return redirect()->route('admin.orders.index')->with('verified', '1');
+        } elseif ($user->hasRole('seller')) {
+            return redirect()->route('admin.seller.dashboard')->with('verified', '1');
+        }
+
+        // Default: redirect customers to home page
+        return redirect()->route('home')->with('verified', '1');
     }
 }
