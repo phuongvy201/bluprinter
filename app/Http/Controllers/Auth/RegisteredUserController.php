@@ -86,7 +86,7 @@ class RegisteredUserController extends Controller
         $token = $request->input('g-recaptcha-response');
         if (!$token) {
             throw ValidationException::withMessages([
-                'captcha' => __('Vui lòng hoàn tất kiểm tra bảo mật.'),
+                'captcha' => __('Please complete the security check.'),
             ]);
         }
 
@@ -104,12 +104,12 @@ class RegisteredUserController extends Controller
 
             if (!($data['success'] ?? false)) {
                 throw ValidationException::withMessages([
-                    'captcha' => __('Xác minh bảo mật không thành công, vui lòng thử lại.'),
+                    'captcha' => __('Security verification failed, please try again.'),
                 ]);
             }
         } catch (\Throwable $exception) {
             throw ValidationException::withMessages([
-                'captcha' => __('Không thể xác minh bảo mật, vui lòng thử lại.'),
+                'captcha' => __('Unable to verify security, please try again.'),
             ]);
         }
     }

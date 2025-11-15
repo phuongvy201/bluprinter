@@ -170,14 +170,68 @@
             </div>
         </div>
 
-        <!-- Channels Table -->
+        <!-- Traffic Sources Table - Chi tiết nguồn truy cập -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
             <div class="p-6 border-b border-gray-200 flex items-center justify-between">
                 <div>
-                    <h3 class="text-lg font-semibold text-gray-900">Showing {{ count($channels) }} of {{ count($channels) }} Rows</h3>
+                    <h3 class="text-lg font-semibold text-gray-900">Traffic Sources - Chi tiết nguồn truy cập</h3>
+                    <p class="text-sm text-gray-600 mt-1">Hiển thị chi tiết lượt truy cập từ TikTok, Facebook, Pinterest, Google, v.v.</p>
                 </div>
                 <div class="flex items-center gap-3">
-                    <input type="text" placeholder="Search..." class="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <input type="text" id="sourceSearch" placeholder="Tìm kiếm nguồn..." class="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full" id="trafficSourcesTable">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SOURCE TYPE</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SOURCE</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MEDIUM</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SESSIONS</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AVG. SESSION DURATION</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NEW USERS</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">BOUNCE RATE</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAGE VIEWS</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        @forelse($trafficSources ?? [] as $source)
+                            <tr class="hover:bg-gray-50 source-row" data-source="{{ strtolower($source['source'] . ' ' . $source['source_type']) }}">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                        @if(in_array($source['source_type'], ['Facebook', 'TikTok', 'Pinterest', 'Instagram', 'Twitter/X', 'YouTube', 'LinkedIn'])) bg-blue-100 text-blue-800
+                                        @elseif(in_array($source['source_type'], ['Google', 'Bing'])) bg-green-100 text-green-800
+                                        @elseif($source['source_type'] === 'Direct') bg-gray-100 text-gray-800
+                                        @else bg-purple-100 text-purple-800
+                                        @endif">
+                                        {{ $source['source_type'] }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $source['source'] }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $source['medium'] }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['sessions']) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$source['avg_session_duration']) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['new_users']) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['bounce_rate'], 2) }}%</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['page_views']) }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="8" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Channels Table - Tổng quan theo kênh -->
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm mt-6">
+            <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">Channels Overview - Tổng quan theo kênh</h3>
+                    <p class="text-sm text-gray-600 mt-1">Showing {{ count($channels) }} of {{ count($channels) }} Rows</p>
                 </div>
             </div>
             <div class="overflow-x-auto">
@@ -464,6 +518,24 @@
                 },
                 cutout: '70%'
             }
+        });
+    }
+
+    // Search functionality cho Traffic Sources Table
+    const sourceSearch = document.getElementById('sourceSearch');
+    if (sourceSearch) {
+        sourceSearch.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#trafficSourcesTable .source-row');
+            
+            rows.forEach(row => {
+                const sourceText = row.getAttribute('data-source');
+                if (sourceText.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
         });
     }
 </script>

@@ -688,7 +688,8 @@ Route::get('/test-variant-removal-page', function () {
     return view('test-variant-removal');
 })->name('test.variant.removal.page');
 
-// Page routes - Must be at the end to avoid conflicts
-Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller|newsletter).*$');
-
+// Load auth routes first to avoid conflicts with catch-all route
 require __DIR__ . '/auth.php';
+
+// Page routes - Must be at the end to avoid conflicts
+Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller|newsletter|verify-email).*$');

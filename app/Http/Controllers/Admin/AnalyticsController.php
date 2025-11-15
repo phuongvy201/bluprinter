@@ -30,6 +30,7 @@ class AnalyticsController extends Controller
             case 'acquisition':
                 $data['sessionsByDate'] = $this->analyticsService->getSessionsByDate($days);
                 $data['channels'] = $this->analyticsService->getAcquisitionChannels($days);
+                $data['trafficSources'] = $this->analyticsService->getTrafficSources($days);
                 $data['totalSessions'] = array_sum(array_column($data['channels'], 'sessions'));
                 break;
 

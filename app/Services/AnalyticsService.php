@@ -73,7 +73,7 @@ class AnalyticsService
                 $request = new RunRealtimeReportRequest([
                     'property' => "properties/{$this->propertyId}",
                     'dimensions' => [
-                        new Dimension(['name' => 'pagePath']),
+                        new Dimension(['name' => 'unifiedScreenClass']),
                     ],
                     'metrics' => [
                         new Metric(['name' => 'activeUsers']),
@@ -172,11 +172,12 @@ class AnalyticsService
 
         return Cache::remember('analytics.realtime.sources', 60, function () {
             try {
+                // Lưu ý: Realtime API không hỗ trợ firstUserSource/firstUserMedium
+                // Sử dụng sessionDefaultChannelGroup thay thế để lấy channel grouping
                 $request = new RunRealtimeReportRequest([
                     'property' => "properties/{$this->propertyId}",
                     'dimensions' => [
-                        new Dimension(['name' => 'firstUserSource']),
-                        new Dimension(['name' => 'firstUserMedium']),
+                        new Dimension(['name' => 'sessionDefaultChannelGroup']),
                     ],
                     'metrics' => [
                         new Metric(['name' => 'activeUsers']),
@@ -197,8 +198,9 @@ class AnalyticsService
                     $metricValues = $row->getMetricValues();
 
                     $data[] = [
-                        'source' => $dimensionValues[0]->getValue(),
-                        'medium' => $dimensionValues[1]->getValue(),
+                        'channel' => $dimensionValues[0]->getValue(),
+                        'source' => $dimensionValues[0]->getValue(), // Dùng channel làm source vì không có source realtime
+                        'medium' => '', // Realtime API không có medium
                         'users' => (int) $metricValues[0]->getValue(),
                     ];
                 }
@@ -439,6 +441,159 @@ class AnalyticsService
                 return [];
             }
         });
+    }
+
+    /**
+     * Lấy chi tiết nguồn truy cập (TikTok, Facebook, Pinterest, etc.)
+     */
+    public function getTrafficSources(int $days = 7): array
+    {
+        if (!$this->client) {
+            return [];
+        }
+
+        $cacheKey = "analytics.traffic.sources.{$days}";
+        $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
+
+        return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
+            try {
+                $request = new RunReportRequest([
+                    'property' => "properties/{$this->propertyId}",
+                    'date_ranges' => [
+                        new DateRange([
+                            'start_date' => "{$days}daysAgo",
+                            'end_date' => 'today',
+                        ]),
+                    ],
+                    'dimensions' => [
+                        new Dimension(['name' => 'sessionSource']),
+                        new Dimension(['name' => 'sessionMedium']),
+                    ],
+                    'metrics' => [
+                        new Metric(['name' => 'sessions']),
+                        new Metric(['name' => 'averageSessionDuration']),
+                        new Metric(['name' => 'newUsers']),
+                        new Metric(['name' => 'bounceRate']),
+                        new Metric(['name' => 'screenPageViews']),
+                    ],
+                    'limit' => 50,
+                    'order_bys' => [
+                        new OrderBy([
+                            'metric' => new MetricOrderBy(['metric_name' => 'sessions']),
+                            'desc' => true,
+                        ]),
+                    ],
+                ]);
+                $response = $this->client->runReport($request);
+
+                Log::info('Traffic Sources API Response', [
+                    'days' => $days,
+                    'row_count' => $response->getRows()->count(),
+                    'response' => json_decode($response->serializeToJsonString(), true)
+                ]);
+
+                $data = [];
+                foreach ($response->getRows() as $row) {
+                    $dimensionValues = $row->getDimensionValues();
+                    $metricValues = $row->getMetricValues();
+
+                    $source = $dimensionValues[0]->getValue();
+                    $medium = $dimensionValues[1]->getValue();
+
+                    // Xác định loại nguồn
+                    $sourceType = $this->categorizeSource($source, $medium);
+
+                    $data[] = [
+                        'source' => $source,
+                        'medium' => $medium,
+                        'source_type' => $sourceType,
+                        'sessions' => (int) $metricValues[0]->getValue(),
+                        'avg_session_duration' => $metricValues[1]->getValue(),
+                        'new_users' => (int) $metricValues[2]->getValue(),
+                        'bounce_rate' => (float) $metricValues[3]->getValue(),
+                        'page_views' => (int) $metricValues[4]->getValue(),
+                    ];
+                }
+
+                Log::info('Traffic Sources Processed Data', ['data' => $data]);
+                return $data;
+            } catch (Exception $e) {
+                Log::error('Lỗi lấy traffic sources: ' . $e->getMessage());
+                return [];
+            }
+        });
+    }
+
+    /**
+     * Phân loại nguồn truy cập
+     */
+    private function categorizeSource(string $source, string $medium): string
+    {
+        $sourceLower = strtolower($source);
+        $mediumLower = strtolower($medium);
+
+        // Social Media - Kiểm tra exact match trước, sau đó mới kiểm tra contains
+        if (
+            $sourceLower === 'tiktok' ||
+            $sourceLower === 'tiktok.com' ||
+            str_ends_with($sourceLower, '.tiktok.com') ||
+            str_ends_with($sourceLower, '@tiktok.com')
+        ) {
+            return 'TikTok';
+        }
+        if (str_contains($sourceLower, 'facebook') || str_contains($sourceLower, 'fb.com')) {
+            return 'Facebook';
+        }
+        if (str_contains($sourceLower, 'pinterest') || str_contains($sourceLower, 'pinterest.com')) {
+            return 'Pinterest';
+        }
+        if (str_contains($sourceLower, 'instagram') || str_contains($sourceLower, 'instagram.com')) {
+            return 'Instagram';
+        }
+        if (str_contains($sourceLower, 'twitter') || str_contains($sourceLower, 'x.com') || str_contains($sourceLower, 'twitter.com')) {
+            return 'Twitter/X';
+        }
+        if (str_contains($sourceLower, 'youtube') || str_contains($sourceLower, 'youtube.com')) {
+            return 'YouTube';
+        }
+        if (str_contains($sourceLower, 'linkedin') || str_contains($sourceLower, 'linkedin.com')) {
+            return 'LinkedIn';
+        }
+
+        // Search Engines
+        if (str_contains($sourceLower, 'google')) {
+            return 'Google';
+        }
+        if (str_contains($sourceLower, 'bing')) {
+            return 'Bing';
+        }
+
+        // Direct
+        if ($sourceLower === '(direct)' || $sourceLower === 'direct') {
+            return 'Direct';
+        }
+
+        // Referral
+        if ($mediumLower === 'referral') {
+            return 'Referral';
+        }
+
+        // Email
+        if ($mediumLower === 'email') {
+            return 'Email';
+        }
+
+        // Organic Search
+        if ($mediumLower === 'organic') {
+            return 'Organic Search';
+        }
+
+        // Paid Search
+        if ($mediumLower === 'cpc' || $mediumLower === 'paid') {
+            return 'Paid Search';
+        }
+
+        return 'Other';
     }
 
     /**
