@@ -781,6 +781,8 @@ class AnalyticsService
                     'dimensions' => [
                         new Dimension(['name' => 'country']),
                         new Dimension(['name' => 'city']),
+                        new Dimension(['name' => 'sessionSource']),
+                        new Dimension(['name' => 'sessionMedium']),
                     ],
                     'metrics' => [
                         new Metric(['name' => 'activeUsers']),

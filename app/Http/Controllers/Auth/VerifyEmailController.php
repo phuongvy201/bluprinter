@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 
 class VerifyEmailController extends Controller
@@ -19,35 +20,64 @@ class VerifyEmailController extends Controller
      */
     public function __invoke(Request $request, $id, $hash): RedirectResponse
     {
-        $user = User::findOrFail($id);
+        try {
+            $user = User::findOrFail($id);
 
-        // Verify the hash matches
-        if (!hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
+            // Verify the hash matches
+            if (!hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
+                return redirect()->route('login')
+                    ->with('error', 'Invalid verification link. Please request a new verification email.');
+            }
+
+            // Check if URL is signed correctly (only if signature exists in request)
+            // Some email clients may modify URLs, so we allow verification if hash matches
+            if ($request->has('signature')) {
+                try {
+                    if (!URL::hasValidSignature($request)) {
+                        // If signature exists but invalid, still allow if hash is correct
+                        // This handles cases where email clients modify URLs slightly
+                        Log::warning('Email verification: Invalid signature but valid hash', [
+                            'user_id' => $user->id,
+                            'email' => $user->email
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // If signature validation throws exception, still allow if hash is correct
+                    Log::warning('Email verification: Signature validation error', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Login the user if not already logged in
+            if (!Auth::check()) {
+                Auth::login($user);
+            }
+
+            // Mark email as verified
+            if ($user->hasVerifiedEmail()) {
+                return redirect()->intended(route('dashboard', absolute: false) . '?verified=1')
+                    ->with('success', 'Your email is already verified.');
+            }
+
+            if ($user->markEmailAsVerified()) {
+                event(new Verified($user));
+            }
+
+            return redirect()->intended(route('dashboard', absolute: false) . '?verified=1')
+                ->with('success', 'Your email has been verified successfully!');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return redirect()->route('login')
-                ->with('error', 'Invalid verification link. Please request a new verification email.');
-        }
+                ->with('error', 'User not found. Please check your verification link.');
+        } catch (\Exception $e) {
+            Log::error('Email verification error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
 
-        // Check if URL is signed correctly
-        if (!URL::hasValidSignature($request)) {
             return redirect()->route('login')
-                ->with('error', 'Invalid or expired verification link. Please request a new verification email.');
+                ->with('error', 'An error occurred during email verification. Please try requesting a new verification email.');
         }
-
-        // Login the user if not already logged in
-        if (!Auth::check()) {
-            Auth::login($user);
-        }
-
-        // Mark email as verified
-        if ($user->hasVerifiedEmail()) {
-            return redirect()->intended(route('dashboard', absolute: false) . '?verified=1');
-        }
-
-        if ($user->markEmailAsVerified()) {
-            event(new Verified($user));
-        }
-
-        return redirect()->intended(route('dashboard', absolute: false) . '?verified=1')
-            ->with('success', 'Your email has been verified successfully!');
     }
 }

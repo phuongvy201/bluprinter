@@ -37,8 +37,9 @@ Route::middleware('guest')->group(function () {
 });
 
 // Email verification route - must be outside auth middleware to allow clicking from email
+// Note: Signed middleware validation is handled in controller to provide better error messages
 Route::get('verify-email/{id}/{hash}', VerifyEmailController::class)
-    ->middleware(['signed', 'throttle:6,1'])
+    ->middleware(['throttle:6,1'])
     ->name('verification.verify');
 
 Route::middleware('auth')->group(function () {

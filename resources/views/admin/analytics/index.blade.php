@@ -12,7 +12,11 @@
     },
     changeTab(newTab) {
         this.tab = newTab;
-        window.location.href = '{{ route('admin.analytics.index') }}?days=' + this.days + '&tab=' + newTab;
+        const filter = '{{ $filter ?? 'all' }}';
+        window.location.href = '{{ route('admin.analytics.index') }}?days=' + this.days + '&tab=' + newTab + (filter !== 'all' ? '&filter=' + filter : '');
+    },
+    changeFilter(filter) {
+        window.location.href = '{{ route('admin.analytics.index') }}?days=' + this.days + '&tab={{ $tab }}&filter=' + filter;
     }
 }">
     <!-- Header -->
@@ -80,15 +84,21 @@
         <!-- Acquisition Sub Navigation -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
             <div class="flex items-center gap-4 overflow-x-auto">
-                <button class="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium whitespace-nowrap">All</button>
-                <button class="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg whitespace-nowrap">Organic Search</button>
-                <button class="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg whitespace-nowrap">Paid Search</button>
-                <button class="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg whitespace-nowrap">Direct</button>
-                <button class="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg whitespace-nowrap">Social</button>
-                <button class="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg whitespace-nowrap">Referrals</button>
-                <button class="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg whitespace-nowrap">Display</button>
-                <button class="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg whitespace-nowrap">Email</button>
-                <button class="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg whitespace-nowrap">Other</button>
+                @php
+                    $filters = ['All', 'Organic Search', 'Paid Search', 'Direct', 'Social', 'Referrals', 'Display', 'Email', 'Other'];
+                    $currentFilter = $filter ?? 'all';
+                @endphp
+                @foreach($filters as $filterOption)
+                    <button 
+                        onclick="changeFilter('{{ strtolower(str_replace(' ', '-', $filterOption)) }}')"
+                        class="px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors {{ 
+                            strtolower(str_replace(' ', '-', $currentFilter)) === strtolower(str_replace(' ', '-', $filterOption)) 
+                                ? 'bg-blue-50 text-blue-600' 
+                                : 'text-gray-600 hover:bg-gray-50' 
+                        }}">
+                        {{ $filterOption }}
+                    </button>
+                @endforeach
             </div>
         </div>
 
@@ -102,7 +112,13 @@
                 </div>
                 <div class="mt-4 flex items-center justify-between">
                     <div>
-                        <p class="text-2xl font-bold text-gray-900">{{ number_format(array_sum(array_column($sessionsByDate, 'sessions'))) }}</p>
+                        @php
+                            $filteredSessions = array_sum(array_column($sessionsByDate, 'sessions'));
+                            if (($filter ?? 'all') !== 'all' && isset($channels)) {
+                                $filteredSessions = array_sum(array_column($channels, 'sessions'));
+                            }
+                        @endphp
+                        <p class="text-2xl font-bold text-gray-900">{{ number_format($filteredSessions) }}</p>
                         <p class="text-sm text-green-600 mt-1">+14% from previous period</p>
                     </div>
                 </div>
@@ -139,8 +155,14 @@
         <!-- Summary Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p class="text-sm font-medium text-gray-600 mb-1">Sessions</p>
-                <p class="text-2xl font-bold text-gray-900">{{ number_format($summaryMetrics['sessions']) }}</p>
+                        <p class="text-sm font-medium text-gray-600 mb-1">Sessions</p>
+                        @php
+                            $filteredSessions = $summaryMetrics['sessions'];
+                            if (($filter ?? 'all') !== 'all' && isset($channels)) {
+                                $filteredSessions = array_sum(array_column($channels, 'sessions'));
+                            }
+                        @endphp
+                        <p class="text-2xl font-bold text-gray-900">{{ number_format($filteredSessions) }}</p>
                 <p class="text-sm text-red-600 mt-1">-23%</p>
             </div>
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
@@ -537,6 +559,13 @@
                 }
             });
         });
+    }
+
+    // Filter function (global for onclick handlers)
+    function changeFilter(filter) {
+        const days = {{ $days ?? 7 }};
+        const tab = '{{ $tab ?? 'acquisition' }}';
+        window.location.href = '{{ route('admin.analytics.index') }}?days=' + days + '&tab=' + tab + '&filter=' + filter;
     }
 </script>
 @endpush
