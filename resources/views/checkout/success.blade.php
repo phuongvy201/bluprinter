@@ -38,15 +38,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (typeof gtag === 'function') {
-        const gaItems = @json($order->items->map(function($item, $index) {
-            return [
-                'item_id' => (string) $item->product_id,
-                'item_name' => $item->product_name,
-                'price' => (float) $item->unit_price,
-                'quantity' => (int) $item->quantity,
-                'index' => $index + 1,
-            ];
-        })->values());
+        @php
+            $gaItems = $order->items->map(function($item, $index) {
+                return [
+                    'item_id' => (string) $item->product_id,
+                    'item_name' => $item->product_name,
+                    'price' => (float) $item->unit_price,
+                    'quantity' => (int) $item->quantity,
+                    'index' => $index + 1
+                ];
+            })->values()->toArray();
+        @endphp
+        const gaItems = @json($gaItems);
 
         gtag('event', 'purchase', {
             currency: 'USD',

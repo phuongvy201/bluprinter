@@ -1786,15 +1786,44 @@ document.addEventListener('DOMContentLoaded', function() {
                             mode: 'same-origin'
                         });
                         
+                        // Check content type first
+                        const contentType = response.headers.get('content-type') || '';
+                        const isJson = contentType.includes('application/json');
+                        
                         if (!response.ok) {
-                            // Handle validation errors (422) specifically
-                            if (response.status === 422) {
-                                const errorData = await response.json();
-                                console.error('❌ Validation Error:', errorData);
-                                throw new Error(`Validation failed: ${errorData.message || Object.values(errorData.errors || {}).flat().join(', ')}`);
-                            } else {
-                                throw new Error(`Order processing failed: ${response.status} ${response.statusText}`);
+                            // Try to parse error response
+                            let errorMessage = `Order processing failed: ${response.status} ${response.statusText}`;
+                            
+                            try {
+                                if (isJson) {
+                                    const errorData = await response.json();
+                                    console.error('❌ Server Error:', errorData);
+                                    
+                                    if (response.status === 422) {
+                                        // Validation error
+                                        errorMessage = errorData.message || Object.values(errorData.errors || {}).flat().join(', ');
+                                    } else {
+                                        errorMessage = errorData.message || errorData.error || errorMessage;
+                                    }
+                                } else {
+                                    // HTML response - try to extract error message
+                                    const text = await response.text();
+                                    console.error('❌ HTML Error Response:', text.substring(0, 500));
+                                    errorMessage = 'Server returned an error. Please try again or contact support.';
+                                }
+                            } catch (parseError) {
+                                console.error('❌ Error parsing response:', parseError);
+                                errorMessage = `Order processing failed: ${response.status} ${response.statusText}`;
                             }
+                            
+                            throw new Error(errorMessage);
+                        }
+                        
+                        // Parse successful response
+                        if (!isJson) {
+                            const text = await response.text();
+                            console.error('❌ Non-JSON Response:', text.substring(0, 500));
+                            throw new Error('Server returned an unexpected response format. Please try again.');
                         }
                         
                         const responseData = await response.json();
@@ -2306,6 +2335,21 @@ document.addEventListener('DOMContentLoaded', function() {
         if (missingFields.length > 0) {
             showToast('error', 'Form Error', 'Please fill in all required fields: ' + missingFields.join(', '));
             return;
+        }
+        
+        // Validate minimum order amount for Stripe
+        if (selectedPaymentMethod === 'stripe') {
+            const subtotal = parseFloat('{{ $subtotal }}');
+            const shipping = parseFloat('{{ $shippingCost }}');
+            const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
+            const total = subtotal + shipping + tip;
+            
+            if (total < 0.5) {
+                showToast('error', 'Minimum Order Amount', 
+                    'Stripe requires a minimum order of $0.50. Your order total is $' + total.toFixed(2) + 
+                    '. Please use LianLian Pay or PayPal for smaller orders.');
+                return;
+            }
         }
         
         if (selectedPaymentMethod === 'lianlian_pay') {

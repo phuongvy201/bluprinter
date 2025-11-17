@@ -250,6 +250,24 @@ class CheckoutController extends Controller
         $tipAmount = $request->tip_amount ?? 0; // Get tip amount from request
         $total = $subtotal + $shippingCost + $tipAmount;
 
+        // Validate minimum order amount based on payment method
+        $paymentMethod = $request->payment_method;
+        if ($paymentMethod === 'stripe' && $total < 0.5) {
+            $errorMessage = 'Minimum order amount for Stripe is $0.50. Your order total is $' . number_format($total, 2) . '. Please use LianLian Pay or PayPal for smaller orders.';
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $errorMessage,
+                    'errors' => ['payment_method' => [$errorMessage]]
+                ], 422);
+            }
+
+            return back()->withInput()->withErrors([
+                'payment_method' => $errorMessage
+            ]);
+        }
+
         // Log freeship application for debugging
         Log::info('🚚 FREESHIP LOGIC APPLIED', [
             'subtotal' => $subtotal,
