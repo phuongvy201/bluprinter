@@ -15,6 +15,7 @@ class Product extends Model
         'shop_id',
         'name',
         'slug',
+        'sku',
         'price',
         'description',
         'media',

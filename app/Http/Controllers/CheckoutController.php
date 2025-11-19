@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class CheckoutController extends Controller
 {
@@ -249,24 +250,6 @@ class CheckoutController extends Controller
         $taxAmount = 0; // No tax
         $tipAmount = $request->tip_amount ?? 0; // Get tip amount from request
         $total = $subtotal + $shippingCost + $tipAmount;
-
-        // Validate minimum order amount based on payment method
-        $paymentMethod = $request->payment_method;
-        if ($paymentMethod === 'stripe' && $total < 0.5) {
-            $errorMessage = 'Minimum order amount for Stripe is $0.50. Your order total is $' . number_format($total, 2) . '. Please use LianLian Pay or PayPal for smaller orders.';
-
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $errorMessage,
-                    'errors' => ['payment_method' => [$errorMessage]]
-                ], 422);
-            }
-
-            return back()->withInput()->withErrors([
-                'payment_method' => $errorMessage
-            ]);
-        }
 
         // Log freeship application for debugging
         Log::info('🚚 FREESHIP LOGIC APPLIED', [
@@ -1160,9 +1143,74 @@ class CheckoutController extends Controller
 
     public function success($orderNumber)
     {
-        $order = Order::where('order_number', $orderNumber)->firstOrFail();
+        $order = Order::with(['items.product'])->where('order_number', $orderNumber)->firstOrFail();
 
         return view('checkout.success', compact('order'));
+    }
+
+    /**
+     * Download order receipt as PDF
+     */
+    public function downloadReceipt($orderNumber, Request $request)
+    {
+        $order = Order::with(['items.product'])->where('order_number', $orderNumber)->firstOrFail();
+
+        // Determine country/language for receipt
+        $country = $order->country ?? 'US';
+        $locale = $this->getLocaleFromCountry($country);
+
+        // Set locale for receipt
+        app()->setLocale($locale);
+
+        try {
+            // Generate PDF receipt
+            $pdf = Pdf::loadView('checkout.receipt', [
+                'order' => $order,
+                'country' => $country,
+                'locale' => $locale
+            ])->setPaper('a4', 'portrait');
+
+            $filename = 'receipt-' . $order->order_number . '.pdf';
+
+            return $pdf->download($filename);
+        } catch (\Exception $e) {
+            Log::error('PDF generation failed: ' . $e->getMessage(), [
+                'order_number' => $orderNumber,
+                'error' => $e->getTraceAsString()
+            ]);
+
+            // Fallback: return error or HTML
+            return back()->with('error', 'Failed to generate PDF receipt. Please try again.');
+        }
+    }
+
+    /**
+     * Get locale from country code
+     */
+    private function getLocaleFromCountry($country)
+    {
+        $countryLocaleMap = [
+            'US' => 'en',
+            'GB' => 'en',
+            'VN' => 'vi',
+            'CN' => 'zh',
+            'JP' => 'ja',
+            'KR' => 'ko',
+            'FR' => 'fr',
+            'DE' => 'de',
+            'ES' => 'es',
+            'IT' => 'it',
+            'PT' => 'pt',
+            'RU' => 'ru',
+            'AR' => 'es',
+            'MX' => 'es',
+            'BR' => 'pt',
+            'CA' => 'en',
+            'AU' => 'en',
+            'NZ' => 'en',
+        ];
+
+        return $countryLocaleMap[strtoupper($country)] ?? 'en';
     }
 
     public function paypalSuccess(Request $request)

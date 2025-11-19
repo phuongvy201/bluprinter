@@ -221,17 +221,38 @@ document.addEventListener('DOMContentLoaded', function() {
                         <h3 class="text-lg font-semibold text-gray-900 mb-3">Order Items</h3>
                         <div class="space-y-3">
                             @foreach($order->items as $item)
+                                @php
+                                    $product = $item->product;
+                                    $imageUrl = null;
+                                    
+                                    if ($product) {
+                                        $media = $product->getEffectiveMedia();
+                                        if ($media && count($media) > 0) {
+                                            if (is_string($media[0])) {
+                                                $imageUrl = $media[0];
+                                            } elseif (is_array($media[0])) {
+                                                $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? null;
+                                            }
+                                        }
+                                    }
+                                @endphp
                                 <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                                    <div class="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                        </svg>
+                                    <div class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200">
+                                        @if($imageUrl)
+                                            <img src="{{ $imageUrl }}" alt="{{ $item->product_name }}" class="w-full h-full object-cover">
+                                        @else
+                                            <div class="w-full h-full flex items-center justify-center">
+                                                <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                </svg>
+                                            </div>
+                                        @endif
                                     </div>
-                                    <div class="flex-1">
-                                        <h4 class="font-medium text-gray-900">{{ $item->product_name }}</h4>
+                                    <div class="flex-1 min-w-0">
+                                        <h4 class="font-medium text-gray-900 truncate">{{ $item->product_name }}</h4>
                                         <p class="text-sm text-gray-600">Qty: {{ $item->quantity }} × ${{ number_format($item->unit_price, 2) }}</p>
                                     </div>
-                                    <div class="text-right">
+                                    <div class="text-right flex-shrink-0">
                                         <p class="font-semibold text-gray-900">${{ number_format($item->total_price, 2) }}</p>
                                     </div>
                                 </div>
@@ -388,10 +409,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     Continue Shopping
                 </a>
                 
-                <a href="#" 
+                <a href="{{ route('checkout.receipt', $order->order_number) }}" 
                    class="inline-flex items-center px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                     Download Receipt
                 </a>

@@ -1711,6 +1711,25 @@ document.addEventListener('DOMContentLoaded', function() {
                         const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
                         const total = subtotal + tax + shipping + tip;
                         
+                        // Build description from product SKUs
+                        const skuList = [];
+                        if (typeof checkoutItemsData !== 'undefined' && Array.isArray(checkoutItemsData)) {
+                            checkoutItemsData.forEach(function(item) {
+                                if (item.product && item.product.sku) {
+                                    // Add SKU with quantity if > 1
+                                    const qty = item.quantity || 1;
+                                    if (qty > 1) {
+                                        skuList.push(item.product.sku + ' x' + qty);
+                                    } else {
+                                        skuList.push(item.product.sku);
+                                    }
+                                }
+                            });
+                        }
+                        const description = skuList.length > 0 
+                            ? skuList.join(', ') 
+                            : 'Order from Bluprinter';
+                        
                         // Create order on PayPal side using actions.order.create()
                         return actions.order.create({
                             purchase_units: [{
@@ -1718,7 +1737,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     value: total.toFixed(2),
                                     currency_code: 'USD'
                                 },
-                                description: 'Order from Bluprinter',
+                                description: description,
                                 custom_id: 'order-' + Date.now()
                             }]
                         });
@@ -2779,6 +2798,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'price' => (float) $item['cart_item']->price,
             'product' => [
                 'name' => $item['product']->name,
+                'sku' => $item['product']->sku ?? null,
                 'variants' => $item['product']->variants,
                 'media' => $item['product']->media ?? $item['product']->getEffectiveMedia(),
                 'base_price' => (float) ($item['product']->base_price ?? 0),

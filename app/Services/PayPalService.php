@@ -44,13 +44,18 @@ class PayPalService
     }
 
     /**
-     * Get generic product name to avoid copyright issues
+     * Get product name using SKU to avoid copyright issues
      * 
-     * @param int $index The index of the product (1-based)
-     * @return string Generic product name like "Item #1", "Item #2", etc.
+     * @param object|null $product The product object
+     * @param int $index The index of the product (1-based) as fallback
+     * @return string Product name using SKU or fallback to "Item #X"
      */
-    private function getGenericProductName($index)
+    private function getGenericProductName($product = null, $index = 1)
     {
+        // Use SKU if available, otherwise fallback to Item #X
+        if ($product && isset($product->sku) && !empty($product->sku)) {
+            return $product->sku;
+        }
         return "Item #{$index}";
     }
 
@@ -73,8 +78,8 @@ class PayPalService
             $formattedUnitPrice = number_format($unitPrice, 2, '.', '');
 
             $paypalItems[] = [
-                'name' => $this->getGenericProductName($itemIndex),
-                'sku' => $item['product']->id,
+                'name' => $this->getGenericProductName($item['product'], $itemIndex),
+                'sku' => $item['product']->sku ?? $item['product']->id,
                 'price' => $formattedUnitPrice,
                 'currency' => 'USD',
                 'quantity' => (int)$item['quantity']

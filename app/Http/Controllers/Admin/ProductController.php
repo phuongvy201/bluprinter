@@ -106,6 +106,7 @@ class ProductController extends Controller
 
             $data = $request->all();
             $data['slug'] = $this->generateUniqueSlug($request->name);
+            $data['sku'] = $this->generateUniqueSKU();
             $data['user_id'] = auth()->id(); // Set product owner
 
             // Set shop_id based on user role
@@ -344,6 +345,7 @@ class ProductController extends Controller
                 'shop_id' => $product->shop_id,
                 'name' => $product->name . ' (Copy)',
                 'slug' => $this->generateUniqueSlug($product->name . ' (Copy)'),
+                'sku' => $this->generateUniqueSKU(),
                 'price' => $product->price,
                 'description' => $product->description,
                 'media' => $product->media, // Copy media array
@@ -782,5 +784,20 @@ class ProductController extends Controller
         }
 
         return $slug;
+    }
+
+    /**
+     * Generate a unique SKU for a product
+     * Format: PRD-{random 8 characters}
+     * 
+     * @return string Unique SKU
+     */
+    private function generateUniqueSKU()
+    {
+        do {
+            $sku = 'PRD-' . strtoupper(Str::random(8));
+        } while (Product::where('sku', $sku)->exists());
+
+        return $sku;
     }
 }

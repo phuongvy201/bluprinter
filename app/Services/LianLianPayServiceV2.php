@@ -91,15 +91,22 @@ class LianLianPayServiceV2
             // 5️⃣ Sản phẩm (chỉ lấy 1 dòng demo hoặc loop đơn giản)
             $products = [];
             $itemIndex = 1;
+            // Load product relationship if not already loaded
+            if (!$order->relationLoaded('items.product')) {
+                $order->load('items.product');
+            }
             foreach ($order->items as $item) {
+                $productModel = $item->product; // Get the actual Product model
                 $product = new Product();
                 $product->category = 'general';
-                $product->name = $this->getGenericProductName($itemIndex);
+                // Use SKU from product if available, otherwise fallback
+                $product->name = $this->getGenericProductName($productModel, $itemIndex);
                 $product->price = $item->unit_price;
                 $product->product_id = (string)$item->product_id;
                 $product->quantity = $item->quantity;
                 $product->shipping_provider = 'DHL';
-                $product->sku = 'SKU-' . $item->product_id;
+                // Use SKU from product if available, otherwise fallback to product_id
+                $product->sku = $productModel && $productModel->sku ? $productModel->sku : ('SKU-' . $item->product_id);
                 $product->url = url('/products/' . $item->product_id);
                 $products[] = $product;
                 $itemIndex++;
@@ -449,8 +456,19 @@ class LianLianPayServiceV2
      * @param int $index The index of the product (1-based)
      * @return string Generic product name like "Item #1", "Item #2", etc.
      */
-    private function getGenericProductName($index)
+    /**
+     * Get product name using SKU to avoid copyright issues
+     * 
+     * @param object|null $product The product object
+     * @param int $index The index of the product (1-based) as fallback
+     * @return string Product name using SKU or fallback to "Item #X"
+     */
+    private function getGenericProductName($product = null, $index = 1)
     {
+        // Use SKU if available, otherwise fallback to Item #X
+        if ($product && isset($product->sku) && !empty($product->sku)) {
+            return $product->sku;
+        }
         return "Item #{$index}";
     }
 
