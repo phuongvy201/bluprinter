@@ -571,6 +571,7 @@ Route::middleware('auth')->group(function () {
         // Products
         Route::resource('products', AdminProductController::class);
         Route::post('products/bulk-delete', [AdminProductController::class, 'bulkDelete'])->name('products.bulk-delete');
+        Route::post('products/{product}/duplicate', [AdminProductController::class, 'duplicate'])->name('products.duplicate');
 
         // Collections
         Route::resource('collections', AdminCollectionController::class);

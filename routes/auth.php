@@ -4,6 +4,8 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
+use App\Http\Controllers\Auth\FacebookDataDeletionController;
+use App\Http\Controllers\Auth\FacebookLoginController;
 use App\Http\Controllers\Auth\GoogleLoginController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
@@ -31,6 +33,13 @@ Route::middleware('guest')->group(function () {
     Route::get('auth/google/callback', [GoogleLoginController::class, 'handleGoogleCallback'])
         ->name('google.callback');
 
+    // Facebook OAuth routes
+    Route::get('auth/facebook', [FacebookLoginController::class, 'redirectToFacebook'])
+        ->name('facebook.login');
+
+    Route::get('auth/facebook/callback', [FacebookLoginController::class, 'handleFacebookCallback'])
+        ->name('facebook.callback');
+
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
 
@@ -49,6 +58,13 @@ Route::middleware('guest')->group(function () {
 Route::get('verify-email/{id}/{hash}', VerifyEmailController::class)
     ->middleware(['throttle:6,1'])
     ->name('verification.verify');
+
+// Facebook Data Deletion Callback (required by Facebook - must be public)
+Route::post('auth/facebook/deletion', [FacebookDataDeletionController::class, 'handleDeletion'])
+    ->name('facebook.deletion');
+
+Route::get('auth/facebook/deletion/status/{confirmation_code}', [FacebookDataDeletionController::class, 'status'])
+    ->name('facebook.deletion.status');
 
 Route::middleware('auth')->group(function () {
     Route::get('verify-email', EmailVerificationPromptController::class)

@@ -176,6 +176,84 @@
             </div>
         </div>
 
+        <!-- Product Variants -->
+        @if($product->variants && $product->variants->count() > 0)
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-teal-50">
+                <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                    </svg>
+                    Product Variants
+                </h3>
+                <p class="text-sm text-gray-600 mt-1">Edit price and quantity for each variant</p>
+            </div>
+            <div class="p-6">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Variant</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Current Price</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">New Price</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Quantity</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            @foreach($product->variants as $index => $variant)
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0 h-10 w-10">
+                                            <div class="h-10 w-10 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center">
+                                                <span class="text-white font-semibold text-sm">{{ $index + 1 }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="ml-4">
+                                            <div class="text-sm font-semibold text-gray-900">{{ $variant->variant_name }}</div>
+                                            @if($variant->attributes)
+                                                <div class="text-xs text-gray-500">
+                                                    @foreach($variant->attributes as $key => $value)
+                                                        {{ $key }}: {{ $value }}@if(!$loop->last), @endif
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <input type="hidden" name="variants[{{ $index }}][id]" value="{{ $variant->id }}">
+                                    <input type="hidden" name="variants[{{ $index }}][variant_name]" value="{{ $variant->variant_name }}">
+                                    <input type="hidden" name="variants[{{ $index }}][attributes]" value='{{ json_encode($variant->attributes ?? []) }}'>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="text-sm font-medium text-gray-900">${{ number_format($variant->price ?? 0, 2) }}</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <input type="number" 
+                                           name="variants[{{ $index }}][price]" 
+                                           value="{{ old("variants.{$index}.price", $variant->price) }}"
+                                           step="0.01" 
+                                           min="0"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                           placeholder="{{ number_format($variant->price ?? 0, 2) }}">
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <input type="number" 
+                                           name="variants[{{ $index }}][quantity]" 
+                                           value="{{ old("variants.{$index}.quantity", $variant->quantity) }}"
+                                           min="0"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                           placeholder="0"
+                                           required>
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        @endif
+
         <!-- Media Upload -->
         <div class="bg-white shadow rounded-lg">
             <div class="px-6 py-4 border-b border-gray-200">

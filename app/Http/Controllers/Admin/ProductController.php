@@ -132,6 +132,7 @@ class ProductController extends Controller
                 $data['price'] = $template->base_price + $addAmount;
             }
 
+
             // Handle description logic
             $customDescription = trim($request->description ?? '');
             if (!empty($customDescription)) {
@@ -157,8 +158,23 @@ class ProductController extends Controller
 
             // Handle media upload to S3
             if ($request->hasFile('media')) {
+                $mediaFiles = $request->file('media');
                 $mediaUrls = [];
-                foreach ($request->file('media') as $file) {
+
+                // Get custom order if provided
+                $mediaOrder = $request->input('media_order');
+                $orderedIndices = $mediaOrder ? explode(',', $mediaOrder) : null;
+
+                // If order is provided, reorder files accordingly
+                if ($orderedIndices && count($orderedIndices) === count($mediaFiles)) {
+                    $orderedFiles = [];
+                    foreach ($orderedIndices as $index) {
+                        $orderedFiles[] = $mediaFiles[(int)$index];
+                    }
+                    $mediaFiles = $orderedFiles;
+                }
+
+                foreach ($mediaFiles as $file) {
                     try {
                         // Validate file
                         if (!$file->isValid()) {
@@ -306,6 +322,80 @@ class ProductController extends Controller
     }
 
     /**
+     * Duplicate a product
+     */
+    public function duplicate(Product $product)
+    {
+        try {
+            $user = auth()->user();
+
+            // Check authorization
+            if (!$user->hasRole('admin') && $product->template->user_id !== $user->id) {
+                abort(403, 'Unauthorized action.');
+            }
+
+            // Load product with relationships
+            $product->load(['variants']);
+
+            // Create new product data
+            $newProductData = [
+                'template_id' => $product->template_id,
+                'user_id' => $user->id,
+                'shop_id' => $product->shop_id,
+                'name' => $product->name . ' (Copy)',
+                'slug' => $this->generateUniqueSlug($product->name . ' (Copy)'),
+                'price' => $product->price,
+                'description' => $product->description,
+                'media' => $product->media, // Copy media array
+                'quantity' => $product->quantity,
+                'status' => 'draft', // Set to draft by default
+            ];
+
+            // Create the duplicated product
+            $newProduct = Product::create($newProductData);
+
+            // Duplicate variants if they exist
+            if ($product->variants && $product->variants->count() > 0) {
+                foreach ($product->variants as $variant) {
+                    \App\Models\ProductVariant::create([
+                        'template_id' => $product->template_id,
+                        'product_id' => $newProduct->id,
+                        'variant_name' => $variant->variant_name,
+                        'attributes' => $variant->attributes,
+                        'price' => $variant->price,
+                        'quantity' => $variant->quantity,
+                        'sku' => 'SKU-' . strtoupper(Str::random(8)), // Generate new unique SKU
+                        'media' => $variant->media,
+                    ]);
+                }
+            }
+
+            // Increment shop products count if user has shop
+            if ($user->hasShop()) {
+                $user->shop->incrementProducts();
+            }
+
+            Log::info('Product duplicated', [
+                'original_product_id' => $product->id,
+                'new_product_id' => $newProduct->id,
+                'user_id' => $user->id
+            ]);
+
+            return redirect()->route('admin.products.edit', $newProduct)
+                ->with('success', 'Product duplicated successfully! You can now edit the duplicated product.');
+        } catch (\Exception $e) {
+            Log::error('Product duplication error: ' . $e->getMessage(), [
+                'product_id' => $product->id,
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->route('admin.products.index')
+                ->with('error', 'Failed to duplicate product: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Show the form for editing the specified resource.
      */
     public function edit(Product $product)
@@ -351,6 +441,11 @@ class ProductController extends Controller
                 'shop_id' => $user->hasRole('admin') ? 'nullable|exists:shops,id' : 'nullable',
                 'media.*' => 'nullable|mimes:jpeg,png,jpg,gif,mp4,mov,avi|max:10240',
                 'current_media_order' => 'nullable|array',
+                'variants' => 'nullable|array',
+                'variants.*.id' => 'nullable|exists:product_variants,id',
+                'variants.*.variant_name' => 'nullable|string',
+                'variants.*.price' => 'nullable|numeric|min:0',
+                'variants.*.quantity' => 'nullable|integer|min:0',
             ]);
 
             $data = $request->only([
@@ -362,7 +457,11 @@ class ProductController extends Controller
                 'shop_id',
             ]);
 
-            $data['slug'] = $this->generateUniqueSlug($request->name);
+            // Chỉ tạo slug mới nếu tên sản phẩm thay đổi
+            if ($request->name !== $product->name) {
+                $data['slug'] = $this->generateUniqueSlug($request->name, $product->id);
+            }
+            // Nếu tên không đổi, giữ nguyên slug cũ (không thêm vào $data)
 
             // Preserve and reorder current media based on submitted order
             $existingMediaOrder = $request->input('current_media_order', []);
@@ -410,6 +509,25 @@ class ProductController extends Controller
             }
 
             $product->update($data);
+
+            // Update product variants
+            if ($request->has('variants')) {
+                foreach ($request->variants as $variantData) {
+                    if (isset($variantData['id']) && $variantData['id']) {
+                        // Update existing variant
+                        $variant = \App\Models\ProductVariant::where('id', $variantData['id'])
+                            ->where('product_id', $product->id)
+                            ->first();
+
+                        if ($variant) {
+                            $variant->update([
+                                'price' => $variantData['price'] ?? $variant->price,
+                                'quantity' => $variantData['quantity'] ?? $variant->quantity,
+                            ]);
+                        }
+                    }
+                }
+            }
 
             return redirect()->route('admin.products.index')
                 ->with('success', 'Product updated successfully!');
@@ -635,17 +753,32 @@ class ProductController extends Controller
 
     /**
      * Generate a unique slug for the product
+     * 
+     * @param string $name Product name
+     * @param int|null $excludeProductId Product ID to exclude from uniqueness check (for updates)
+     * @return string Unique slug
      */
-    private function generateUniqueSlug($name)
+    private function generateUniqueSlug($name, $excludeProductId = null)
     {
         $slug = Str::slug($name);
         $originalSlug = $slug;
         $counter = 1;
 
-        // Check if slug already exists
-        while (Product::where('slug', $slug)->exists()) {
+        // Check if slug already exists (excluding current product if updating)
+        $query = Product::where('slug', $slug);
+        if ($excludeProductId) {
+            $query->where('id', '!=', $excludeProductId);
+        }
+
+        while ($query->exists()) {
             $slug = $originalSlug . '-' . $counter;
             $counter++;
+
+            // Rebuild query for next check
+            $query = Product::where('slug', $slug);
+            if ($excludeProductId) {
+                $query->where('id', '!=', $excludeProductId);
+            }
         }
 
         return $slug;

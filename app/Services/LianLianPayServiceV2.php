@@ -90,10 +90,11 @@ class LianLianPayServiceV2
 
             // 5️⃣ Sản phẩm (chỉ lấy 1 dòng demo hoặc loop đơn giản)
             $products = [];
+            $itemIndex = 1;
             foreach ($order->items as $item) {
                 $product = new Product();
                 $product->category = 'general';
-                $product->name = $item->product_name;
+                $product->name = $this->getGenericProductName($itemIndex);
                 $product->price = $item->unit_price;
                 $product->product_id = (string)$item->product_id;
                 $product->quantity = $item->quantity;
@@ -101,6 +102,7 @@ class LianLianPayServiceV2
                 $product->sku = 'SKU-' . $item->product_id;
                 $product->url = url('/products/' . $item->product_id);
                 $products[] = $product;
+                $itemIndex++;
             }
 
             // 6️⃣ Thông tin vận chuyển
@@ -439,6 +441,17 @@ class LianLianPayServiceV2
                 'trace' => $e->getTraceAsString()
             ]);
         }
+    }
+
+    /**
+     * Get generic product name to avoid copyright issues
+     * 
+     * @param int $index The index of the product (1-based)
+     * @return string Generic product name like "Item #1", "Item #2", etc.
+     */
+    private function getGenericProductName($index)
+    {
+        return "Item #{$index}";
     }
 
     /**

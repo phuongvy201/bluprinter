@@ -358,8 +358,9 @@
                 </div>
                 
                 <div id="media-preview" class="mt-6 hidden">
-                    <h5 class="text-sm font-semibold text-gray-700 mb-4">Selected Files:</h5>
+                    <h5 class="text-sm font-semibold text-gray-700 mb-4">Selected Files (Drag to reorder):</h5>
                     <div id="media-preview-list" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+                    <input type="hidden" id="media-order" name="media_order" value="">
                 </div>
             </div>
         </div>
@@ -551,7 +552,15 @@ function displayMediaPreview() {
     
     selectedMediaFiles.forEach((file, index) => {
         const previewItem = document.createElement('div');
-        previewItem.className = 'relative bg-white rounded-lg border-2 border-gray-200 p-2 shadow-sm';
+        previewItem.className = 'relative bg-white rounded-lg border-2 border-gray-200 p-2 shadow-sm cursor-move draggable-media';
+        previewItem.draggable = true;
+        previewItem.dataset.index = index;
+        
+        // Drag event handlers
+        previewItem.addEventListener('dragstart', handleMediaDragStart);
+        previewItem.addEventListener('dragover', handleMediaDragOver);
+        previewItem.addEventListener('drop', handleMediaDrop);
+        previewItem.addEventListener('dragend', handleMediaDragEnd);
         
         const isVideo = file.type.startsWith('video/');
         const isImage = file.type.startsWith('image/');
@@ -564,8 +573,9 @@ function displayMediaPreview() {
                         <img src="${e.target.result}" alt="${file.name}" class="w-full h-full object-cover">
                     </div>
                     <p class="text-xs font-medium text-gray-700 truncate">${file.name}</p>
+                    <div class="absolute top-1 left-1 bg-blue-500 text-white text-xs px-2 py-1 rounded">${index + 1}</div>
                     <button type="button" onclick="removeMediaFile(${index})" 
-                            class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600">×</button>
+                            class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 z-10">×</button>
                 `;
             };
             reader.readAsDataURL(file);
@@ -577,13 +587,67 @@ function displayMediaPreview() {
                     </svg>
                 </div>
                 <p class="text-xs font-medium text-gray-700 truncate">${file.name}</p>
+                <div class="absolute top-1 left-1 bg-blue-500 text-white text-xs px-2 py-1 rounded">${index + 1}</div>
                 <button type="button" onclick="removeMediaFile(${index})" 
-                        class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600">×</button>
+                        class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 z-10">×</button>
             `;
         }
         
         previewList.appendChild(previewItem);
     });
+    
+    updateMediaOrder();
+}
+
+let draggedMediaIndex = null;
+
+function handleMediaDragStart(e) {
+    draggedMediaIndex = parseInt(e.currentTarget.dataset.index);
+    e.currentTarget.classList.add('opacity-50', 'border-blue-500');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleMediaDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const target = e.currentTarget;
+    if (target.classList.contains('draggable-media') && target.dataset.index != draggedMediaIndex) {
+        target.classList.add('border-green-500', 'bg-green-50');
+    }
+}
+
+function handleMediaDrop(e) {
+    e.preventDefault();
+    const targetIndex = parseInt(e.currentTarget.dataset.index);
+    
+    if (draggedMediaIndex !== null && draggedMediaIndex !== targetIndex) {
+        // Reorder files array
+        const draggedFile = selectedMediaFiles[draggedMediaIndex];
+        selectedMediaFiles.splice(draggedMediaIndex, 1);
+        selectedMediaFiles.splice(targetIndex, 0, draggedFile);
+        
+        // Update file input
+        const input = document.getElementById('media');
+        const dt = new DataTransfer();
+        selectedMediaFiles.forEach(file => dt.items.add(file));
+        input.files = dt.files;
+        
+        // Redisplay preview with new order
+        displayMediaPreview();
+    }
+}
+
+function handleMediaDragEnd(e) {
+    e.currentTarget.classList.remove('opacity-50', 'border-blue-500');
+    document.querySelectorAll('.draggable-media').forEach(item => {
+        item.classList.remove('border-green-500', 'bg-green-50');
+    });
+    draggedMediaIndex = null;
+}
+
+function updateMediaOrder() {
+    const order = selectedMediaFiles.map((file, index) => index).join(',');
+    document.getElementById('media-order').value = order;
 }
 
 function removeMediaFile(index) {
@@ -595,6 +659,7 @@ function removeMediaFile(index) {
     input.files = dt.files;
     
     displayMediaPreview();
+    updateMediaOrder();
 }
 
 // Rich Text Editor Functions
@@ -729,7 +794,7 @@ function validateForm() {
         return false;
     }
     
-    if (!quantity || quantity < 0) {
+    if (!quantity || quantity === '' || isNaN(quantity) || parseInt(quantity) < 0) {
         alert('Please enter a valid quantity');
         return false;
     }

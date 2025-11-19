@@ -44,6 +44,17 @@ class PayPalService
     }
 
     /**
+     * Get generic product name to avoid copyright issues
+     * 
+     * @param int $index The index of the product (1-based)
+     * @return string Generic product name like "Item #1", "Item #2", etc.
+     */
+    private function getGenericProductName($index)
+    {
+        return "Item #{$index}";
+    }
+
+    /**
      * Create a PayPal payment
      */
     public function createPayment($order, $items)
@@ -53,6 +64,7 @@ class PayPalService
         // Build items first to calculate accurate subtotal
         $paypalItems = [];
         $itemsSubtotal = 0;
+        $itemIndex = 1;
 
         foreach ($items as $item) {
             // Calculate unit price from total (total / quantity)
@@ -61,7 +73,7 @@ class PayPalService
             $formattedUnitPrice = number_format($unitPrice, 2, '.', '');
 
             $paypalItems[] = [
-                'name' => substr($item['product']->name, 0, 127),
+                'name' => $this->getGenericProductName($itemIndex),
                 'sku' => $item['product']->id,
                 'price' => $formattedUnitPrice,
                 'currency' => 'USD',
@@ -70,6 +82,7 @@ class PayPalService
 
             // Calculate subtotal from formatted prices to match PayPal's rounding
             $itemsSubtotal += (float)$formattedUnitPrice * (int)$item['quantity'];
+            $itemIndex++;
         }
 
         // Format amounts - use calculated subtotal to avoid rounding errors

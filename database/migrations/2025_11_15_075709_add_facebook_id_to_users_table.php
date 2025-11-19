@@ -11,11 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('settings', function (Blueprint $table) {
-            $table->id();
-            $table->string('key')->unique();
-            $table->text('value')->nullable();
-            $table->timestamps();
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('facebook_id')->nullable()->after('google_id');
+            $table->index('facebook_id');
         });
     }
 
@@ -24,10 +22,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('settings');
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropIndex(['facebook_id']);
+            $table->dropColumn('facebook_id');
+        });
     }
 };
-
-
-
-
