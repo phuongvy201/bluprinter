@@ -84,7 +84,7 @@
 
                     <div>
                         <label for="google_tag_manager_id" class="block text-sm font-semibold text-gray-900 mb-1">
-                            Google Tag Manager ID
+                            Google Tag Manager ID (Legacy - Single)
                         </label>
                         <input
                             type="text"
@@ -99,6 +99,28 @@
                         @enderror
                         <p class="mt-2 text-xs text-gray-500">
                             Ví dụ: <code>{{ $defaults['google_tag_manager_id'] }}</code>
+                        </p>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label for="google_tag_manager_ids" class="block text-sm font-semibold text-gray-900 mb-1">
+                            Google Tag Manager IDs (Multiple - Mỗi ID một dòng)
+                        </label>
+                        <textarea
+                            name="google_tag_manager_ids"
+                            id="google_tag_manager_ids"
+                            rows="5"
+                            placeholder="GTM-XXXXXXX&#10;GTM-YYYYYYY&#10;GTM-ZZZZZZZ"
+                            class="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200/50 font-mono text-sm"
+                        >{{ old('google_tag_manager_ids', $settings['google_tag_manager_ids'] ?? '') }}</textarea>
+                        @error('google_tag_manager_ids')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                        <p class="mt-2 text-xs text-gray-500">
+                            Nhập nhiều GTM IDs, mỗi ID trên một dòng hoặc phân cách bằng dấu phẩy. Ví dụ:<br>
+                            <code>GTM-XXXXXXX</code><br>
+                            <code>GTM-YYYYYYY</code><br>
+                            <code>GTM-ZZZZZZZ</code>
                         </p>
                     </div>
 

@@ -55,6 +55,12 @@
                         class="px-4 py-2 transition-colors">
                         Events
                     </button>
+                    <button 
+                        @click="changeTab('domains')"
+                        :class="tab === 'domains' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
+                        class="px-4 py-2 transition-colors">
+                        Domains
+                    </button>
                 </div>
             </div>
             <div class="flex items-center gap-3">
@@ -468,6 +474,308 @@
                 </table>
             </div>
         </div>
+
+    @elseif($tab === 'domains')
+        @if(isset($selectedDomain))
+            <!-- Domain Detail View -->
+            <div class="space-y-6" x-data="{ 
+                domainTab: '{{ request('domain_tab', 'overview') }}',
+                changeDomainTab(newTab) {
+                    this.domainTab = newTab;
+                    window.location.href = '{{ route('admin.analytics.index') }}?days={{ $days }}&tab=domains&domain={{ urlencode($selectedDomain) }}&domain_tab=' + newTab;
+                }
+            }">
+                <!-- Header với nút back -->
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <button 
+                                onclick="window.location.href='{{ route('admin.analytics.index') }}?days={{ $days }}&tab=domains'"
+                                class="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                </svg>
+                            </button>
+                            <div>
+                                <h2 class="text-2xl font-bold text-gray-900">{{ $selectedDomain }}</h2>
+                                <p class="text-sm text-gray-600 mt-1">Chi tiết thống kê domain</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Domain Sub Tabs -->
+                    <div class="flex items-center gap-4 mt-6 border-b border-gray-200">
+                        <button 
+                            @click="changeDomainTab('overview')"
+                            :class="domainTab === 'overview' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
+                            class="px-4 py-2 transition-colors">
+                            Overview
+                        </button>
+                        <button 
+                            @click="changeDomainTab('pages')"
+                            :class="domainTab === 'pages' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
+                            class="px-4 py-2 transition-colors">
+                            Pages
+                        </button>
+                        <button 
+                            @click="changeDomainTab('sources')"
+                            :class="domainTab === 'sources' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
+                            class="px-4 py-2 transition-colors">
+                            Traffic Sources
+                        </button>
+                        <button 
+                            @click="changeDomainTab('demographics')"
+                            :class="domainTab === 'demographics' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
+                            class="px-4 py-2 transition-colors">
+                            Demographics
+                        </button>
+                        <button 
+                            @click="changeDomainTab('devices')"
+                            :class="domainTab === 'devices' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
+                            class="px-4 py-2 transition-colors">
+                            Devices
+                        </button>
+                        <button 
+                            @click="changeDomainTab('timeline')"
+                            :class="domainTab === 'timeline' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
+                            class="px-4 py-2 transition-colors">
+                            Timeline
+                        </button>
+                    </div>
+                </div>
+
+                @php
+                    $domainTab = request('domain_tab', 'overview');
+                @endphp
+
+                @if($domainTab === 'overview')
+                    <!-- Timeline Chart -->
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Sessions Timeline</h3>
+                        <div class="h-64">
+                            <canvas id="domainTimelineChart"></canvas>
+                        </div>
+                    </div>
+                @elseif($domainTab === 'pages')
+                    <!-- Domain Pages -->
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                        <div class="p-6 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900">Top Pages</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Path</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Title</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Views</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Duration</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bounce Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    @forelse($domainPages ?? [] as $page)
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 text-sm text-gray-900">{{ $page['page_path'] }}</td>
+                                            <td class="px-6 py-4 text-sm text-gray-900">{{ $page['page_title'] }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($page['page_views']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($page['users']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$page['avg_duration']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($page['bounce_rate'], 2) }}%</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="6" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @elseif($domainTab === 'sources')
+                    <!-- Domain Traffic Sources -->
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                        <div class="p-6 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900">Traffic Sources</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source Type</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Medium</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sessions</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Duration</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bounce Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    @forelse($domainTrafficSources ?? [] as $source)
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                                    @if(in_array($source['source_type'], ['Facebook', 'TikTok', 'Pinterest', 'Instagram', 'Twitter/X', 'YouTube', 'LinkedIn'])) bg-blue-100 text-blue-800
+                                                    @elseif(in_array($source['source_type'], ['Google', 'Bing'])) bg-green-100 text-green-800
+                                                    @elseif($source['source_type'] === 'Direct') bg-gray-100 text-gray-800
+                                                    @else bg-purple-100 text-purple-800
+                                                    @endif">
+                                                    {{ $source['source_type'] }}
+                                                </span>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $source['source'] }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $source['medium'] }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['sessions']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['users']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$source['avg_session_duration']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['bounce_rate'], 2) }}%</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="7" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @elseif($domainTab === 'demographics')
+                    <!-- Domain Demographics -->
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                        <div class="p-6 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900">Demographics</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Country</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">City</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sessions</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Views</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    @forelse($domainDemographics ?? [] as $demo)
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $demo['country'] }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $demo['city'] }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($demo['users']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($demo['sessions']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($demo['page_views']) }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="5" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @elseif($domainTab === 'devices')
+                    <!-- Domain Devices -->
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                        <div class="p-6 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900">Devices</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sessions</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Duration</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bounce Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    @forelse($domainDevices ?? [] as $device)
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $device['device'] }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($device['users']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($device['sessions']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$device['avg_duration']) }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($device['bounce_rate'], 2) }}%</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="5" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @elseif($domainTab === 'timeline')
+                    <!-- Domain Timeline -->
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Sessions Timeline</h3>
+                        <div class="h-64">
+                            <canvas id="domainTimelineChart"></canvas>
+                        </div>
+                    </div>
+                @endif
+            </div>
+        @else
+            <!-- Domains List View -->
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Domain Statistics - Thống kê Domain</h3>
+                        <p class="text-sm text-gray-600 mt-1">Hiển thị thống kê theo domain từ GA4</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <input type="text" id="domainSearch" placeholder="Tìm kiếm domain..." class="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full" id="domainsTable">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DOMAIN</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SESSIONS</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">USERS</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NEW USERS</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAGE VIEWS</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AVG. SESSION DURATION</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">BOUNCE RATE</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            @forelse($domains ?? [] as $domain)
+                                <tr class="hover:bg-gray-50 domain-row" data-domain="{{ strtolower($domain['domain']) }}">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="text-sm font-medium text-gray-900">{{ $domain['domain'] }}</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($domain['sessions']) }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($domain['users']) }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($domain['new_users']) }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($domain['page_views']) }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$domain['avg_session_duration']) }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($domain['bounce_rate'], 2) }}%</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        <button 
+                                            onclick="window.location.href='{{ route('admin.analytics.index') }}?days={{ $days }}&tab=domains&domain={{ urlencode($domain['domain']) }}&domain_tab=overview'"
+                                            class="text-blue-600 hover:text-blue-800 font-medium">
+                                            Xem chi tiết
+                                        </button>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="8" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
     @endif
 </div>
 
@@ -566,6 +874,73 @@
         const days = {{ $days ?? 7 }};
         const tab = '{{ $tab ?? 'acquisition' }}';
         window.location.href = '{{ route('admin.analytics.index') }}?days=' + days + '&tab=' + tab + '&filter=' + filter;
+    }
+
+    // Search functionality cho Domains Table
+    const domainSearch = document.getElementById('domainSearch');
+    if (domainSearch) {
+        domainSearch.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#domainsTable .domain-row');
+            
+            rows.forEach(row => {
+                const domainText = row.getAttribute('data-domain');
+                if (domainText.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+
+    // Domain Timeline Chart
+    const domainTimelineCtx = document.getElementById('domainTimelineChart');
+    if (domainTimelineCtx) {
+        const domainTimelineData = @json($domainTimeline ?? []);
+        new Chart(domainTimelineCtx, {
+            type: 'line',
+            data: {
+                labels: domainTimelineData.map(d => d.date),
+                datasets: [{
+                    label: 'Sessions',
+                    data: domainTimelineData.map(d => d.sessions),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'Users',
+                    data: domainTimelineData.map(d => d.users),
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'Page Views',
+                    data: domainTimelineData.map(d => d.page_views),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
     }
 </script>
 @endpush

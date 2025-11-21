@@ -59,6 +59,22 @@ class AnalyticsController extends Controller
             case 'events':
                 $data['events'] = $this->analyticsService->getAllEvents($days);
                 break;
+
+            case 'domains':
+                $domain = $request->get('domain');
+                if ($domain) {
+                    // Hiển thị chi tiết domain
+                    $data['selectedDomain'] = $domain;
+                    $data['domainPages'] = $this->analyticsService->getDomainPages($domain, $days);
+                    $data['domainTrafficSources'] = $this->analyticsService->getDomainTrafficSources($domain, $days);
+                    $data['domainDemographics'] = $this->analyticsService->getDomainDemographics($domain, $days);
+                    $data['domainDevices'] = $this->analyticsService->getDomainDevices($domain, $days);
+                    $data['domainTimeline'] = $this->analyticsService->getDomainTimeline($domain, $days);
+                } else {
+                    // Hiển thị danh sách domains
+                    $data['domains'] = $this->analyticsService->getDomains($days);
+                }
+                break;
         }
 
         return view('admin.analytics.index', $data);

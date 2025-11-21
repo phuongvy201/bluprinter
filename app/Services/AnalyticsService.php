@@ -1070,4 +1070,443 @@ class AnalyticsService
             }
         });
     }
+
+    /**
+     * Lấy dữ liệu Domain - Thống kê theo domain
+     */
+    public function getDomains(int $days = 7): array
+    {
+        if (!$this->client) {
+            return [];
+        }
+
+        $cacheKey = "analytics.domains.{$days}";
+        $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
+
+        return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
+            try {
+                $request = new RunReportRequest([
+                    'property' => "properties/{$this->propertyId}",
+                    'date_ranges' => [
+                        new DateRange([
+                            'start_date' => "{$days}daysAgo",
+                            'end_date' => 'today',
+                        ]),
+                    ],
+                    'dimensions' => [
+                        new Dimension(['name' => 'hostName']),
+                    ],
+                    'metrics' => [
+                        new Metric(['name' => 'sessions']),
+                        new Metric(['name' => 'activeUsers']),
+                        new Metric(['name' => 'screenPageViews']),
+                        new Metric(['name' => 'averageSessionDuration']),
+                        new Metric(['name' => 'bounceRate']),
+                        new Metric(['name' => 'newUsers']),
+                    ],
+                    'limit' => 50,
+                    'order_bys' => [
+                        new OrderBy([
+                            'metric' => new MetricOrderBy(['metric_name' => 'sessions']),
+                            'desc' => true,
+                        ]),
+                    ],
+                ]);
+                $response = $this->client->runReport($request);
+
+                Log::info('Domains API Response', [
+                    'days' => $days,
+                    'row_count' => $response->getRows()->count(),
+                    'response' => json_decode($response->serializeToJsonString(), true)
+                ]);
+
+                $data = [];
+                foreach ($response->getRows() as $row) {
+                    $dimensionValues = $row->getDimensionValues();
+                    $metricValues = $row->getMetricValues();
+
+                    $data[] = [
+                        'domain' => $dimensionValues[0]->getValue(),
+                        'sessions' => (int) $metricValues[0]->getValue(),
+                        'users' => (int) $metricValues[1]->getValue(),
+                        'page_views' => (int) $metricValues[2]->getValue(),
+                        'avg_session_duration' => $metricValues[3]->getValue(),
+                        'bounce_rate' => (float) $metricValues[4]->getValue(),
+                        'new_users' => (int) $metricValues[5]->getValue(),
+                    ];
+                }
+
+                Log::info('Domains Processed Data', ['data' => $data]);
+                return $data;
+            } catch (Exception $e) {
+                Log::error('Lỗi lấy domains: ' . $e->getMessage());
+                return [];
+            }
+        });
+    }
+
+    /**
+     * Lấy top pages theo domain cụ thể
+     */
+    public function getDomainPages(string $domain, int $days = 7): array
+    {
+        if (!$this->client) {
+            return [];
+        }
+
+        $cacheKey = "analytics.domain.pages.{$domain}.{$days}";
+        $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
+
+        return Cache::remember($cacheKey, $cacheTime, function () use ($domain, $days) {
+            try {
+                $request = new RunReportRequest([
+                    'property' => "properties/{$this->propertyId}",
+                    'date_ranges' => [
+                        new DateRange([
+                            'start_date' => "{$days}daysAgo",
+                            'end_date' => 'today',
+                        ]),
+                    ],
+                    'dimensions' => [
+                        new Dimension(['name' => 'hostName']),
+                        new Dimension(['name' => 'pagePath']),
+                        new Dimension(['name' => 'pageTitle']),
+                    ],
+                    'metrics' => [
+                        new Metric(['name' => 'screenPageViews']),
+                        new Metric(['name' => 'activeUsers']),
+                        new Metric(['name' => 'averageSessionDuration']),
+                        new Metric(['name' => 'bounceRate']),
+                    ],
+                    'limit' => 50,
+                    'order_bys' => [
+                        new OrderBy([
+                            'metric' => new MetricOrderBy(['metric_name' => 'screenPageViews']),
+                            'desc' => true,
+                        ]),
+                    ],
+                ]);
+                $response = $this->client->runReport($request);
+
+                $data = [];
+                foreach ($response->getRows() as $row) {
+                    $dimensionValues = $row->getDimensionValues();
+                    $metricValues = $row->getMetricValues();
+
+                    $rowDomain = $dimensionValues[0]->getValue();
+                    // Filter by domain
+                    if ($rowDomain !== $domain) {
+                        continue;
+                    }
+
+                    $data[] = [
+                        'domain' => $rowDomain,
+                        'page_path' => $dimensionValues[1]->getValue(),
+                        'page_title' => $dimensionValues[2]->getValue(),
+                        'page_views' => (int) $metricValues[0]->getValue(),
+                        'users' => (int) $metricValues[1]->getValue(),
+                        'avg_duration' => $metricValues[2]->getValue(),
+                        'bounce_rate' => (float) $metricValues[3]->getValue(),
+                    ];
+                }
+
+                return $data;
+            } catch (Exception $e) {
+                Log::error("Lỗi lấy domain pages cho {$domain}: " . $e->getMessage());
+                return [];
+            }
+        });
+    }
+
+    /**
+     * Lấy traffic sources theo domain cụ thể
+     */
+    public function getDomainTrafficSources(string $domain, int $days = 7): array
+    {
+        if (!$this->client) {
+            return [];
+        }
+
+        $cacheKey = "analytics.domain.sources.{$domain}.{$days}";
+        $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
+
+        return Cache::remember($cacheKey, $cacheTime, function () use ($domain, $days) {
+            try {
+                $request = new RunReportRequest([
+                    'property' => "properties/{$this->propertyId}",
+                    'date_ranges' => [
+                        new DateRange([
+                            'start_date' => "{$days}daysAgo",
+                            'end_date' => 'today',
+                        ]),
+                    ],
+                    'dimensions' => [
+                        new Dimension(['name' => 'hostName']),
+                        new Dimension(['name' => 'sessionSource']),
+                        new Dimension(['name' => 'sessionMedium']),
+                    ],
+                    'metrics' => [
+                        new Metric(['name' => 'sessions']),
+                        new Metric(['name' => 'activeUsers']),
+                        new Metric(['name' => 'averageSessionDuration']),
+                        new Metric(['name' => 'bounceRate']),
+                    ],
+                    'limit' => 50,
+                    'order_bys' => [
+                        new OrderBy([
+                            'metric' => new MetricOrderBy(['metric_name' => 'sessions']),
+                            'desc' => true,
+                        ]),
+                    ],
+                ]);
+                $response = $this->client->runReport($request);
+
+                $data = [];
+                foreach ($response->getRows() as $row) {
+                    $dimensionValues = $row->getDimensionValues();
+                    $metricValues = $row->getMetricValues();
+
+                    $rowDomain = $dimensionValues[0]->getValue();
+                    // Filter by domain
+                    if ($rowDomain !== $domain) {
+                        continue;
+                    }
+
+                    $source = $dimensionValues[1]->getValue();
+                    $medium = $dimensionValues[2]->getValue();
+                    $sourceType = $this->categorizeSource($source, $medium);
+
+                    $data[] = [
+                        'domain' => $rowDomain,
+                        'source' => $source,
+                        'medium' => $medium,
+                        'source_type' => $sourceType,
+                        'sessions' => (int) $metricValues[0]->getValue(),
+                        'users' => (int) $metricValues[1]->getValue(),
+                        'avg_session_duration' => $metricValues[2]->getValue(),
+                        'bounce_rate' => (float) $metricValues[3]->getValue(),
+                    ];
+                }
+
+                return $data;
+            } catch (Exception $e) {
+                Log::error("Lỗi lấy domain traffic sources cho {$domain}: " . $e->getMessage());
+                return [];
+            }
+        });
+    }
+
+    /**
+     * Lấy demographics theo domain cụ thể
+     */
+    public function getDomainDemographics(string $domain, int $days = 7): array
+    {
+        if (!$this->client) {
+            return [];
+        }
+
+        $cacheKey = "analytics.domain.demographics.{$domain}.{$days}";
+        $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
+
+        return Cache::remember($cacheKey, $cacheTime, function () use ($domain, $days) {
+            try {
+                $request = new RunReportRequest([
+                    'property' => "properties/{$this->propertyId}",
+                    'date_ranges' => [
+                        new DateRange([
+                            'start_date' => "{$days}daysAgo",
+                            'end_date' => 'today',
+                        ]),
+                    ],
+                    'dimensions' => [
+                        new Dimension(['name' => 'hostName']),
+                        new Dimension(['name' => 'country']),
+                        new Dimension(['name' => 'city']),
+                    ],
+                    'metrics' => [
+                        new Metric(['name' => 'activeUsers']),
+                        new Metric(['name' => 'sessions']),
+                        new Metric(['name' => 'screenPageViews']),
+                    ],
+                    'limit' => 50,
+                    'order_bys' => [
+                        new OrderBy([
+                            'metric' => new MetricOrderBy(['metric_name' => 'activeUsers']),
+                            'desc' => true,
+                        ]),
+                    ],
+                ]);
+                $response = $this->client->runReport($request);
+
+                $data = [];
+                foreach ($response->getRows() as $row) {
+                    $dimensionValues = $row->getDimensionValues();
+                    $metricValues = $row->getMetricValues();
+
+                    $rowDomain = $dimensionValues[0]->getValue();
+                    // Filter by domain
+                    if ($rowDomain !== $domain) {
+                        continue;
+                    }
+
+                    $data[] = [
+                        'domain' => $rowDomain,
+                        'country' => $dimensionValues[1]->getValue(),
+                        'city' => $dimensionValues[2]->getValue(),
+                        'users' => (int) $metricValues[0]->getValue(),
+                        'sessions' => (int) $metricValues[1]->getValue(),
+                        'page_views' => (int) $metricValues[2]->getValue(),
+                    ];
+                }
+
+                return $data;
+            } catch (Exception $e) {
+                Log::error("Lỗi lấy domain demographics cho {$domain}: " . $e->getMessage());
+                return [];
+            }
+        });
+    }
+
+    /**
+     * Lấy devices theo domain cụ thể
+     */
+    public function getDomainDevices(string $domain, int $days = 7): array
+    {
+        if (!$this->client) {
+            return [];
+        }
+
+        $cacheKey = "analytics.domain.devices.{$domain}.{$days}";
+        $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
+
+        return Cache::remember($cacheKey, $cacheTime, function () use ($domain, $days) {
+            try {
+                $request = new RunReportRequest([
+                    'property' => "properties/{$this->propertyId}",
+                    'date_ranges' => [
+                        new DateRange([
+                            'start_date' => "{$days}daysAgo",
+                            'end_date' => 'today',
+                        ]),
+                    ],
+                    'dimensions' => [
+                        new Dimension(['name' => 'hostName']),
+                        new Dimension(['name' => 'deviceCategory']),
+                    ],
+                    'metrics' => [
+                        new Metric(['name' => 'activeUsers']),
+                        new Metric(['name' => 'sessions']),
+                        new Metric(['name' => 'averageSessionDuration']),
+                        new Metric(['name' => 'bounceRate']),
+                    ],
+                    'order_bys' => [
+                        new OrderBy([
+                            'metric' => new MetricOrderBy(['metric_name' => 'activeUsers']),
+                            'desc' => true,
+                        ]),
+                    ],
+                ]);
+                $response = $this->client->runReport($request);
+
+                $data = [];
+                foreach ($response->getRows() as $row) {
+                    $dimensionValues = $row->getDimensionValues();
+                    $metricValues = $row->getMetricValues();
+
+                    $rowDomain = $dimensionValues[0]->getValue();
+                    // Filter by domain
+                    if ($rowDomain !== $domain) {
+                        continue;
+                    }
+
+                    $data[] = [
+                        'domain' => $rowDomain,
+                        'device' => $dimensionValues[1]->getValue(),
+                        'users' => (int) $metricValues[0]->getValue(),
+                        'sessions' => (int) $metricValues[1]->getValue(),
+                        'avg_duration' => $metricValues[2]->getValue(),
+                        'bounce_rate' => (float) $metricValues[3]->getValue(),
+                    ];
+                }
+
+                return $data;
+            } catch (Exception $e) {
+                Log::error("Lỗi lấy domain devices cho {$domain}: " . $e->getMessage());
+                return [];
+            }
+        });
+    }
+
+    /**
+     * Lấy timeline (sessions theo ngày) theo domain cụ thể
+     */
+    public function getDomainTimeline(string $domain, int $days = 7): array
+    {
+        if (!$this->client) {
+            return [];
+        }
+
+        $cacheKey = "analytics.domain.timeline.{$domain}.{$days}";
+        $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
+
+        return Cache::remember($cacheKey, $cacheTime, function () use ($domain, $days) {
+            try {
+                $request = new RunReportRequest([
+                    'property' => "properties/{$this->propertyId}",
+                    'date_ranges' => [
+                        new DateRange([
+                            'start_date' => "{$days}daysAgo",
+                            'end_date' => 'today',
+                        ]),
+                    ],
+                    'dimensions' => [
+                        new Dimension(['name' => 'hostName']),
+                        new Dimension(['name' => 'date']),
+                    ],
+                    'metrics' => [
+                        new Metric(['name' => 'sessions']),
+                        new Metric(['name' => 'activeUsers']),
+                        new Metric(['name' => 'screenPageViews']),
+                    ],
+                    'order_bys' => [
+                        new OrderBy([
+                            'dimension' => new DimensionOrderBy([
+                                'dimension_name' => 'date',
+                            ]),
+                            'desc' => false,
+                        ]),
+                    ],
+                ]);
+                $response = $this->client->runReport($request);
+
+                $data = [];
+                foreach ($response->getRows() as $row) {
+                    $dimensionValues = $row->getDimensionValues();
+                    $metricValues = $row->getMetricValues();
+
+                    $rowDomain = $dimensionValues[0]->getValue();
+                    // Filter by domain
+                    if ($rowDomain !== $domain) {
+                        continue;
+                    }
+
+                    $date = $dimensionValues[1]->getValue();
+                    $formattedDate = \Carbon\Carbon::createFromFormat('Ymd', $date)->format('M d');
+
+                    $data[] = [
+                        'domain' => $rowDomain,
+                        'date' => $formattedDate,
+                        'sessions' => (int) $metricValues[0]->getValue(),
+                        'users' => (int) $metricValues[1]->getValue(),
+                        'page_views' => (int) $metricValues[2]->getValue(),
+                    ];
+                }
+
+                return $data;
+            } catch (Exception $e) {
+                Log::error("Lỗi lấy domain timeline cho {$domain}: " . $e->getMessage());
+                return [];
+            }
+        });
+    }
 }

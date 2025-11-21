@@ -217,9 +217,15 @@
                                     <p class="text-xs text-gray-500 truncate" title="{{ $product->description ?? $product->template->description }}">
                                         {{ Str::limit($product->description ?? $product->template->description, 40) }}
                                     </p>
-                                    <p class="text-xs text-gray-400 mt-1 truncate" title="{{ $product->slug }}">
-                                        SKU: {{ Str::limit($product->slug, 20) }}
+                                    @if($product->sku)
+                                    <p class="text-xs text-gray-400 mt-1 truncate font-medium" title="{{ $product->sku }}">
+                                        SKU: <span class="text-blue-600 font-semibold">{{ $product->sku }}</span>
                                     </p>
+                                    @else
+                                    <p class="text-xs text-gray-400 mt-1 italic">
+                                        SKU: <span class="text-gray-400">Not assigned</span>
+                                    </p>
+                                    @endif
                                 </div>
                             </div>
                         </td>

@@ -31,18 +31,38 @@
         $tiktokPixelId = \App\Support\Settings::get('analytics.tiktok_pixel_id', config('services.tiktok.pixel_id'));
         $googleTagManagerId = \App\Support\Settings::get('analytics.google_tag_manager_id', config('services.google.tag_manager_id'));
         $googleAdsId = \App\Support\Settings::get('analytics.google_ads_id', config('services.google.ads_id'));
+        
+        // Parse multiple GTM IDs (support JSON array, comma-separated, or single value)
+        $gtmIds = [];
+        $gtmSetting = \App\Support\Settings::get('analytics.google_tag_manager_ids', null);
+        if ($gtmSetting) {
+            // Try to decode as JSON array first
+            $decoded = json_decode($gtmSetting, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $gtmIds = array_filter(array_map('trim', $decoded));
+            } else {
+                // Try comma-separated or newline-separated
+                $gtmIds = array_filter(array_map('trim', preg_split('/[,\n\r]+/', $gtmSetting)));
+            }
+        }
+        // Fallback to single GTM ID if no multiple IDs set
+        if (empty($gtmIds) && $googleTagManagerId) {
+            $gtmIds = [trim($googleTagManagerId)];
+        }
     @endphp
 
     <!-- Cookie Script -->
     <script type="text/javascript" charset="UTF-8" src="//cdn.cookie-script.com/s/4a353d27e80af68f255e8b4bff37f75c.js"></script>
 
-    @if($googleTagManagerId)
-        <!-- Google Tag Manager -->
+    @if(!empty($gtmIds))
+        <!-- Google Tag Manager - Multiple Containers -->
+        @foreach($gtmIds as $gtmId)
         <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
         new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
         j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-        })(window,document,'script','dataLayer','{{ $googleTagManagerId }}');</script>
+        })(window,document,'script','dataLayer','{{ $gtmId }}');</script>
+        @endforeach
         <!-- End Google Tag Manager -->
     @endif
     
@@ -199,10 +219,12 @@
     </style>
 </head>
 <body class="font-sans antialiased bg-gray-50">
-    @if($googleTagManagerId)
-        <!-- Google Tag Manager (noscript) -->
-        <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ $googleTagManagerId }}"
+    @if(!empty($gtmIds))
+        <!-- Google Tag Manager (noscript) - Multiple Containers -->
+        @foreach($gtmIds as $gtmId)
+        <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ $gtmId }}"
         height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+        @endforeach
         <!-- End Google Tag Manager (noscript) -->
     @endif
     
