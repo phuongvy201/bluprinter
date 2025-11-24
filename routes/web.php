@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\CollectionController as AdminCollectionController
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Admin\AnalyticsSettingsController;
+use App\Http\Controllers\Admin\DomainAnalyticsConfigController;
 use App\Http\Controllers\Admin\ShopController as AdminShopController;
 use App\Http\Controllers\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Seller\SellerDashboardController;
@@ -542,6 +543,16 @@ Route::middleware('auth')->group(function () {
         // Analytics settings
         Route::get('settings/analytics', [AnalyticsSettingsController::class, 'edit'])->name('settings.analytics.edit');
         Route::put('settings/analytics', [AnalyticsSettingsController::class, 'update'])->name('settings.analytics.update');
+
+        // Domain Analytics Configs
+        Route::resource('settings/domain-analytics', DomainAnalyticsConfigController::class)->names([
+            'index' => 'settings.domain-analytics.index',
+            'create' => 'settings.domain-analytics.create',
+            'store' => 'settings.domain-analytics.store',
+            'edit' => 'settings.domain-analytics.edit',
+            'update' => 'settings.domain-analytics.update',
+            'destroy' => 'settings.domain-analytics.destroy',
+        ]);
 
         // Analytics Dashboard
         Route::get('analytics', [App\Http\Controllers\Admin\AnalyticsController::class, 'index'])->name('analytics.index');

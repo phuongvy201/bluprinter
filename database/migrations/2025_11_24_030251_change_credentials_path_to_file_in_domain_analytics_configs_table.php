@@ -11,11 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('settings', function (Blueprint $table) {
-            $table->id();
-            $table->string('key')->unique();
-            $table->text('value')->nullable();
-            $table->timestamps();
+        Schema::table('domain_analytics_configs', function (Blueprint $table) {
+            $table->renameColumn('credentials_path', 'credentials_file');
         });
     }
 
@@ -24,13 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('settings');
+        Schema::table('domain_analytics_configs', function (Blueprint $table) {
+            $table->renameColumn('credentials_file', 'credentials_path');
+        });
     }
 };
-
-
-
-
-
-
-

@@ -1,810 +1,974 @@
 @extends('layouts.admin')
 
-@section('title', 'Google Analytics')
+@section('title', 'Google Analytics Dashboard')
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+@endpush
 
 @section('content')
-<div class="space-y-6" x-data="{ 
-    days: {{ $days }},
-    tab: '{{ $tab }}',
-    changeDays(newDays) {
-        this.days = newDays;
-        window.location.href = '{{ route('admin.analytics.index') }}?days=' + newDays + '&tab=' + this.tab;
-    },
-    changeTab(newTab) {
-        this.tab = newTab;
-        const filter = '{{ $filter ?? 'all' }}';
-        window.location.href = '{{ route('admin.analytics.index') }}?days=' + this.days + '&tab=' + newTab + (filter !== 'all' ? '&filter=' + filter : '');
-    },
-    changeFilter(filter) {
-        window.location.href = '{{ route('admin.analytics.index') }}?days=' + this.days + '&tab={{ $tab }}&filter=' + filter;
-    }
-}">
-    <!-- Header -->
-    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-        <div class="flex items-center justify-between flex-wrap gap-4">
-            <div>
-                <h1 class="text-3xl font-bold text-gray-900 mb-2">Google Analytics</h1>
-                <div class="flex items-center gap-4 mt-4">
-                    <button 
-                        @click="changeTab('acquisition')"
-                        :class="tab === 'acquisition' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                        class="px-4 py-2 transition-colors">
-                        Acquisition
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6" x-data="analyticsDashboard()">
+    <!-- Top Header with Tabs -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-4">
+            <h1 class="text-2xl font-bold text-gray-900">Google Analytics</h1>
+            <div class="flex items-center gap-4 flex-wrap">
+                <!-- Domain Selector -->
+                @if(count($availableDomains) > 1)
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm font-medium text-gray-700">Domain:</label>
+                        <select 
+                            x-model="selectedDomain" 
+                            @change="updateFilters()"
+                            class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        >
+                            @foreach($availableDomains as $domain)
+                                <option value="{{ $domain }}" {{ $selectedDomain === $domain ? 'selected' : '' }}>
+                                    {{ $domain }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @else
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm font-medium text-gray-700">Domain:</label>
+                        <span class="px-4 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 text-gray-700">
+                            {{ $selectedDomain ?? ($availableDomains[0] ?? 'N/A') }}
+                        </span>
+                    </div>
+                @endif
+                
+                <!-- Days Selector -->
+                <select 
+                    x-model="days" 
+                    @change="updateFilters()"
+                    class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                    <option value="7" {{ $days == 7 ? 'selected' : '' }}>Last 7 Days</option>
+                    <option value="14" {{ $days == 14 ? 'selected' : '' }}>Last 14 Days</option>
+                    <option value="30" {{ $days == 30 ? 'selected' : '' }}>Last 30 Days</option>
+                    <option value="60" {{ $days == 60 ? 'selected' : '' }}>Last 60 Days</option>
+                    <option value="90" {{ $days == 90 ? 'selected' : '' }}>Last 90 Days</option>
+                </select>
+                
+                <div class="flex items-center gap-2">
+                    <button class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg" title="Export">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
                     </button>
-                    <button 
-                        @click="changeTab('audience')"
-                        :class="tab === 'audience' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                        class="px-4 py-2 transition-colors">
-                        Audience
-                    </button>
-                    <button 
-                        @click="changeTab('conversions')"
-                        :class="tab === 'conversions' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                        class="px-4 py-2 transition-colors">
-                        Conversions
-                    </button>
-                    <button 
-                        @click="changeTab('pages')"
-                        :class="tab === 'pages' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                        class="px-4 py-2 transition-colors">
-                        Pages
-                    </button>
-                    <button 
-                        @click="changeTab('events')"
-                        :class="tab === 'events' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                        class="px-4 py-2 transition-colors">
-                        Events
-                    </button>
-                    <button 
-                        @click="changeTab('domains')"
-                        :class="tab === 'domains' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                        class="px-4 py-2 transition-colors">
-                        Domains
+                    <button class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg" title="Share">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.885 12.938 9 12.482 9 12c0-.482-.115-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+                        </svg>
                     </button>
                 </div>
             </div>
-            <div class="flex items-center gap-3">
-                <select 
-                    x-model="days"
-                    @change="changeDays($event.target.value)"
-                    class="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <option value="7">Last 7 Days</option>
-                    <option value="30">Last 30 Days</option>
-                    <option value="90">Last 90 Days</option>
-                </select>
-                <button class="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                    </svg>
+        </div>
+
+        <!-- Main Tabs -->
+        <div class="border-b border-gray-200">
+            <nav class="flex -mb-px space-x-8">
+                <button 
+                    @click="switchTab('acquisition')"
+                    :class="activeTab === 'acquisition' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                >
+                    Acquisition
                 </button>
-                <button class="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
-                    </svg>
+                <button 
+                    @click="switchTab('audience')"
+                    :class="activeTab === 'audience' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                >
+                    Audience
                 </button>
-            </div>
+                <button 
+                    @click="switchTab('conversions')"
+                    :class="activeTab === 'conversions' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                >
+                    Conversions
+                </button>
+                <button 
+                    @click="switchTab('pages')"
+                    :class="activeTab === 'pages' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                >
+                    Pages
+                </button>
+                <button 
+                    @click="switchTab('events')"
+                    :class="activeTab === 'events' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                >
+                    Events
+                </button>
+            </nav>
         </div>
     </div>
 
-    @if($tab === 'acquisition')
-        <!-- Acquisition Sub Navigation -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-            <div class="flex items-center gap-4 overflow-x-auto">
-                @php
-                    $filters = ['All', 'Organic Search', 'Paid Search', 'Direct', 'Social', 'Referrals', 'Display', 'Email', 'Other'];
-                    $currentFilter = $filter ?? 'all';
-                @endphp
-                @foreach($filters as $filterOption)
-                    <button 
-                        onclick="changeFilter('{{ strtolower(str_replace(' ', '-', $filterOption)) }}')"
-                        class="px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors {{ 
-                            strtolower(str_replace(' ', '-', $currentFilter)) === strtolower(str_replace(' ', '-', $filterOption)) 
-                                ? 'bg-blue-50 text-blue-600' 
-                                : 'text-gray-600 hover:bg-gray-50' 
-                        }}">
-                        {{ $filterOption }}
-                    </button>
-                @endforeach
-            </div>
+
+    <!-- Acquisition Tab Content -->
+    <div x-show="activeTab === 'acquisition'" x-transition>
+        @php
+            $summary = $summaryMetrics ?? [];
+            $sessions = $summary['sessions'] ?? 0;
+            $avgDuration = $summary['avg_session_duration'] ?? 0;
+            $newSessionsPercent = $summary['new_sessions_percent'] ?? 0;
+            $bounceRate = ($summary['bounce_rate'] ?? 0) * 100;
+            $goalCompletions = $summary['goal_completions'] ?? 0;
+            $pagesPerSession = $summary['pages_per_session'] ?? 0;
+            
+            // Format duration
+            $hours = floor($avgDuration / 3600);
+            $minutes = floor(($avgDuration % 3600) / 60);
+            $seconds = floor($avgDuration % 60);
+            $formattedDuration = sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
+        @endphp
+
+        <!-- Acquisition Sub-Navigation -->
+        <div class="mb-6 flex flex-wrap gap-2 border-b border-gray-200 pb-4">
+            <button 
+                @click="setFilter('all')"
+                :class="filter === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                class="px-4 py-2 rounded-lg text-sm font-medium border transition"
+            >
+                All
+            </button>
+            <button 
+                @click="setFilter('organic-search')"
+                :class="filter === 'organic-search' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                class="px-4 py-2 rounded-lg text-sm font-medium border transition"
+            >
+                Organic Search
+            </button>
+            <button 
+                @click="setFilter('paid-search')"
+                :class="filter === 'paid-search' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                class="px-4 py-2 rounded-lg text-sm font-medium border transition"
+            >
+                Paid Search
+            </button>
+            <button 
+                @click="setFilter('direct')"
+                :class="filter === 'direct' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                class="px-4 py-2 rounded-lg text-sm font-medium border transition"
+            >
+                Direct
+            </button>
+            <button 
+                @click="setFilter('social')"
+                :class="filter === 'social' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                class="px-4 py-2 rounded-lg text-sm font-medium border transition"
+            >
+                Social
+            </button>
+            <button 
+                @click="setFilter('referrals')"
+                :class="filter === 'referrals' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                class="px-4 py-2 rounded-lg text-sm font-medium border transition"
+            >
+                Referrals
+            </button>
+            <button 
+                @click="setFilter('display')"
+                :class="filter === 'display' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                class="px-4 py-2 rounded-lg text-sm font-medium border transition"
+            >
+                Display
+            </button>
+            <button 
+                @click="setFilter('email')"
+                :class="filter === 'email' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                class="px-4 py-2 rounded-lg text-sm font-medium border transition"
+            >
+                Email
+            </button>
+            <button 
+                @click="setFilter('other')"
+                :class="filter === 'other' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                class="px-4 py-2 rounded-lg text-sm font-medium border transition"
+            >
+                Other
+            </button>
         </div>
 
-        <!-- Charts Row -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Top Row: Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <!-- Sessions Line Chart -->
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Sessions</h3>
-                <div class="h-64">
-                    <canvas id="sessionsChart"></canvas>
-                </div>
-                <div class="mt-4 flex items-center justify-between">
-                    <div>
-                        @php
-                            $filteredSessions = array_sum(array_column($sessionsByDate, 'sessions'));
-                            if (($filter ?? 'all') !== 'all' && isset($channels)) {
-                                $filteredSessions = array_sum(array_column($channels, 'sessions'));
-                            }
-                        @endphp
-                        <p class="text-2xl font-bold text-gray-900">{{ number_format($filteredSessions) }}</p>
-                        <p class="text-sm text-green-600 mt-1">+14% from previous period</p>
+            @if(isset($sessionsByDate) && count($sessionsByDate) > 0)
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Sessions</h3>
+                    </div>
+                    <div class="mb-4">
+                        <p class="text-3xl font-bold text-gray-900">{{ number_format($sessions) }}</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                            </svg>
+                            <span class="text-sm text-green-600 font-medium">14%</span>
+                        </div>
+                    </div>
+                    <div style="height: 250px;">
+                        <canvas id="sessionsChart"></canvas>
                     </div>
                 </div>
-            </div>
+            @endif
 
             <!-- Sessions Donut Chart -->
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Sessions</h3>
-                <div class="flex items-center justify-center h-64">
-                    <div class="relative w-48 h-48">
-                        <canvas id="sessionsDonutChart"></canvas>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <div class="text-center">
-                                <p class="text-2xl font-bold text-gray-900">{{ number_format($totalSessions) }}</p>
-                                <p class="text-sm text-gray-600">Sessions</p>
-                            </div>
+            @if(isset($channels) && count($channels) > 0)
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Sessions</h3>
+                    </div>
+                    <div class="flex items-center justify-center mb-4">
+                        <div class="text-center">
+                            <p class="text-3xl font-bold text-gray-900">{{ number_format(array_sum(array_column($channels, 'sessions'))) }}</p>
+                            <p class="text-sm text-gray-600">Sessions</p>
                         </div>
                     </div>
-                </div>
-                <div class="mt-4 space-y-2 max-h-48 overflow-y-auto">
-                    @foreach($channels as $channel)
-                        <div class="flex items-center justify-between text-sm">
-                            <div class="flex items-center gap-2">
-                                <div class="w-3 h-3 rounded-full" style="background-color: {{ ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#6366f1', '#ef4444', '#14b8a6'][$loop->index % 8] }}"></div>
-                                <span class="text-gray-700">{{ $channel['channel'] }}</span>
-                            </div>
-                            <span class="font-medium text-gray-900">{{ number_format($channel['sessions']) }}</span>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-
-        <!-- Summary Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                        <p class="text-sm font-medium text-gray-600 mb-1">Sessions</p>
+                    <div style="height: 250px;">
+                        <canvas id="channelsChart"></canvas>
+                    </div>
+                    <div class="mt-4 grid grid-cols-2 gap-2 text-xs">
                         @php
-                            $filteredSessions = $summaryMetrics['sessions'];
-                            if (($filter ?? 'all') !== 'all' && isset($channels)) {
-                                $filteredSessions = array_sum(array_column($channels, 'sessions'));
-                            }
+                            $chartColors = [
+                                'rgba(59, 130, 246, 0.8)',   // Blue
+                                'rgba(139, 92, 246, 0.8)',   // Purple
+                                'rgba(236, 72, 153, 0.8)',   // Pink
+                                'rgba(251, 146, 60, 0.8)',   // Orange
+                                'rgba(16, 185, 129, 0.8)',   // Green
+                                'rgba(34, 197, 94, 0.8)',     // Green 2
+                            ];
                         @endphp
-                        <p class="text-2xl font-bold text-gray-900">{{ number_format($filteredSessions) }}</p>
-                <p class="text-sm text-red-600 mt-1">-23%</p>
-            </div>
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p class="text-sm font-medium text-gray-600 mb-1">Avg. Session Duration</p>
-                <p class="text-2xl font-bold text-gray-900">{{ gmdate('H:i:s', (int)$summaryMetrics['avg_session_duration']) }}</p>
-                <p class="text-sm text-red-600 mt-1">-10%</p>
-            </div>
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p class="text-sm font-medium text-gray-600 mb-1">% New Sessions</p>
-                <p class="text-2xl font-bold text-gray-900">{{ number_format($summaryMetrics['new_sessions_percent'], 2) }}%</p>
-                <p class="text-sm text-red-600 mt-1">-7%</p>
-            </div>
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p class="text-sm font-medium text-gray-600 mb-1">Bounce Rate</p>
-                <p class="text-2xl font-bold text-gray-900">{{ number_format($summaryMetrics['bounce_rate'], 2) }}%</p>
-                <p class="text-sm text-red-600 mt-1">-68%</p>
-            </div>
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p class="text-sm font-medium text-gray-600 mb-1">Goal Completions</p>
-                <p class="text-2xl font-bold text-gray-900">{{ number_format($summaryMetrics['goal_completions']) }}</p>
-                <p class="text-sm text-green-600 mt-1">+80%</p>
-            </div>
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p class="text-sm font-medium text-gray-600 mb-1">Pages/Session</p>
-                <p class="text-2xl font-bold text-gray-900">{{ number_format($summaryMetrics['pages_per_session'], 2) }}</p>
-                <p class="text-sm text-red-600 mt-1">-9%</p>
-            </div>
-        </div>
-
-        <!-- Traffic Sources Table - Chi tiết nguồn truy cập -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-            <div class="p-6 border-b border-gray-200 flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-900">Traffic Sources - Chi tiết nguồn truy cập</h3>
-                    <p class="text-sm text-gray-600 mt-1">Hiển thị chi tiết lượt truy cập từ TikTok, Facebook, Pinterest, Google, v.v.</p>
-                </div>
-                <div class="flex items-center gap-3">
-                    <input type="text" id="sourceSearch" placeholder="Tìm kiếm nguồn..." class="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                </div>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full" id="trafficSourcesTable">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SOURCE TYPE</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SOURCE</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MEDIUM</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SESSIONS</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AVG. SESSION DURATION</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NEW USERS</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">BOUNCE RATE</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAGE VIEWS</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        @forelse($trafficSources ?? [] as $source)
-                            <tr class="hover:bg-gray-50 source-row" data-source="{{ strtolower($source['source'] . ' ' . $source['source_type']) }}">
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                                        @if(in_array($source['source_type'], ['Facebook', 'TikTok', 'Pinterest', 'Instagram', 'Twitter/X', 'YouTube', 'LinkedIn'])) bg-blue-100 text-blue-800
-                                        @elseif(in_array($source['source_type'], ['Google', 'Bing'])) bg-green-100 text-green-800
-                                        @elseif($source['source_type'] === 'Direct') bg-gray-100 text-gray-800
-                                        @else bg-purple-100 text-purple-800
-                                        @endif">
-                                        {{ $source['source_type'] }}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $source['source'] }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $source['medium'] }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['sessions']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$source['avg_session_duration']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['new_users']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['bounce_rate'], 2) }}%</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['page_views']) }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="8" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Channels Table - Tổng quan theo kênh -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm mt-6">
-            <div class="p-6 border-b border-gray-200 flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-900">Channels Overview - Tổng quan theo kênh</h3>
-                    <p class="text-sm text-gray-600 mt-1">Showing {{ count($channels) }} of {{ count($channels) }} Rows</p>
-                </div>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CHANNEL</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SESSIONS</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AVG. SESSION DURATION</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% NEW SESSIONS</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">BOUNCE RATE</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">GOAL COMPLETIONS</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAGES/SESSION</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        @forelse($channels as $channel)
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $channel['channel'] }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($channel['sessions']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$channel['avg_session_duration']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {{ $channel['sessions'] > 0 ? number_format(($channel['new_users'] / $channel['sessions']) * 100, 2) : 0 }}%
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($channel['bounce_rate'], 2) }}%</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">-</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {{ $channel['sessions'] > 0 ? number_format($channel['page_views'] / $channel['sessions'], 2) : 0 }}
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="7" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    @elseif($tab === 'audience')
-        <!-- Audience Tab -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Demographics Table -->
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-                <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-semibold text-gray-900">Demographics</h3>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Country</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">City</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sessions</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Views</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            @forelse($demographics ?? [] as $demo)
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $demo['country'] }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $demo['city'] }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($demo['users']) }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($demo['sessions']) }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($demo['page_views']) }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Devices Table -->
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-                <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-semibold text-gray-900">Devices</h3>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sessions</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Duration</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            @forelse($devices ?? [] as $device)
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $device['device'] }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($device['users']) }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($device['sessions']) }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$device['avg_duration']) }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="4" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-    @elseif($tab === 'conversions')
-        <!-- Conversions Tab -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Conversions (Events)</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event Count</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Users</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        @forelse($conversions ?? [] as $conversion)
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $conversion['event_name'] }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($conversion['event_count']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($conversion['total_users']) }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="3" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-    @elseif($tab === 'pages')
-        <!-- Pages Tab -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-            <div class="p-6 border-b border-gray-200 flex items-center justify-between">
-                <h3 class="text-lg font-semibold text-gray-900">Top Pages</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Path</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Title</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Views</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Duration</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bounce Rate</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        @forelse($topPages ?? [] as $page)
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 text-sm text-gray-900">{{ $page['page_path'] }}</td>
-                                <td class="px-6 py-4 text-sm text-gray-900">{{ $page['page_title'] }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($page['page_views']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($page['users']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$page['avg_duration']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($page['bounce_rate'], 2) }}%</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="6" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-    @elseif($tab === 'events')
-        <!-- Events Tab -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-            <div class="p-6 border-b border-gray-200 flex items-center justify-between">
-                <h3 class="text-lg font-semibold text-gray-900">All Events</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event Count</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Users</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event Value</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        @forelse($events ?? [] as $event)
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $event['event_name'] }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($event['event_count']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($event['total_users']) }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($event['event_value'], 2) }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="4" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-    @elseif($tab === 'domains')
-        @if(isset($selectedDomain))
-            <!-- Domain Detail View -->
-            <div class="space-y-6" x-data="{ 
-                domainTab: '{{ request('domain_tab', 'overview') }}',
-                changeDomainTab(newTab) {
-                    this.domainTab = newTab;
-                    window.location.href = '{{ route('admin.analytics.index') }}?days={{ $days }}&tab=domains&domain={{ urlencode($selectedDomain) }}&domain_tab=' + newTab;
-                }
-            }">
-                <!-- Header với nút back -->
-                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <button 
-                                onclick="window.location.href='{{ route('admin.analytics.index') }}?days={{ $days }}&tab=domains'"
-                                class="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                                </svg>
-                            </button>
-                            <div>
-                                <h2 class="text-2xl font-bold text-gray-900">{{ $selectedDomain }}</h2>
-                                <p class="text-sm text-gray-600 mt-1">Chi tiết thống kê domain</p>
+                        @foreach($channels as $index => $channel)
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full" style="background-color: {{ $chartColors[$index % count($chartColors)] }}"></div>
+                                <span class="text-gray-700">{{ $channel['channel'] ?? 'N/A' }}:</span>
+                                <span class="font-semibold text-gray-900">{{ number_format($channel['sessions'] ?? 0) }}</span>
                             </div>
-                        </div>
-                    </div>
-                    <!-- Domain Sub Tabs -->
-                    <div class="flex items-center gap-4 mt-6 border-b border-gray-200">
-                        <button 
-                            @click="changeDomainTab('overview')"
-                            :class="domainTab === 'overview' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                            class="px-4 py-2 transition-colors">
-                            Overview
-                        </button>
-                        <button 
-                            @click="changeDomainTab('pages')"
-                            :class="domainTab === 'pages' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                            class="px-4 py-2 transition-colors">
-                            Pages
-                        </button>
-                        <button 
-                            @click="changeDomainTab('sources')"
-                            :class="domainTab === 'sources' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                            class="px-4 py-2 transition-colors">
-                            Traffic Sources
-                        </button>
-                        <button 
-                            @click="changeDomainTab('demographics')"
-                            :class="domainTab === 'demographics' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                            class="px-4 py-2 transition-colors">
-                            Demographics
-                        </button>
-                        <button 
-                            @click="changeDomainTab('devices')"
-                            :class="domainTab === 'devices' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                            class="px-4 py-2 transition-colors">
-                            Devices
-                        </button>
-                        <button 
-                            @click="changeDomainTab('timeline')"
-                            :class="domainTab === 'timeline' ? 'border-b-2 border-blue-600 text-blue-600 font-semibold' : 'text-gray-600 hover:text-gray-900'"
-                            class="px-4 py-2 transition-colors">
-                            Timeline
-                        </button>
+                        @endforeach
                     </div>
                 </div>
+            @endif
+        </div>
 
-                @php
-                    $domainTab = request('domain_tab', 'overview');
-                @endphp
-
-                @if($domainTab === 'overview')
-                    <!-- Timeline Chart -->
-                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Sessions Timeline</h3>
-                        <div class="h-64">
-                            <canvas id="domainTimelineChart"></canvas>
-                        </div>
-                    </div>
-                @elseif($domainTab === 'pages')
-                    <!-- Domain Pages -->
-                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-                        <div class="p-6 border-b border-gray-200">
-                            <h3 class="text-lg font-semibold text-gray-900">Top Pages</h3>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Path</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Title</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Views</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Duration</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bounce Rate</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    @forelse($domainPages ?? [] as $page)
-                                        <tr class="hover:bg-gray-50">
-                                            <td class="px-6 py-4 text-sm text-gray-900">{{ $page['page_path'] }}</td>
-                                            <td class="px-6 py-4 text-sm text-gray-900">{{ $page['page_title'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($page['page_views']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($page['users']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$page['avg_duration']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($page['bounce_rate'], 2) }}%</td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="6" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                @elseif($domainTab === 'sources')
-                    <!-- Domain Traffic Sources -->
-                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-                        <div class="p-6 border-b border-gray-200">
-                            <h3 class="text-lg font-semibold text-gray-900">Traffic Sources</h3>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source Type</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Medium</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sessions</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Duration</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bounce Rate</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    @forelse($domainTrafficSources ?? [] as $source)
-                                        <tr class="hover:bg-gray-50">
-                                            <td class="px-6 py-4 whitespace-nowrap">
-                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                                                    @if(in_array($source['source_type'], ['Facebook', 'TikTok', 'Pinterest', 'Instagram', 'Twitter/X', 'YouTube', 'LinkedIn'])) bg-blue-100 text-blue-800
-                                                    @elseif(in_array($source['source_type'], ['Google', 'Bing'])) bg-green-100 text-green-800
-                                                    @elseif($source['source_type'] === 'Direct') bg-gray-100 text-gray-800
-                                                    @else bg-purple-100 text-purple-800
-                                                    @endif">
-                                                    {{ $source['source_type'] }}
-                                                </span>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $source['source'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $source['medium'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['sessions']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['users']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$source['avg_session_duration']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($source['bounce_rate'], 2) }}%</td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="7" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                @elseif($domainTab === 'demographics')
-                    <!-- Domain Demographics -->
-                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-                        <div class="p-6 border-b border-gray-200">
-                            <h3 class="text-lg font-semibold text-gray-900">Demographics</h3>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Country</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">City</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sessions</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page Views</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    @forelse($domainDemographics ?? [] as $demo)
-                                        <tr class="hover:bg-gray-50">
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $demo['country'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $demo['city'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($demo['users']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($demo['sessions']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($demo['page_views']) }}</td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="5" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                @elseif($domainTab === 'devices')
-                    <!-- Domain Devices -->
-                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-                        <div class="p-6 border-b border-gray-200">
-                            <h3 class="text-lg font-semibold text-gray-900">Devices</h3>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sessions</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Duration</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bounce Rate</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    @forelse($domainDevices ?? [] as $device)
-                                        <tr class="hover:bg-gray-50">
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $device['device'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($device['users']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($device['sessions']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$device['avg_duration']) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($device['bounce_rate'], 2) }}%</td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="5" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                @elseif($domainTab === 'timeline')
-                    <!-- Domain Timeline -->
-                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Sessions Timeline</h3>
-                        <div class="h-64">
-                            <canvas id="domainTimelineChart"></canvas>
-                        </div>
-                    </div>
-                @endif
+        <!-- Middle Row: KPI Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+            <!-- Sessions -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 uppercase mb-2 truncate">Sessions</p>
+                <p class="text-2xl font-bold text-gray-900 mb-1">{{ number_format($sessions) }}</p>
+                <p class="text-xs text-red-600">-23%</p>
             </div>
-        @else
-            <!-- Domains List View -->
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-                <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+
+            <!-- Avg. Session Duration -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 uppercase mb-2 truncate">Avg. Ses...</p>
+                <p class="text-2xl font-bold text-gray-900 mb-1">{{ $formattedDuration }}</p>
+                <p class="text-xs text-red-600">-10%</p>
+            </div>
+
+            <!-- % New Sessions -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 uppercase mb-2 truncate">% New S...</p>
+                <p class="text-2xl font-bold text-gray-900 mb-1">{{ number_format($newSessionsPercent, 2) }}%</p>
+                <p class="text-xs text-red-600">-7%</p>
+            </div>
+
+            <!-- Bounce Rate -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 uppercase mb-2 truncate">Bounce...</p>
+                <p class="text-2xl font-bold text-gray-900 mb-1">{{ number_format($bounceRate, 2) }}%</p>
+                <p class="text-xs text-red-600">-68%</p>
+            </div>
+
+            <!-- Goal Completions -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 uppercase mb-2 truncate">Goal Co...</p>
+                <p class="text-2xl font-bold text-gray-900 mb-1">{{ number_format($goalCompletions) }}</p>
+                <p class="text-xs text-green-600">+80%</p>
+            </div>
+
+            <!-- Pages/Session -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 uppercase mb-2 truncate">Pages/Se...</p>
+                <p class="text-2xl font-bold text-gray-900 mb-1">{{ number_format($pagesPerSession, 2) }}</p>
+                <p class="text-xs text-red-600">-9%</p>
+            </div>
+        </div>
+
+        <!-- Bottom: Channels Table -->
+        @if(isset($channels) && count($channels) > 0)
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <div>
-                        <h3 class="text-lg font-semibold text-gray-900">Domain Statistics - Thống kê Domain</h3>
-                        <p class="text-sm text-gray-600 mt-1">Hiển thị thống kê theo domain từ GA4</p>
+                        <h3 class="text-lg font-semibold text-gray-900">Channels Overview</h3>
+                        <p class="text-sm text-gray-600 mt-1">Showing {{ count($channels) }} of {{ count($channels) }} Rows</p>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <input type="text" id="domainSearch" placeholder="Tìm kiếm domain..." class="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
+                    <input 
+                        type="text" 
+                        placeholder="Search..." 
+                        class="px-4 py-2 border border-gray-300 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        x-model="searchChannel"
+                        @input="filterChannels()"
+                    >
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full" id="domainsTable">
+                    <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DOMAIN</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SESSIONS</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">USERS</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NEW USERS</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAGE VIEWS</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AVG. SESSION DURATION</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">BOUNCE RATE</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sessions</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg. Session Du...</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% New Sessions</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bounce Rate</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Goal Completio...</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pages/Session</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            @forelse($domains ?? [] as $domain)
-                                <tr class="hover:bg-gray-50 domain-row" data-domain="{{ strtolower($domain['domain']) }}">
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="text-sm font-medium text-gray-900">{{ $domain['domain'] }}</span>
+                        <tbody class="bg-white divide-y divide-gray-200" id="channelsTable">
+                            @foreach($channels as $channel)
+                                @php
+                                    $channelSessions = $channel['sessions'] ?? 0;
+                                    $newUsers = $channel['new_users'] ?? 0;
+                                    $newSessionsPercent = $channelSessions > 0 ? round(($newUsers / $channelSessions) * 100, 2) : 0;
+                                    
+                                    $duration = $channel['avg_session_duration'] ?? 0;
+                                    $h = floor($duration / 3600);
+                                    $m = floor(($duration % 3600) / 60);
+                                    $s = floor($duration % 60);
+                                    $formattedDur = sprintf('%02d:%02d:%02d', $h, $m, $s);
+                                    
+                                    $bounceRatePercent = ($channel['bounce_rate'] ?? 0) * 100;
+                                    $pagesPerSession = $channelSessions > 0 ? round(($channel['page_views'] ?? 0) / $channelSessions, 2) : 0;
+                                @endphp
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        {{ $channel['channel'] ?? 'N/A' }}
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($domain['sessions']) }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($domain['users']) }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($domain['new_users']) }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($domain['page_views']) }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ gmdate('H:i:s', (int)$domain['avg_session_duration']) }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ number_format($domain['bounce_rate'], 2) }}%</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                        <button 
-                                            onclick="window.location.href='{{ route('admin.analytics.index') }}?days={{ $days }}&tab=domains&domain={{ urlencode($domain['domain']) }}&domain_tab=overview'"
-                                            class="text-blue-600 hover:text-blue-800 font-medium">
-                                            Xem chi tiết
-                                        </button>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {{ number_format($channelSessions) }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {{ $formattedDur }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {{ number_format($newSessionsPercent, 2) }}%
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {{ number_format($bounceRatePercent, 2) }}%
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        -
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {{ $pagesPerSession > 0 ? number_format($pagesPerSession, 2) : '-' }}
                                     </td>
                                 </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="8" class="px-6 py-4 text-center text-gray-500">Không có dữ liệu</td>
-                                </tr>
-                            @endforelse
+                            @endforeach
                         </tbody>
                     </table>
                 </div>
             </div>
         @endif
-    @endif
+
+        <!-- Traffic Sources Section -->
+        @if(isset($trafficSources) && count($trafficSources) > 0)
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold text-gray-900 mb-2">Traffic Sources - Chi tiết nguồn truy cập</h2>
+                    <p class="text-gray-600">Hiển thị chi tiết lượt truy cập từ TikTok, Facebook, Pinterest, Google, v.v.</p>
+                </div>
+
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Danh sách nguồn truy cập</h3>
+                        <div class="text-sm text-gray-600">
+                            Tổng: {{ count($trafficSources) }} nguồn
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source Type</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medium</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sessions</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg. Session Duration</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">New Users</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bounce Rate</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Page Views</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                @foreach($trafficSources as $source)
+                                    @php
+                                        $duration = $source['avg_session_duration'] ?? 0;
+                                        $h = floor($duration / 3600);
+                                        $m = floor(($duration % 3600) / 60);
+                                        $s = floor($duration % 60);
+                                        $formattedDur = sprintf('%02d:%02d:%02d', $h, $m, $s);
+                                        
+                                        $bounceRatePercent = ($source['bounce_rate'] ?? 0) * 100;
+                                        
+                                        // Badge color cho source type
+                                        $sourceTypeColors = [
+                                            'Google' => 'bg-blue-100 text-blue-800',
+                                            'Bing' => 'bg-green-100 text-green-800',
+                                            'Organic Search' => 'bg-purple-100 text-purple-800',
+                                            'Paid Search' => 'bg-yellow-100 text-yellow-800',
+                                            'Direct' => 'bg-gray-100 text-gray-800',
+                                            'Facebook' => 'bg-blue-100 text-blue-800',
+                                            'TikTok' => 'bg-black text-white',
+                                            'Pinterest' => 'bg-red-100 text-red-800',
+                                            'Instagram' => 'bg-pink-100 text-pink-800',
+                                            'Twitter/X' => 'bg-sky-100 text-sky-800',
+                                            'YouTube' => 'bg-red-100 text-red-800',
+                                            'LinkedIn' => 'bg-blue-100 text-blue-800',
+                                            'Referral' => 'bg-indigo-100 text-indigo-800',
+                                            'Email' => 'bg-green-100 text-green-800',
+                                            'Display' => 'bg-orange-100 text-orange-800',
+                                            'Other' => 'bg-gray-100 text-gray-800',
+                                        ];
+                                        $sourceTypeColor = $sourceTypeColors[$source['source_type'] ?? 'Other'] ?? 'bg-gray-100 text-gray-800';
+                                    @endphp
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span class="px-2 py-1 text-xs font-semibold rounded-full {{ $sourceTypeColor }}">
+                                                {{ $source['source_type'] ?? 'Other' }}
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            {{ $source['source'] ?? 'N/A' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                            {{ $source['medium'] ?? 'N/A' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
+                                            {{ number_format($source['sessions'] ?? 0) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ $formattedDur }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($source['new_users'] ?? 0) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($bounceRatePercent, 2) }}%
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($source['page_views'] ?? 0) }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Summary by Source Type -->
+                @php
+                    $sourceTypeSummary = [];
+                    foreach ($trafficSources as $source) {
+                        $type = $source['source_type'] ?? 'Other';
+                        if (!isset($sourceTypeSummary[$type])) {
+                            $sourceTypeSummary[$type] = [
+                                'sessions' => 0,
+                                'new_users' => 0,
+                                'page_views' => 0,
+                                'count' => 0
+                            ];
+                        }
+                        $sourceTypeSummary[$type]['sessions'] += $source['sessions'] ?? 0;
+                        $sourceTypeSummary[$type]['new_users'] += $source['new_users'] ?? 0;
+                        $sourceTypeSummary[$type]['page_views'] += $source['page_views'] ?? 0;
+                        $sourceTypeSummary[$type]['count']++;
+                    }
+                    arsort($sourceTypeSummary);
+                @endphp
+
+                <div class="mt-8">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Tổng hợp theo loại nguồn</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        @foreach($sourceTypeSummary as $type => $summary)
+                            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-sm font-semibold text-gray-900">{{ $type }}</h4>
+                                    <span class="text-xs text-gray-500">{{ $summary['count'] }} nguồn</span>
+                                </div>
+                                <div class="space-y-1">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-gray-600">Sessions:</span>
+                                        <span class="font-semibold text-gray-900">{{ number_format($summary['sessions']) }}</span>
+                                    </div>
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-gray-600">New Users:</span>
+                                        <span class="font-semibold text-gray-900">{{ number_format($summary['new_users']) }}</span>
+                                    </div>
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-gray-600">Page Views:</span>
+                                        <span class="font-semibold text-gray-900">{{ number_format($summary['page_views']) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
+    </div>
+
+    <!-- Audience Tab -->
+    <div x-show="activeTab === 'audience'" x-transition>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            @if(isset($demographics) && count($demographics) > 0)
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Nhân khẩu học</h3>
+                    <div style="height: 400px;">
+                        <canvas id="demographicsChart"></canvas>
+                    </div>
+                </div>
+            @endif
+
+            @if(isset($devices) && count($devices) > 0)
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Thiết bị</h3>
+                    <div style="height: 400px;">
+                        <canvas id="devicesChart"></canvas>
+                    </div>
+                </div>
+            @endif
+
+            @if((!isset($demographics) || count($demographics) == 0) && (!isset($devices) || count($devices) == 0))
+                <div class="text-center py-12">
+                    <p class="text-gray-500">Không có dữ liệu để hiển thị</p>
+                </div>
+            @endif
+        </div>
+    </div>
+
+    <!-- Conversions Tab -->
+    <div x-show="activeTab === 'conversions'" x-transition>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            @if(isset($conversions) && count($conversions) > 0)
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Conversions</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Count</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                @foreach($conversions as $conversion)
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            {{ $conversion['event_name'] ?? 'N/A' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($conversion['count'] ?? 0) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($conversion['value'] ?? 0) }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            @else
+                <div class="text-center py-12">
+                    <p class="text-gray-500">Không có dữ liệu conversions để hiển thị</p>
+                </div>
+            @endif
+        </div>
+    </div>
+
+    <!-- Pages Tab -->
+    <div x-show="activeTab === 'pages'" x-transition>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            @if(isset($topPages) && count($topPages) > 0)
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Trang được xem nhiều nhất</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trang</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pageviews</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unique Pageviews</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg. Time</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                @foreach(array_slice($topPages, 0, 20) as $page)
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 text-sm font-medium text-gray-900">
+                                            <a href="{{ $page['page_path'] ?? '#' }}" target="_blank" class="text-blue-600 hover:text-blue-800">
+                                                {{ $page['page_path'] ?? 'N/A' }}
+                                            </a>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($page['pageviews'] ?? 0) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($page['unique_pageviews'] ?? 0) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($page['avg_time_on_page'] ?? 0, 1) }}s
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            @else
+                <div class="text-center py-12">
+                    <p class="text-gray-500">Không có dữ liệu trang để hiển thị</p>
+                </div>
+            @endif
+        </div>
+    </div>
+
+    <!-- Events Tab -->
+    <div x-show="activeTab === 'events'" x-transition>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            @if(isset($events) && count($events) > 0)
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Events</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Count</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                @foreach(array_slice($events, 0, 20) as $event)
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            {{ $event['event_name'] ?? 'N/A' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($event['count'] ?? 0) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($event['total_value'] ?? 0) }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            @else
+                <div class="text-center py-12">
+                    <p class="text-gray-500">Không có dữ liệu events để hiển thị</p>
+                </div>
+            @endif
+        </div>
+    </div>
+
+    <!-- Traffic Sources Tab -->
+    <div x-show="activeTab === 'traffic-sources'" x-transition>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Traffic Sources - Chi tiết nguồn truy cập</h2>
+                <p class="text-gray-600">Hiển thị chi tiết lượt truy cập từ TikTok, Facebook, Pinterest, Google, v.v.</p>
+            </div>
+
+            @if(isset($trafficSources) && count($trafficSources) > 0)
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Danh sách nguồn truy cập</h3>
+                        <div class="text-sm text-gray-600">
+                            Tổng: {{ count($trafficSources) }} nguồn
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source Type</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medium</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sessions</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg. Session Duration</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">New Users</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bounce Rate</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Page Views</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                @foreach($trafficSources as $source)
+                                    @php
+                                        $duration = $source['avg_session_duration'] ?? 0;
+                                        $h = floor($duration / 3600);
+                                        $m = floor(($duration % 3600) / 60);
+                                        $s = floor($duration % 60);
+                                        $formattedDur = sprintf('%02d:%02d:%02d', $h, $m, $s);
+                                        
+                                        $bounceRatePercent = ($source['bounce_rate'] ?? 0) * 100;
+                                        
+                                        // Badge color cho source type
+                                        $sourceTypeColors = [
+                                            'Google' => 'bg-blue-100 text-blue-800',
+                                            'Bing' => 'bg-green-100 text-green-800',
+                                            'Organic Search' => 'bg-purple-100 text-purple-800',
+                                            'Paid Search' => 'bg-yellow-100 text-yellow-800',
+                                            'Direct' => 'bg-gray-100 text-gray-800',
+                                            'Facebook' => 'bg-blue-100 text-blue-800',
+                                            'TikTok' => 'bg-black text-white',
+                                            'Pinterest' => 'bg-red-100 text-red-800',
+                                            'Instagram' => 'bg-pink-100 text-pink-800',
+                                            'Twitter/X' => 'bg-sky-100 text-sky-800',
+                                            'YouTube' => 'bg-red-100 text-red-800',
+                                            'LinkedIn' => 'bg-blue-100 text-blue-800',
+                                            'Referral' => 'bg-indigo-100 text-indigo-800',
+                                            'Email' => 'bg-green-100 text-green-800',
+                                            'Display' => 'bg-orange-100 text-orange-800',
+                                            'Other' => 'bg-gray-100 text-gray-800',
+                                        ];
+                                        $sourceTypeColor = $sourceTypeColors[$source['source_type'] ?? 'Other'] ?? 'bg-gray-100 text-gray-800';
+                                    @endphp
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span class="px-2 py-1 text-xs font-semibold rounded-full {{ $sourceTypeColor }}">
+                                                {{ $source['source_type'] ?? 'Other' }}
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            {{ $source['source'] ?? 'N/A' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                            {{ $source['medium'] ?? 'N/A' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
+                                            {{ number_format($source['sessions'] ?? 0) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ $formattedDur }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($source['new_users'] ?? 0) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($bounceRatePercent, 2) }}%
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($source['page_views'] ?? 0) }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Summary by Source Type -->
+                @php
+                    $sourceTypeSummary = [];
+                    foreach ($trafficSources as $source) {
+                        $type = $source['source_type'] ?? 'Other';
+                        if (!isset($sourceTypeSummary[$type])) {
+                            $sourceTypeSummary[$type] = [
+                                'sessions' => 0,
+                                'new_users' => 0,
+                                'page_views' => 0,
+                                'count' => 0
+                            ];
+                        }
+                        $sourceTypeSummary[$type]['sessions'] += $source['sessions'] ?? 0;
+                        $sourceTypeSummary[$type]['new_users'] += $source['new_users'] ?? 0;
+                        $sourceTypeSummary[$type]['page_views'] += $source['page_views'] ?? 0;
+                        $sourceTypeSummary[$type]['count']++;
+                    }
+                    arsort($sourceTypeSummary);
+                @endphp
+
+                <div class="mt-8">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Tổng hợp theo loại nguồn</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        @foreach($sourceTypeSummary as $type => $summary)
+                            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-sm font-semibold text-gray-900">{{ $type }}</h4>
+                                    <span class="text-xs text-gray-500">{{ $summary['count'] }} nguồn</span>
+                                </div>
+                                <div class="space-y-1">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-gray-600">Sessions:</span>
+                                        <span class="font-semibold text-gray-900">{{ number_format($summary['sessions']) }}</span>
+                                    </div>
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-gray-600">New Users:</span>
+                                        <span class="font-semibold text-gray-900">{{ number_format($summary['new_users']) }}</span>
+                                    </div>
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-gray-600">Page Views:</span>
+                                        <span class="font-semibold text-gray-900">{{ number_format($summary['page_views']) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @else
+                <div class="text-center py-12">
+                    <p class="text-gray-500">Không có dữ liệu traffic sources để hiển thị</p>
+                </div>
+            @endif
+        </div>
+    </div>
+
+    <!-- Domains Tab -->
+    <div x-show="activeTab === 'domains'" x-transition>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            @if(isset($domains) && count($domains) > 0)
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Domains</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Domain</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sessions</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Users</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                @foreach($domains as $domain)
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            {{ $domain['domain'] ?? 'N/A' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($domain['sessions'] ?? 0) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ number_format($domain['users'] ?? 0) }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <a href="?tab=domains&domain={{ urlencode($domain['domain'] ?? '') }}&days={{ $days }}&selected_domain={{ $selectedDomain ?? $availableDomains[0] ?? '' }}" 
+                                               class="text-blue-600 hover:text-blue-900">
+                                                Xem chi tiết
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            @else
+                <div class="text-center py-12">
+                    <p class="text-gray-500">Không có dữ liệu domains để hiển thị</p>
+                </div>
+            @endif
+        </div>
+    </div>
 </div>
 
-@push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-    // Sessions Line Chart
+function analyticsDashboard() {
+    return {
+        activeTab: '{{ $tab }}',
+        days: {{ $days }},
+        selectedDomain: '{{ $selectedDomain ?? ($availableDomains[0] ?? '') }}',
+        filter: '{{ $filter }}',
+        searchChannel: '',
+        
+        switchTab(tab) {
+            this.activeTab = tab;
+            this.updateFilters();
+        },
+        
+        setFilter(filterValue) {
+            this.filter = filterValue;
+            this.updateFilters();
+        },
+        
+        filterChannels() {
+            const searchTerm = this.searchChannel.toLowerCase();
+            const rows = document.querySelectorAll('#channelsTable tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        },
+        
+        updateFilters() {
+            const params = new URLSearchParams({
+                tab: this.activeTab,
+                days: this.days,
+                selected_domain: this.selectedDomain,
+            });
+            
+            if (this.activeTab === 'acquisition' && this.filter !== 'all') {
+                params.append('filter', this.filter);
+            }
+            
+            window.location.href = '{{ route("admin.analytics.index") }}?' + params.toString();
+        }
+    }
+}
+
+// Chart Colors
+const channelColors = [
+    'rgba(59, 130, 246, 0.8)',   // Blue
+    'rgba(139, 92, 246, 0.8)',   // Purple
+    'rgba(236, 72, 153, 0.8)',   // Pink
+    'rgba(251, 146, 60, 0.8)',   // Orange
+    'rgba(16, 185, 129, 0.8)',   // Green
+    'rgba(34, 197, 94, 0.8)',     // Green 2
+];
+
+// Sessions Line Chart
+@if(isset($sessionsByDate) && count($sessionsByDate) > 0)
+document.addEventListener('DOMContentLoaded', function() {
     const sessionsCtx = document.getElementById('sessionsChart');
     if (sessionsCtx) {
-        const sessionsData = @json($sessionsByDate ?? []);
+        const sessionsData = {!! json_encode($sessionsByDate) !!};
+        const labels = sessionsData.map(d => d.date);
+        const sessions = sessionsData.map(d => d.sessions);
+        const pageViews = sessionsData.map(d => d.page_views || 0);
+        
         new Chart(sessionsCtx, {
             type: 'line',
             data: {
-                labels: sessionsData.map(d => d.date),
-                datasets: [{
-                    label: 'Sessions',
-                    data: sessionsData.map(d => d.sessions),
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }, {
-                    label: 'Page Views',
-                    data: sessionsData.map(d => d.page_views),
-                    borderColor: '#8b5cf6',
-                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Sessions',
+                        data: sessions,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: false,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Page Views',
+                        data: pageViews,
+                        borderColor: 'rgba(59, 130, 246, 0.5)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                        tension: 0.4,
+                        fill: true,
+                        borderWidth: 2
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -817,25 +981,40 @@
                 },
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
                     }
                 }
             }
         });
     }
+});
+@endif
 
-    // Sessions Donut Chart
-    const donutCtx = document.getElementById('sessionsDonutChart');
-    if (donutCtx) {
-        const channelsData = @json($channels ?? []);
-        const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#6366f1', '#ef4444', '#14b8a6'];
-        new Chart(donutCtx, {
+// Channels Donut Chart
+@if(isset($channels) && count($channels) > 0)
+document.addEventListener('DOMContentLoaded', function() {
+    const channelsCtx = document.getElementById('channelsChart');
+    if (channelsCtx) {
+        const channelData = {!! json_encode($channels) !!};
+        const labels = channelData.map(c => c.channel);
+        const data = channelData.map(c => c.sessions);
+        
+        new Chart(channelsCtx, {
             type: 'doughnut',
             data: {
-                labels: channelsData.map(c => c.channel),
+                labels: labels,
                 datasets: [{
-                    data: channelsData.map(c => c.sessions),
-                    backgroundColor: channelsData.map((_, i) => colors[i % colors.length])
+                    data: data,
+                    backgroundColor: channelColors.slice(0, labels.length),
+                    borderWidth: 0
                 }]
             },
             options: {
@@ -850,79 +1029,22 @@
             }
         });
     }
+});
+@endif
 
-    // Search functionality cho Traffic Sources Table
-    const sourceSearch = document.getElementById('sourceSearch');
-    if (sourceSearch) {
-        sourceSearch.addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
-            const rows = document.querySelectorAll('#trafficSourcesTable .source-row');
-            
-            rows.forEach(row => {
-                const sourceText = row.getAttribute('data-source');
-                if (sourceText.includes(searchTerm)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-        });
-    }
-
-    // Filter function (global for onclick handlers)
-    function changeFilter(filter) {
-        const days = {{ $days ?? 7 }};
-        const tab = '{{ $tab ?? 'acquisition' }}';
-        window.location.href = '{{ route('admin.analytics.index') }}?days=' + days + '&tab=' + tab + '&filter=' + filter;
-    }
-
-    // Search functionality cho Domains Table
-    const domainSearch = document.getElementById('domainSearch');
-    if (domainSearch) {
-        domainSearch.addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
-            const rows = document.querySelectorAll('#domainsTable .domain-row');
-            
-            rows.forEach(row => {
-                const domainText = row.getAttribute('data-domain');
-                if (domainText.includes(searchTerm)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-        });
-    }
-
-    // Domain Timeline Chart
-    const domainTimelineCtx = document.getElementById('domainTimelineChart');
-    if (domainTimelineCtx) {
-        const domainTimelineData = @json($domainTimeline ?? []);
-        new Chart(domainTimelineCtx, {
-            type: 'line',
+// Demographics Chart
+@if(isset($demographics) && count($demographics) > 0)
+document.addEventListener('DOMContentLoaded', function() {
+    const demographicsCtx = document.getElementById('demographicsChart');
+    if (demographicsCtx) {
+        new Chart(demographicsCtx, {
+            type: 'bar',
             data: {
-                labels: domainTimelineData.map(d => d.date),
+                labels: {!! json_encode(array_column($demographics, 'country')) !!},
                 datasets: [{
-                    label: 'Sessions',
-                    data: domainTimelineData.map(d => d.sessions),
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }, {
                     label: 'Users',
-                    data: domainTimelineData.map(d => d.users),
-                    borderColor: '#8b5cf6',
-                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }, {
-                    label: 'Page Views',
-                    data: domainTimelineData.map(d => d.page_views),
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.4,
-                    fill: true
+                    data: {!! json_encode(array_column($demographics, 'users')) !!},
+                    backgroundColor: 'rgba(59, 130, 246, 0.8)'
                 }]
             },
             options: {
@@ -930,8 +1052,7 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        display: true,
-                        position: 'top'
+                        display: false
                     }
                 },
                 scales: {
@@ -942,7 +1063,39 @@
             }
         });
     }
-</script>
-@endpush
-@endsection
+});
+@endif
 
+// Devices Chart
+@if(isset($devices) && count($devices) > 0)
+document.addEventListener('DOMContentLoaded', function() {
+    const devicesCtx = document.getElementById('devicesChart');
+    if (devicesCtx) {
+        new Chart(devicesCtx, {
+            type: 'pie',
+            data: {
+                labels: {!! json_encode(array_column($devices, 'device_category')) !!},
+                datasets: [{
+                    data: {!! json_encode(array_column($devices, 'sessions')) !!},
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(251, 146, 60, 0.8)',
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+    }
+});
+@endif
+</script>
+@endsection

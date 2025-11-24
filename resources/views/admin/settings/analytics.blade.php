@@ -3,11 +3,18 @@
 @section('content')
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">Cấu hình Tracking & Pixels</h1>
-            <p class="text-gray-600">
-                Thay đổi ID tích hợp (Meta Pixel, TikTok Pixel, Google Tag Manager, Google Ads) trực tiếp trong admin.
-                Để trống một trường sẽ quay về giá trị mặc định đang cấu hình trong hệ thống.
-            </p>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 mb-2">Cấu hình Tracking & Pixels</h1>
+                    <p class="text-gray-600">
+                        Thay đổi ID tích hợp (Meta Pixel, TikTok Pixel, Google Tag Manager, Google Ads) trực tiếp trong admin.
+                        Để trống một trường sẽ quay về giá trị mặc định đang cấu hình trong hệ thống.
+                    </p>
+                </div>
+                <a href="{{ route('admin.settings.domain-analytics.index') }}" class="px-5 py-2.5 rounded-xl border border-blue-600 text-blue-600 font-semibold hover:bg-blue-50 transition">
+                    Quản lý GA theo Domain
+                </a>
+            </div>
         </div>
 
         @if (session('success'))

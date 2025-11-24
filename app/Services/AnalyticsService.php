@@ -13,40 +13,49 @@ use Google\Analytics\Data\V1beta\OrderBy\MetricOrderBy;
 use Google\Analytics\Data\V1beta\OrderBy\DimensionOrderBy;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
+use App\Models\DomainAnalyticsConfig;
 use Exception;
 
 class AnalyticsService
 {
     private ?BetaAnalyticsDataClient $client = null;
     private string $propertyId;
+    private ?string $domain = null;
 
-    public function __construct()
+    public function __construct(?string $domain = null)
     {
-        $this->propertyId = config('services.google.analytics.property_id');
-        $credentialsPath = config('services.google.analytics.credentials_path');
-
-        if (!$this->propertyId) {
-            Log::warning('Google Analytics Property ID chưa được cấu hình');
+        // Chỉ sử dụng domain từ database, không dùng default config
+        if (!$domain) {
             return;
         }
 
-        // Xử lý đường dẫn: nếu là đường dẫn tương đối thì convert sang tuyệt đối
-        if ($credentialsPath && !is_file($credentialsPath)) {
-            // Thử với base_path() nếu là đường dẫn tương đối từ root
-            $absolutePath = base_path($credentialsPath);
-            if (is_file($absolutePath)) {
-                $credentialsPath = $absolutePath;
-            } elseif (str_starts_with($credentialsPath, 'storage/app/')) {
-                // Thử với storage_path() nếu bắt đầu bằng storage/app/
-                $absolutePath = storage_path('app/' . str_replace('storage/app/', '', $credentialsPath));
-                if (is_file($absolutePath)) {
-                    $credentialsPath = $absolutePath;
-                }
-            }
+        // Lấy config từ database
+        $config = DomainAnalyticsConfig::getForDomain($domain);
+
+        if (!$config) {
+            return;
+        }
+
+        $this->domain = $domain;
+        $this->propertyId = $config->property_id;
+        $credentialsFile = $config->credentials_file;
+
+        // Nếu là file trong storage, lấy đường dẫn tuyệt đối
+        if ($credentialsFile && Storage::exists($credentialsFile)) {
+            $credentialsPath = Storage::path($credentialsFile);
+        } else {
+            Log::error("File credentials không tồn tại trong storage: {$credentialsFile}");
+            return;
+        }
+
+        if (!$this->propertyId) {
+            Log::error('Google Analytics Property ID chưa được cấu hình');
+            return;
         }
 
         if (!$credentialsPath || !file_exists($credentialsPath)) {
-            Log::warning("File credentials Google Analytics không tồn tại: " . config('services.google.analytics.credentials_path'));
+            Log::error("File credentials Google Analytics không tồn tại: " . ($credentialsPath ?? 'null'));
             return;
         }
 
@@ -60,6 +69,33 @@ class AnalyticsService
     }
 
     /**
+     * Tạo instance AnalyticsService cho domain cụ thể
+     */
+    public static function forDomain(?string $domain): self
+    {
+        return new self($domain);
+    }
+
+    /**
+     * Lấy domain từ request hiện tại
+     */
+    public static function getCurrentDomain(): ?string
+    {
+        $host = request()->getHost();
+        // Loại bỏ port nếu có
+        $host = explode(':', $host)[0];
+        return $host;
+    }
+
+    /**
+     * Kiểm tra xem service đã được khởi tạo đúng chưa
+     */
+    public function isInitialized(): bool
+    {
+        return $this->client !== null && !empty($this->propertyId);
+    }
+
+    /**
      * Lấy dữ liệu realtime - Người đang online và trang đang xem
      */
     public function getRealtimePages(): array
@@ -68,12 +104,12 @@ class AnalyticsService
             return [];
         }
 
-        return Cache::remember('analytics.realtime.pages', 60, function () {
+        return Cache::remember("analytics.realtime.pages.{$this->propertyId}", 60, function () {
             try {
                 $request = new RunRealtimeReportRequest([
                     'property' => "properties/{$this->propertyId}",
                     'dimensions' => [
-                        new Dimension(['name' => 'unifiedScreenClass']),
+                        new Dimension(['name' => 'unifiedScreenName']),
                     ],
                     'metrics' => [
                         new Metric(['name' => 'activeUsers']),
@@ -83,8 +119,8 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runRealtimeReport($request);
 
-                // Log response để debug
-                Log::info('Realtime Pages API Response', [
+                // Log API response để debug
+                Log::info('GA4 Realtime Pages API', [
                     'row_count' => $response->getRows()->count(),
                     'response' => json_decode($response->serializeToJsonString(), true)
                 ]);
@@ -101,7 +137,6 @@ class AnalyticsService
                     ];
                 }
 
-                Log::info('Realtime Pages Processed Data', ['data' => $data]);
                 return $data;
             } catch (Exception $e) {
                 Log::error('Lỗi lấy realtime pages: ' . $e->getMessage());
@@ -119,7 +154,7 @@ class AnalyticsService
             return [];
         }
 
-        return Cache::remember('analytics.realtime.locations', 60, function () {
+        return Cache::remember("analytics.realtime.locations.{$this->propertyId}", 60, function () {
             try {
                 $request = new RunRealtimeReportRequest([
                     'property' => "properties/{$this->propertyId}",
@@ -134,8 +169,8 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runRealtimeReport($request);
 
-                // Log response để debug
-                Log::info('Realtime Locations API Response', [
+                // Log API response để debug
+                Log::info('GA4 Realtime Locations API', [
                     'row_count' => $response->getRows()->count(),
                     'response' => json_decode($response->serializeToJsonString(), true)
                 ]);
@@ -152,7 +187,6 @@ class AnalyticsService
                     ];
                 }
 
-                Log::info('Realtime Locations Processed Data', ['data' => $data]);
                 return $data;
             } catch (Exception $e) {
                 Log::error('Lỗi lấy realtime locations: ' . $e->getMessage());
@@ -163,6 +197,10 @@ class AnalyticsService
 
     /**
      * Lấy dữ liệu realtime - Nguồn truy cập
+     * 
+     * Lưu ý: Realtime API không hỗ trợ dimensions cho source/medium/channel.
+     * Chỉ có thể lấy tổng số active users hoặc phân loại theo country/device.
+     * Để lấy thông tin source/medium/channel, cần sử dụng Reporting API (không realtime).
      */
     public function getRealtimeSources(): array
     {
@@ -170,14 +208,14 @@ class AnalyticsService
             return [];
         }
 
-        return Cache::remember('analytics.realtime.sources', 60, function () {
+        return Cache::remember("analytics.realtime.sources.{$this->propertyId}", 60, function () {
             try {
-                // Lưu ý: Realtime API không hỗ trợ firstUserSource/firstUserMedium
-                // Sử dụng sessionDefaultChannelGroup thay thế để lấy channel grouping
+                // Realtime API không hỗ trợ source/medium/channel dimensions
+                // Sử dụng country dimension để phân loại theo quốc gia thay thế
                 $request = new RunRealtimeReportRequest([
                     'property' => "properties/{$this->propertyId}",
                     'dimensions' => [
-                        new Dimension(['name' => 'sessionDefaultChannelGroup']),
+                        new Dimension(['name' => 'country']),
                     ],
                     'metrics' => [
                         new Metric(['name' => 'activeUsers']),
@@ -186,8 +224,8 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runRealtimeReport($request);
 
-                // Log response để debug
-                Log::info('Realtime Sources API Response', [
+                // Log API response để debug
+                Log::info('GA4 Realtime Sources API', [
                     'row_count' => $response->getRows()->count(),
                     'response' => json_decode($response->serializeToJsonString(), true)
                 ]);
@@ -197,15 +235,16 @@ class AnalyticsService
                     $dimensionValues = $row->getDimensionValues();
                     $metricValues = $row->getMetricValues();
 
+                    $country = $dimensionValues[0]->getValue();
                     $data[] = [
-                        'channel' => $dimensionValues[0]->getValue(),
-                        'source' => $dimensionValues[0]->getValue(), // Dùng channel làm source vì không có source realtime
-                        'medium' => '', // Realtime API không có medium
+                        'channel' => 'Realtime',
+                        'source' => $country ? "From {$country}" : 'Unknown',
+                        'medium' => 'Realtime',
                         'users' => (int) $metricValues[0]->getValue(),
+                        'country' => $country,
                     ];
                 }
 
-                Log::info('Realtime Sources Processed Data', ['data' => $data]);
                 return $data;
             } catch (Exception $e) {
                 Log::error('Lỗi lấy realtime sources: ' . $e->getMessage());
@@ -223,7 +262,7 @@ class AnalyticsService
             return [];
         }
 
-        return Cache::remember('analytics.realtime.devices', 60, function () {
+        return Cache::remember("analytics.realtime.devices.{$this->propertyId}", 60, function () {
             try {
                 $request = new RunRealtimeReportRequest([
                     'property' => "properties/{$this->propertyId}",
@@ -236,8 +275,8 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runRealtimeReport($request);
 
-                // Log response để debug
-                Log::info('Realtime Devices API Response', [
+                // Log API response để debug
+                Log::info('GA4 Realtime Devices API', [
                     'row_count' => $response->getRows()->count(),
                     'response' => json_decode($response->serializeToJsonString(), true)
                 ]);
@@ -253,7 +292,6 @@ class AnalyticsService
                     ];
                 }
 
-                Log::info('Realtime Devices Processed Data', ['data' => $data]);
                 return $data;
             } catch (Exception $e) {
                 Log::error('Lỗi lấy realtime devices: ' . $e->getMessage());
@@ -271,7 +309,7 @@ class AnalyticsService
             return 0;
         }
 
-        return Cache::remember('analytics.realtime.total_users', 60, function () {
+        return Cache::remember("analytics.realtime.total_users.{$this->propertyId}", 60, function () {
             try {
                 $request = new RunRealtimeReportRequest([
                     'property' => "properties/{$this->propertyId}",
@@ -281,8 +319,8 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runRealtimeReport($request);
 
-                // Log response để debug
-                Log::info('Total Active Users API Response', [
+                // Log API response để debug
+                Log::info('GA4 Total Active Users API', [
                     'row_count' => $response->getRows()->count(),
                     'response' => json_decode($response->serializeToJsonString(), true)
                 ]);
@@ -290,7 +328,6 @@ class AnalyticsService
                 if ($response->getRows()->count() > 0) {
                     $row = $response->getRows()[0];
                     $total = (int) $row->getMetricValues()[0]->getValue();
-                    Log::info('Total Active Users Processed', ['total' => $total]);
                     return $total;
                 }
 
@@ -379,7 +416,7 @@ class AnalyticsService
             return [];
         }
 
-        $cacheKey = "analytics.acquisition.channels.{$days}";
+        $cacheKey = "analytics.acquisition.channels.{$this->propertyId}.{$days}";
         $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800); // 5min, 10min, 30min
 
         return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
@@ -412,8 +449,8 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runReport($request);
 
-                // Log response để debug
-                Log::info('Acquisition Channels API Response', [
+                // Log API response để debug
+                Log::info('GA4 Acquisition Channels API', [
                     'days' => $days,
                     'row_count' => $response->getRows()->count(),
                     'response' => json_decode($response->serializeToJsonString(), true)
@@ -434,7 +471,6 @@ class AnalyticsService
                     ];
                 }
 
-                Log::info('Acquisition Channels Processed Data', ['data' => $data]);
                 return $data;
             } catch (Exception $e) {
                 Log::error('Lỗi lấy acquisition channels: ' . $e->getMessage());
@@ -452,7 +488,7 @@ class AnalyticsService
             return [];
         }
 
-        $cacheKey = "analytics.traffic.sources.{$days}";
+        $cacheKey = "analytics.traffic.sources.{$this->propertyId}.{$days}";
         $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
 
         return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
@@ -486,7 +522,8 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runReport($request);
 
-                Log::info('Traffic Sources API Response', [
+                // Log API response để debug
+                Log::info('GA4 Traffic Sources API', [
                     'days' => $days,
                     'row_count' => $response->getRows()->count(),
                     'response' => json_decode($response->serializeToJsonString(), true)
@@ -515,7 +552,6 @@ class AnalyticsService
                     ];
                 }
 
-                Log::info('Traffic Sources Processed Data', ['data' => $data]);
                 return $data;
             } catch (Exception $e) {
                 Log::error('Lỗi lấy traffic sources: ' . $e->getMessage());
@@ -605,7 +641,7 @@ class AnalyticsService
             return [];
         }
 
-        $cacheKey = "analytics.sessions.by_date.{$days}";
+        $cacheKey = "analytics.sessions.by_date.{$this->propertyId}.{$days}";
         $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
 
         return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
@@ -636,8 +672,8 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runReport($request);
 
-                // Log response để debug
-                Log::info('Sessions By Date API Response', [
+                // Log API response để debug
+                Log::info('GA4 Sessions By Date API', [
                     'days' => $days,
                     'row_count' => $response->getRows()->count(),
                     'response' => json_decode($response->serializeToJsonString(), true)
@@ -658,7 +694,6 @@ class AnalyticsService
                     ];
                 }
 
-                Log::info('Sessions By Date Processed Data', ['data' => $data]);
                 return $data;
             } catch (Exception $e) {
                 Log::error('Lỗi lấy sessions by date: ' . $e->getMessage());
@@ -683,7 +718,7 @@ class AnalyticsService
             ];
         }
 
-        $cacheKey = "analytics.summary.metrics.{$days}";
+        $cacheKey = "analytics.summary.metrics.{$this->propertyId}.{$days}";
         $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
 
         return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
@@ -706,8 +741,8 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runReport($request);
 
-                // Log response để debug
-                Log::info('Summary Metrics API Response', [
+                // Log API response để debug
+                Log::info('GA4 Summary Metrics API', [
                     'days' => $days,
                     'row_count' => $response->getRows()->count(),
                     'response' => json_decode($response->serializeToJsonString(), true)
@@ -730,7 +765,6 @@ class AnalyticsService
                         'pages_per_session' => $sessions > 0 ? round($pageViews / $sessions, 2) : 0,
                     ];
 
-                    Log::info('Summary Metrics Processed Data', ['data' => $result]);
                     return $result;
                 }
 
@@ -765,7 +799,7 @@ class AnalyticsService
             return [];
         }
 
-        $cacheKey = "analytics.audience.demographics.{$days}";
+        $cacheKey = "analytics.audience.demographics.{$this->propertyId}.{$days}";
         $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
 
         return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
@@ -799,9 +833,11 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runReport($request);
 
-                Log::info('Audience Demographics API Response', [
+                // Log API response để debug
+                Log::info('GA4 Audience Demographics API', [
                     'days' => $days,
                     'row_count' => $response->getRows()->count(),
+                    'response' => json_decode($response->serializeToJsonString(), true)
                 ]);
 
                 $data = [];
@@ -835,7 +871,7 @@ class AnalyticsService
             return [];
         }
 
-        $cacheKey = "analytics.audience.devices.{$days}";
+        $cacheKey = "analytics.audience.devices.{$this->propertyId}.{$days}";
         $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
 
         return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
@@ -895,7 +931,7 @@ class AnalyticsService
             return [];
         }
 
-        $cacheKey = "analytics.conversions.{$days}";
+        $cacheKey = "analytics.conversions.{$this->propertyId}.{$days}";
         $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
 
         return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
@@ -932,8 +968,8 @@ class AnalyticsService
 
                     $data[] = [
                         'event_name' => $dimensionValues[0]->getValue(),
-                        'event_count' => (int) $metricValues[0]->getValue(),
-                        'total_users' => (int) $metricValues[1]->getValue(),
+                        'count' => (int) $metricValues[0]->getValue(),
+                        'value' => (int) $metricValues[1]->getValue(), // Using totalUsers as value
                     ];
                 }
 
@@ -954,7 +990,7 @@ class AnalyticsService
             return [];
         }
 
-        $cacheKey = "analytics.pages.top.{$days}";
+        $cacheKey = "analytics.pages.top.{$this->propertyId}.{$days}";
         $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
 
         return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
@@ -995,9 +1031,9 @@ class AnalyticsService
                     $data[] = [
                         'page_path' => $dimensionValues[0]->getValue(),
                         'page_title' => $dimensionValues[1]->getValue(),
-                        'page_views' => (int) $metricValues[0]->getValue(),
-                        'users' => (int) $metricValues[1]->getValue(),
-                        'avg_duration' => $metricValues[2]->getValue(),
+                        'pageviews' => (int) $metricValues[0]->getValue(),
+                        'unique_pageviews' => (int) $metricValues[1]->getValue(), // Using activeUsers as unique_pageviews
+                        'avg_time_on_page' => (float) $metricValues[2]->getValue(), // averageSessionDuration in seconds
                         'bounce_rate' => (float) $metricValues[3]->getValue(),
                     ];
                 }
@@ -1019,7 +1055,7 @@ class AnalyticsService
             return [];
         }
 
-        $cacheKey = "analytics.events.all.{$days}";
+        $cacheKey = "analytics.events.all.{$this->propertyId}.{$days}";
         $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
 
         return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
@@ -1057,9 +1093,8 @@ class AnalyticsService
 
                     $data[] = [
                         'event_name' => $dimensionValues[0]->getValue(),
-                        'event_count' => (int) $metricValues[0]->getValue(),
-                        'total_users' => (int) $metricValues[1]->getValue(),
-                        'event_value' => (float) $metricValues[2]->getValue(),
+                        'count' => (int) $metricValues[0]->getValue(),
+                        'total_value' => (float) $metricValues[2]->getValue(), // eventValue
                     ];
                 }
 
@@ -1080,7 +1115,7 @@ class AnalyticsService
             return [];
         }
 
-        $cacheKey = "analytics.domains.{$days}";
+        $cacheKey = "analytics.domains.{$this->propertyId}.{$days}";
         $cacheTime = $days <= 7 ? 300 : ($days <= 30 ? 600 : 1800);
 
         return Cache::remember($cacheKey, $cacheTime, function () use ($days) {
@@ -1114,7 +1149,8 @@ class AnalyticsService
                 ]);
                 $response = $this->client->runReport($request);
 
-                Log::info('Domains API Response', [
+                // Log API response để debug
+                Log::info('GA4 Domains API', [
                     'days' => $days,
                     'row_count' => $response->getRows()->count(),
                     'response' => json_decode($response->serializeToJsonString(), true)
@@ -1136,7 +1172,6 @@ class AnalyticsService
                     ];
                 }
 
-                Log::info('Domains Processed Data', ['data' => $data]);
                 return $data;
             } catch (Exception $e) {
                 Log::error('Lỗi lấy domains: ' . $e->getMessage());
