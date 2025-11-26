@@ -7,7 +7,7 @@ use Illuminate\Database\Seeder;
 use App\Models\Product;
 use App\Models\Review;
 use App\Models\User;
-use Faker\Factory as Faker;
+use Carbon\Carbon;
 
 class ReviewSeeder extends Seeder
 {
@@ -16,8 +16,6 @@ class ReviewSeeder extends Seeder
      */
     public function run(): void
     {
-        $faker = Faker::create();
-
         // Lấy tất cả sản phẩm
         $products = Product::all();
 
@@ -94,32 +92,46 @@ class ReviewSeeder extends Seeder
 
         foreach ($products as $product) {
             // Tạo từ 3-8 reviews cho mỗi sản phẩm
-            $reviewCount = $faker->numberBetween(3, 8);
+            $reviewCount = rand(3, 8);
 
             for ($i = 0; $i < $reviewCount; $i++) {
                 // Rating từ 3-5 (chủ yếu là positive reviews)
-                $rating = $faker->numberBetween(3, 5);
                 // 80% chance rating 4-5, 20% chance rating 3
-                if ($faker->numberBetween(1, 100) <= 80) {
-                    $rating = $faker->numberBetween(4, 5);
+                $ratingChance = rand(1, 100);
+                if ($ratingChance <= 80) {
+                    $rating = rand(4, 5);
                 } else {
                     $rating = 3;
                 }
 
                 // 70% chance có review text, 30% chỉ có rating
-                $hasReviewText = $faker->numberBetween(1, 100) <= 70;
+                $hasReviewText = rand(1, 100) <= 70;
+
+                // Random customer name
+                $customerName = $customerNames[array_rand($customerNames)];
+
+                // Generate random email
+                $emailPrefix = strtolower(str_replace(' ', '.', $customerName)) . rand(100, 999);
+                $customerEmail = $emailPrefix . '@example.com';
+
+                // 75% verified purchase
+                $isVerifiedPurchase = rand(1, 100) <= 75;
+
+                // Random date trong 6 tháng qua
+                $daysAgo = rand(0, 180);
+                $createdAt = Carbon::now()->subDays($daysAgo)->subHours(rand(0, 23))->subMinutes(rand(0, 59));
 
                 Review::create([
                     'product_id' => $product->id,
                     'user_id' => null, // Anonymous reviews
-                    'customer_name' => $faker->randomElement($customerNames),
-                    'customer_email' => $faker->safeEmail(),
+                    'customer_name' => $customerName,
+                    'customer_email' => $customerEmail,
                     'rating' => $rating,
-                    'review_text' => $hasReviewText ? $faker->randomElement($reviewTexts) : null,
-                    'is_verified_purchase' => $faker->boolean(75), // 75% verified purchase
+                    'review_text' => $hasReviewText ? $reviewTexts[array_rand($reviewTexts)] : null,
+                    'is_verified_purchase' => $isVerifiedPurchase,
                     'is_approved' => true,
-                    'created_at' => $faker->dateTimeBetween('-6 months', 'now'),
-                    'updated_at' => now(),
+                    'created_at' => $createdAt,
+                    'updated_at' => $createdAt,
                 ]);
             }
 

@@ -185,39 +185,67 @@ class ProductController extends Controller
             // Copy variants from template (giống hmtik)
             $createdVariants = [];
             if ($template->variants && $template->variants->count() > 0) {
+                Log::info("Found {$template->variants->count()} variants in template", [
+                    'template_id' => $template->id
+                ]);
+
                 foreach ($template->variants as $templateVariant) {
-                    // Generate unique SKU: template_sku + product_id + random suffix
-                    $baseSku = $templateVariant->sku;
-                    $uniqueSku = $baseSku . '-' . $product->id;
+                    try {
+                        // Generate unique SKU từ variant_name và product_id
+                        // TemplateVariant không có sku field, nên tạo từ variant_name
+                        $baseSku = Str::slug($templateVariant->variant_name);
+                        if (empty($baseSku)) {
+                            $baseSku = 'variant';
+                        }
+                        $uniqueSku = $baseSku . '-' . $product->id;
 
-                    // Ensure SKU is truly unique by checking database
-                    $counter = 1;
-                    while (\App\Models\ProductVariant::where('sku', $uniqueSku)->exists()) {
-                        $uniqueSku = $baseSku . '-' . $product->id . '-' . $counter;
-                        $counter++;
+                        // Ensure SKU is truly unique by checking database
+                        $counter = 1;
+                        while (\App\Models\ProductVariant::where('sku', $uniqueSku)->exists()) {
+                            $uniqueSku = $baseSku . '-' . $product->id . '-' . $counter;
+                            $counter++;
+                        }
+
+                        $variantData = [
+                            'product_id' => $product->id,
+                            'template_id' => $template->id,
+                            'variant_name' => $templateVariant->variant_name,
+                            'attributes' => $templateVariant->attributes ?? [],
+                            'sku' => $uniqueSku, // Truly unique SKU
+                            'price' => $templateVariant->price ?? $template->base_price ?? 0,
+                            'quantity' => $request->quantity ?? 999,
+                            'media' => $templateVariant->media ?? $template->media ?? [],
+                        ];
+
+                        $variant = \App\Models\ProductVariant::create($variantData);
+                        $createdVariants[] = [
+                            'id' => $variant->id,
+                            'variant_name' => $variant->variant_name,
+                            'attributes' => $variant->attributes,
+                            'sku' => $variant->sku,
+                            'price' => $variant->price,
+                            'quantity' => $variant->quantity,
+                        ];
+
+                        Log::info("Created product variant", [
+                            'variant_id' => $variant->id,
+                            'product_id' => $product->id,
+                            'sku' => $variant->sku
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error("Failed to create variant from template", [
+                            'template_variant_id' => $templateVariant->id,
+                            'product_id' => $product->id,
+                            'error' => $e->getMessage()
+                        ]);
+                        // Continue với variant tiếp theo thay vì dừng lại
+                        continue;
                     }
-
-                    $variantData = [
-                        'product_id' => $product->id,
-                        'template_id' => $template->id,
-                        'variant_name' => $templateVariant->variant_name,
-                        'attributes' => $templateVariant->attributes,
-                        'sku' => $uniqueSku, // Truly unique SKU
-                        'price' => $templateVariant->price ?? $template->base_price,
-                        'quantity' => $request->quantity ?? 999,
-                        'media' => $templateVariant->media ?? $template->media ?? [],
-                    ];
-
-                    $variant = \App\Models\ProductVariant::create($variantData);
-                    $createdVariants[] = [
-                        'id' => $variant->id,
-                        'variant_name' => $variant->variant_name,
-                        'attributes' => $variant->attributes,
-                        'sku' => $variant->sku,
-                        'price' => $variant->price,
-                        'quantity' => $variant->quantity,
-                    ];
                 }
+            } else {
+                Log::info("Template has no variants", [
+                    'template_id' => $template->id
+                ]);
             }
 
             // No token usage tracking (public endpoint)
@@ -226,7 +254,7 @@ class ProductController extends Controller
                 'success' => true,
                 'message' => 'Product created successfully',
                 'product_id' => $product->id,
-                'product_url' => route('products.show', $product->slug)
+                'product_url' => route('products.show', $product->slug),
             ], 201)
                 ->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
