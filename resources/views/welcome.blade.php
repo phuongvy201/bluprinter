@@ -5,32 +5,15 @@
             $metaPixelId = \App\Support\Settings::get('analytics.meta_pixel_id', config('services.meta.pixel_id'));
             $googleTagManagerId = \App\Support\Settings::get('analytics.google_tag_manager_id', config('services.google.tag_manager_id'));
             $googleAdsId = \App\Support\Settings::get('analytics.google_ads_id', config('services.google.ads_id'));
-            
-            // Parse multiple GTM IDs
-            $gtmIds = [];
-            $gtmSetting = \App\Support\Settings::get('analytics.google_tag_manager_ids', null);
-            if ($gtmSetting) {
-                $decoded = json_decode($gtmSetting, true);
-                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                    $gtmIds = array_filter(array_map('trim', $decoded));
-                } else {
-                    $gtmIds = array_filter(array_map('trim', preg_split('/[,\n\r]+/', $gtmSetting)));
-                }
-            }
-            if (empty($gtmIds) && $googleTagManagerId) {
-                $gtmIds = [trim($googleTagManagerId)];
-            }
         @endphp
 
-        @if(!empty($gtmIds))
-            <!-- Google Tag Manager - Multiple Containers -->
-            @foreach($gtmIds as $gtmId)
+        @if($googleTagManagerId)
+            <!-- Google Tag Manager -->
             <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
             new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
             j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-            })(window,document,'script','dataLayer','{{ $gtmId }}');</script>
-            @endforeach
+            })(window,document,'script','dataLayer','{{ $googleTagManagerId }}');</script>
             <!-- End Google Tag Manager -->
         @endif
 
@@ -86,12 +69,10 @@
         @endif
     </head>
     <body class="bg-[#FDFDFC] dark:bg-[#0a0a0a] text-[#1b1b18] flex p-6 lg:p-8 items-center lg:justify-center min-h-screen flex-col">
-        @if(!empty($gtmIds))
-            <!-- Google Tag Manager (noscript) - Multiple Containers -->
-            @foreach($gtmIds as $gtmId)
-            <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ $gtmId }}"
+        @if($googleTagManagerId)
+            <!-- Google Tag Manager (noscript) -->
+            <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ $googleTagManagerId }}"
             height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-            @endforeach
             <!-- End Google Tag Manager (noscript) -->
         @endif
         
