@@ -583,6 +583,8 @@ Route::middleware('auth')->group(function () {
         // Products
         Route::resource('products', AdminProductController::class);
         Route::post('products/bulk-delete', [AdminProductController::class, 'bulkDelete'])->name('products.bulk-delete');
+        Route::get('products/preview-gmc-data', [AdminProductController::class, 'previewGMCData'])->name('products.preview-gmc-data');
+        Route::post('products/feed-to-gmc', [AdminProductController::class, 'feedToGMC'])->name('products.feed-to-gmc');
         Route::post('products/{product}/duplicate', [AdminProductController::class, 'duplicate'])->name('products.duplicate');
 
         // Collections

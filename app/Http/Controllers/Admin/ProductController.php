@@ -7,6 +7,9 @@ use App\Models\Product;
 use App\Models\ProductTemplate;
 use App\Models\ProductVariant;
 use App\Models\Shop;
+use App\Models\Category;
+use App\Models\Collection;
+use App\Services\GoogleMerchantCenterService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
@@ -17,22 +20,78 @@ class ProductController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         $user = auth()->user();
 
         // Admin xem tất cả products, Seller chỉ xem products của mình
-        $productsQuery = Product::with(['template.category', 'template.user', 'user', 'shop', 'variants']);
+        $productsQuery = Product::with(['template.category', 'template.user', 'user', 'shop', 'variants', 'collections']);
 
-        if ($user->hasRole('admin')) {
-            $products = $productsQuery->orderBy('created_at', 'desc')->paginate(12);
-        } else {
-            // Seller chỉ thấy products của mình
-            $products = $productsQuery->where('user_id', $user->id)
-                ->orderBy('created_at', 'desc')->paginate(12);
+        // Apply user filter
+        if (!$user->hasRole('admin')) {
+            $productsQuery->where('user_id', $user->id);
         }
 
-        return view('admin.products.index', compact('products'));
+        // Apply filters
+        if ($request->filled('category_id')) {
+            $productsQuery->whereHas('template', function ($q) use ($request) {
+                $q->where('category_id', $request->category_id);
+            });
+        }
+
+        if ($request->filled('template_id')) {
+            $productsQuery->where('template_id', $request->template_id);
+        }
+
+        if ($request->filled('shop_id')) {
+            $productsQuery->where('shop_id', $request->shop_id);
+        }
+
+        if ($request->filled('collection_id')) {
+            $productsQuery->whereHas('collections', function ($q) use ($request) {
+                $q->where('collections.id', $request->collection_id);
+            });
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $productsQuery->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('template', function ($templateQuery) use ($search) {
+                        $templateQuery->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Get filter options for dropdowns
+        $categories = Category::orderBy('name', 'asc')->get();
+
+        $templatesQuery = ProductTemplate::orderBy('name', 'asc');
+        if (!$user->hasRole('admin')) {
+            $templatesQuery->where('user_id', $user->id);
+        }
+        $templates = $templatesQuery->get();
+
+        $shops = null;
+        if ($user->hasRole('admin')) {
+            $shops = Shop::orderBy('shop_name', 'asc')->get();
+        }
+
+        $collectionsQuery = Collection::orderBy('name', 'asc');
+        if (!$user->hasRole('admin')) {
+            $collectionsQuery->where('user_id', $user->id);
+        }
+        $collections = $collectionsQuery->get();
+
+        // Apply default sorting
+        $productsQuery->orderBy('created_at', 'desc');
+
+        // Paginate
+        $products = $productsQuery->paginate(12)->withQueryString();
+
+        return view('admin.products.index', compact('products', 'categories', 'templates', 'shops', 'collections'));
     }
 
     /**
@@ -799,5 +858,451 @@ class ProductController extends Controller
         } while (Product::where('sku', $sku)->exists());
 
         return $sku;
+    }
+
+    /**
+     * Preview product data that will be sent to GMC (for debugging)
+     */
+    public function previewGMCData(Request $request)
+    {
+        try {
+            $request->validate([
+                'product_id' => 'required|exists:products,id',
+            ]);
+
+            $product = Product::with(['template.category', 'shop', 'variants'])
+                ->findOrFail($request->product_id);
+
+            // Check authorization
+            $user = auth()->user();
+            if (!$user->hasRole('admin') && $product->user_id !== $user->id) {
+                abort(403, 'Unauthorized');
+            }
+
+            // Prepare product data
+            $productData = $this->prepareProductForGMC($product);
+
+            if (!$productData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Product does not have required data (name, price, image)'
+                ], 400);
+            }
+
+            // Use service to prepare final API format
+            try {
+                $gmcService = new GoogleMerchantCenterService();
+                $apiData = $gmcService->prepareProductData($productData);
+                $apiEndpoint = $gmcService->getApiEndpoint();
+
+                return response()->json([
+                    'success' => true,
+                    'api_endpoint' => $apiEndpoint,
+                    'product_data' => $apiData,
+                    'raw_product_data' => $productData,
+                    'formatted_json' => json_encode($apiData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                ]);
+            } catch (\Exception $e) {
+                // If service not configured, still return prepared data
+                return response()->json([
+                    'success' => true,
+                    'message' => 'GMC service not configured, showing prepared data only',
+                    'product_data' => $productData,
+                    'formatted_json' => json_encode($productData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'error' => $e->getMessage()
+                ]);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error preparing product data',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Feed selected products to Google Merchant Center
+     * Uploads directly via API or generates XML feed
+     */
+    public function feedToGMC(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            // Validate request
+            $request->validate([
+                'product_ids' => 'required|array',
+                'product_ids.*' => 'exists:products,id',
+                'method' => 'nullable|in:api,xml', // api or xml
+            ]);
+
+            $productIds = $request->product_ids;
+            $method = $request->input('method', 'api'); // Default to API
+
+            // Get products with relationships
+            $productsQuery = Product::with(['template.category', 'shop', 'variants'])
+                ->whereIn('id', $productIds);
+
+            // Check authorization
+            if (!$user->hasRole('admin')) {
+                $productsQuery->where('user_id', $user->id);
+            }
+
+            $products = $productsQuery->get();
+
+            if ($products->isEmpty()) {
+                if ($request->expectsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No products found or you do not have permission to access these products.'
+                    ], 404);
+                }
+                return back()->with('error', 'No products found or you do not have permission to access these products.');
+            }
+
+            // Use API method if requested and configured
+            if ($method === 'api') {
+                try {
+                    $gmcService = new GoogleMerchantCenterService();
+
+                    // Prepare products data for API
+                    $productsData = [];
+                    foreach ($products as $product) {
+                        $productData = $this->prepareProductForGMC($product);
+                        if ($productData) {
+                            $productsData[] = $productData;
+                        }
+                    }
+
+                    if (empty($productsData)) {
+                        throw new \Exception('No valid products to upload. Products must have name, price, and image.');
+                    }
+
+                    // Batch upload products
+                    $results = $gmcService->batchInsertProducts($productsData);
+
+                    // Log successful batch upload
+                    Log::info('GMC Batch upload completed from admin panel', [
+                        'user_id' => auth()->id(),
+                        'user_email' => auth()->user()->email ?? 'N/A',
+                        'total_products' => $results['total'],
+                        'success_count' => $results['success_count'],
+                        'failed_count' => $results['failed_count'],
+                        'product_ids' => $request->input('product_ids', []),
+                        'results' => $results
+                    ]);
+
+                    // Return JSON response for AJAX requests
+                    if ($request->expectsJson() || $request->ajax()) {
+                        return response()->json([
+                            'success' => $results['success_count'] > 0,
+                            'message' => "Uploaded {$results['success_count']} of {$results['total']} products to Google Merchant Center",
+                            'results' => $results
+                        ]);
+                    }
+
+                    // Return redirect with results
+                    $message = "Successfully uploaded {$results['success_count']} of {$results['total']} products to Google Merchant Center";
+                    if ($results['failed_count'] > 0) {
+                        $message .= ". {$results['failed_count']} products failed to upload.";
+                    }
+
+                    return back()->with('success', $message)->with('gmc_results', $results);
+                } catch (\Exception $e) {
+                    Log::error('GMC API upload failed', [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+
+                    // Fallback to XML if API fails
+                    if (str_contains($e->getMessage(), 'not configured') || str_contains($e->getMessage(), 'credentials')) {
+                        $errorMessage = 'Google Merchant Center API is not configured. Please configure GMC_MERCHANT_ID and GMC_CREDENTIALS_PATH in .env file. Falling back to XML download.';
+                        Log::warning($errorMessage);
+
+                        // Fall through to XML generation
+                        $method = 'xml';
+                    } else {
+                        throw $e;
+                    }
+                }
+            }
+
+            // Generate XML feed (fallback or if explicitly requested)
+            if ($method === 'xml') {
+                $xml = $this->generateGMCXML($products);
+
+                // Return XML response
+                return response($xml, 200)
+                    ->header('Content-Type', 'application/xml; charset=utf-8')
+                    ->header('Content-Disposition', 'attachment; filename="gmc_feed_' . date('Y-m-d_His') . '.xml"');
+            }
+        } catch (\Exception $e) {
+            Log::error('GMC Feed failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
+
+            $message = 'An error occurred while processing GMC feed. Please try again.';
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+
+            return back()->with('error', $message);
+        }
+    }
+
+    /**
+     * Prepare product data for Google Merchant Center API
+     */
+    private function prepareProductForGMC(Product $product): ?array
+    {
+        // Skip products without required data
+        if (!$product->name || !$product->price) {
+            return null;
+        }
+
+        // Get base URL from shop's website_url if available, otherwise use config
+        $baseUrl = null;
+        if ($product->shop && $product->shop->website_url) {
+            // Extract domain from website_url (remove path if any)
+            $parsedUrl = parse_url($product->shop->website_url);
+            if ($parsedUrl && isset($parsedUrl['scheme']) && isset($parsedUrl['host'])) {
+                $baseUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'];
+            }
+        }
+
+        // Fallback to config if no shop website_url
+        if (!$baseUrl) {
+            $baseUrl = config('app.url');
+        }
+
+        // Ensure baseUrl doesn't end with slash
+        $baseUrl = rtrim($baseUrl, '/');
+
+        $media = $product->getEffectiveMedia();
+        $primaryImage = !empty($media) ? $media[0] : null;
+
+        // Convert media URL to string if it's an array
+        if (is_array($primaryImage)) {
+            $primaryImage = $primaryImage['url'] ?? $primaryImage['path'] ?? reset($primaryImage) ?? null;
+        }
+
+        if (!$primaryImage) {
+            return null; // GMC requires image
+        }
+
+        // Ensure image URL is absolute (starts with http:// or https://)
+        if ($primaryImage && !preg_match('/^https?:\/\//', $primaryImage)) {
+            // If relative URL, make it absolute using baseUrl
+            $primaryImage = $baseUrl . '/' . ltrim($primaryImage, '/');
+        }
+
+        // Get product URL - use shop domain
+        $productUrl = $baseUrl . '/products/' . ($product->slug ?? $product->id);
+
+        // Get description
+        $description = $product->getEffectiveDescription();
+        $description = strip_tags($description);
+        $description = Str::limit($description, 5000); // GMC limit
+
+        // Get category
+        $category = $product->template->category->name ?? 'Other';
+        $googleCategory = $this->mapToGoogleCategory($category);
+
+        // Availability
+        $availability = ($product->quantity > 0 || $product->variants->where('quantity', '>', 0)->count() > 0)
+            ? 'in stock'
+            : 'out of stock';
+
+        // Get SKU (use as offer_id)
+        $offerId = $product->sku ?? 'PRD-' . $product->id;
+
+        // Get brand (from shop or default)
+        $brand = $product->shop->shop_name ?? 'Bluprinter';
+
+        // Additional images - ensure all are absolute URLs
+        $additionalImages = [];
+        if (count($media) > 1) {
+            $additionalImages = array_slice($media, 1, 10); // GMC allows up to 10 additional images
+            $additionalImages = array_map(function ($image) use ($baseUrl) {
+                $imageUrl = is_array($image) ? ($image['url'] ?? $image['path'] ?? reset($image)) : $image;
+
+                // Ensure absolute URL
+                if ($imageUrl && !preg_match('/^https?:\/\//', $imageUrl)) {
+                    $imageUrl = $baseUrl . '/' . ltrim($imageUrl, '/');
+                }
+
+                return $imageUrl;
+            }, $additionalImages);
+            $additionalImages = array_filter($additionalImages);
+        }
+
+        // Get default country and currency from config
+        $targetCountry = config('services.google.target_country', 'GB');
+        $currency = config('services.google.currency', 'GBP');
+        $contentLanguage = config('services.google.content_language', 'en');
+
+        // Shipping info - IMPORTANT: currency must match product currency
+        // Default shipping cost for UK
+        $defaultShippingCost = $targetCountry === 'GB' ? '5.00' : ($targetCountry === 'VN' ? '30000' : '15.00');
+        // Use the same currency as product to avoid mismatch error
+        $shippingCurrency = $currency; // This will be used in product data
+
+        $shipping = [
+            [
+                'country' => $targetCountry,
+                'price' => [
+                    'value' => $defaultShippingCost,
+                    'currency' => $shippingCurrency // Must match product currency
+                ]
+            ]
+        ];
+
+        return [
+            'offer_id' => $offerId,
+            'title' => Str::limit($product->name, 150),
+            'description' => $description,
+            'link' => $productUrl,
+            'image_link' => $primaryImage,
+            'price' => number_format($product->price, 2, '.', ''),
+            'currency' => $currency,
+            'availability' => $availability,
+            'condition' => 'new',
+            'brand' => $brand,
+            'google_product_category' => $googleCategory,
+            'product_type' => $category,
+            'mpn' => $offerId,
+            'content_language' => $contentLanguage,
+            'target_country' => $targetCountry,
+            'additional_image_links' => array_values($additionalImages),
+            'shipping' => $shipping,
+        ];
+    }
+
+    /**
+     * Generate XML feed in Google Merchant Center format
+     */
+    private function generateGMCXML($products)
+    {
+        $baseUrl = config('app.url');
+
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+        $xml .= '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">' . "\n";
+        $xml .= '  <channel>' . "\n";
+        $xml .= '    <title>Bluprinter Products Feed</title>' . "\n";
+        $xml .= '    <link>' . $baseUrl . '</link>' . "\n";
+        $xml .= '    <description>Product feed for Google Merchant Center</description>' . "\n";
+
+        foreach ($products as $product) {
+            // Skip products without required data
+            if (!$product->name || !$product->price) {
+                continue;
+            }
+
+            $media = $product->getEffectiveMedia();
+            $primaryImage = !empty($media) ? $media[0] : null;
+
+            // Convert media URL to string if it's an array
+            if (is_array($primaryImage)) {
+                $primaryImage = $primaryImage['url'] ?? $primaryImage['path'] ?? reset($primaryImage) ?? null;
+            }
+
+            // Get product URL
+            $productUrl = $baseUrl . '/products/' . ($product->slug ?? $product->id);
+
+            // Get description
+            $description = $product->getEffectiveDescription();
+            $description = strip_tags($description);
+            $description = htmlspecialchars($description, ENT_XML1, 'UTF-8');
+            $description = Str::limit($description, 5000); // GMC limit
+
+            // Get category
+            $category = $product->template->category->name ?? 'Other';
+            $googleCategory = $this->mapToGoogleCategory($category);
+
+            // Availability
+            $availability = ($product->quantity > 0 || $product->variants->where('quantity', '>', 0)->count() > 0)
+                ? 'in stock'
+                : 'out of stock';
+
+            // Get SKU
+            $sku = $product->sku ?? 'PRD-' . $product->id;
+
+            // Get brand (from shop or default)
+            $brand = $product->shop->shop_name ?? 'Bluprinter';
+
+            $xml .= '    <item>' . "\n";
+            $xml .= '      <g:id>' . htmlspecialchars($sku, ENT_XML1, 'UTF-8') . '</g:id>' . "\n";
+            $xml .= '      <title>' . htmlspecialchars(Str::limit($product->name, 150), ENT_XML1, 'UTF-8') . '</title>' . "\n";
+            $xml .= '      <description><![CDATA[' . $description . ']]></description>' . "\n";
+            $xml .= '      <link>' . htmlspecialchars($productUrl, ENT_XML1, 'UTF-8') . '</link>' . "\n";
+
+            if ($primaryImage) {
+                $xml .= '      <g:image_link>' . htmlspecialchars($primaryImage, ENT_XML1, 'UTF-8') . '</g:image_link>' . "\n";
+            }
+
+            $xml .= '      <g:price>' . number_format($product->price, 2, '.', '') . ' USD</g:price>' . "\n";
+            $xml .= '      <g:availability>' . $availability . '</g:availability>' . "\n";
+            $xml .= '      <g:condition>new</g:condition>' . "\n";
+            $xml .= '      <g:brand>' . htmlspecialchars($brand, ENT_XML1, 'UTF-8') . '</g:brand>' . "\n";
+            $xml .= '      <g:google_product_category>' . htmlspecialchars($googleCategory, ENT_XML1, 'UTF-8') . '</g:google_product_category>' . "\n";
+            $xml .= '      <g:product_type>' . htmlspecialchars($category, ENT_XML1, 'UTF-8') . '</g:product_type>' . "\n";
+            $xml .= '      <g:mpn>' . htmlspecialchars($sku, ENT_XML1, 'UTF-8') . '</g:mpn>' . "\n";
+
+            // Add additional images if available
+            if (count($media) > 1) {
+                $additionalImages = array_slice($media, 1, 10); // GMC allows up to 10 additional images
+                foreach ($additionalImages as $image) {
+                    $imageUrl = is_array($image) ? ($image['url'] ?? $image['path'] ?? reset($image)) : $image;
+                    if ($imageUrl && $imageUrl !== $primaryImage) {
+                        $xml .= '      <g:additional_image_link>' . htmlspecialchars($imageUrl, ENT_XML1, 'UTF-8') . '</g:additional_image_link>' . "\n";
+                    }
+                }
+            }
+
+            $xml .= '    </item>' . "\n";
+        }
+
+        $xml .= '  </channel>' . "\n";
+        $xml .= '</rss>';
+
+        return $xml;
+    }
+
+    /**
+     * Map category to Google Product Category
+     * Returns a basic category ID - you should customize this based on your actual categories
+     */
+    private function mapToGoogleCategory($categoryName)
+    {
+        // Basic mapping - you should expand this based on your actual categories
+        $mapping = [
+            'Clothing' => '1604',
+            'Apparel' => '1604',
+            'Accessories' => '166',
+            'Electronics' => '172',
+            'Home & Garden' => '533',
+            'Sports & Outdoors' => '888',
+            'Toys & Games' => '220',
+            'Books' => '266',
+            'Health & Beauty' => '376',
+        ];
+
+        // Try to find exact match
+        foreach ($mapping as $key => $value) {
+            if (stripos($categoryName, $key) !== false) {
+                return $value;
+            }
+        }
+
+        // Default category: Other
+        return '783';
     }
 }

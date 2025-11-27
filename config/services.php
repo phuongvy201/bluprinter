@@ -63,6 +63,12 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI', env('APP_URL') . '/auth/google/callback'),
         'tag_manager_id' => env('GOOGLE_TAG_MANAGER_ID', 'GTM-5T5M2NG4'),
         'ads_id' => env('GOOGLE_ADS_ID', 'AW-17718009492'),
+        'merchant_id' => env('GMC_MERCHANT_ID'),
+        'data_source_id' => env('GMC_DATA_SOURCE_ID', 'PRODUCT_FEED_API'),
+        'merchant_credentials_path' => env('GMC_CREDENTIALS_PATH', storage_path('app/gmc-credentials.json')),
+        'target_country' => env('GMC_TARGET_COUNTRY', 'GB'), // GB for UK, VN for Vietnam, US for USA
+        'currency' => env('GMC_CURRENCY', 'GBP'), // GBP for UK, VND for Vietnam, USD for USA
+        'content_language' => env('GMC_CONTENT_LANGUAGE', 'en'), // en for UK, vi for Vietnam
         'analytics' => [
             'property_id' => env('GOOGLE_ANALYTICS_PROPERTY_ID'),
             'credentials_path' => env('GOOGLE_ANALYTICS_CREDENTIALS_PATH', storage_path('app/google-analytics-credentials.json')),

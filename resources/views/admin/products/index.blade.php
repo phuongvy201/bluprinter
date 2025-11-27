@@ -13,11 +13,22 @@
         <div class="mt-4 sm:mt-0 flex items-center space-x-3">
             <!-- Bulk Delete Button (Hidden by default) -->
             <button id="bulkDeleteBtn" onclick="confirmBulkDelete()" 
-                    class="hidden inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors shadow-md">
+                    style="display: none;"
+                    class="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors shadow-md">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                 </svg>
                 Delete Selected (<span id="selectedCount">0</span>)
+            </button>
+            
+            <!-- Feed to GMC Button (Hidden by default) -->
+            <button id="feedToGMCBtn" onclick="feedToGMC()" 
+                    style="display: none;"
+                    class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-md">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+                Feed to GMC (<span id="gmcSelectedCount">0</span>)
             </button>
             
             <a href="{{ route('admin.products.import') }}" 
@@ -36,6 +47,132 @@
             </a>
         </div>
     </div>
+
+    <!-- Filters Section - Compact -->
+    <div class="bg-white rounded-lg border border-gray-200 shadow-sm">
+        <form method="GET" action="{{ route('admin.products.index') }}" id="filterForm">
+            <div class="flex items-center gap-3 p-3">
+                <!-- Search -->
+                <div class="flex-1 min-w-[200px]">
+                    <input type="text" name="search" value="{{ request('search') }}" 
+                           placeholder="Search..."
+                           class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+
+                <!-- Category -->
+                <div class="w-48">
+                    <select name="category_id" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Categories</option>
+                        @foreach($categories as $category)
+                            <option value="{{ $category->id }}" {{ request('category_id') == $category->id ? 'selected' : '' }}>
+                                {{ $category->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Template -->
+                <div class="w-48">
+                    <select name="template_id" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Templates</option>
+                        @foreach($templates as $template)
+                            <option value="{{ $template->id }}" {{ request('template_id') == $template->id ? 'selected' : '' }}>
+                                {{ Str::limit($template->name, 25) }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Shop (Admin only) -->
+                @if(auth()->user()->hasRole('admin') && $shops)
+                <div class="w-48">
+                    <select name="shop_id" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Shops</option>
+                        @foreach($shops as $shop)
+                            <option value="{{ $shop->id }}" {{ request('shop_id') == $shop->id ? 'selected' : '' }}>
+                                {{ Str::limit($shop->shop_name, 25) }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                @endif
+
+                <!-- Collection -->
+                <div class="w-48">
+                    <select name="collection_id" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Collections</option>
+                        @foreach($collections as $collection)
+                            <option value="{{ $collection->id }}" {{ request('collection_id') == $collection->id ? 'selected' : '' }}>
+                                {{ Str::limit($collection->name, 25) }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex items-center gap-2">
+                    <button type="submit" 
+                            class="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Filter
+                    </button>
+                    @if(request()->anyFilled(['category_id', 'template_id', 'shop_id', 'collection_id', 'search']))
+                        <a href="{{ route('admin.products.index') }}" 
+                           class="inline-flex items-center px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                            Clear
+                        </a>
+                    @endif
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Active Filters Display - Compact -->
+    @if(request()->anyFilled(['category_id', 'template_id', 'shop_id', 'collection_id', 'search']))
+    <div class="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center flex-wrap gap-2">
+                <span class="text-xs font-semibold text-blue-900">Active:</span>
+                @if(request('search'))
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-200 text-blue-800">
+                        Search: "{{ Str::limit(request('search'), 20) }}"
+                        <button onclick="removeFilter('search')" class="ml-1.5 text-blue-600 hover:text-blue-900">×</button>
+                    </span>
+                @endif
+                @if(request('category_id'))
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-200 text-blue-800">
+                        {{ $categories->firstWhere('id', request('category_id'))->name ?? 'N/A' }}
+                        <button onclick="removeFilter('category_id')" class="ml-1.5 text-blue-600 hover:text-blue-900">×</button>
+                    </span>
+                @endif
+                @if(request('template_id'))
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-200 text-blue-800">
+                        {{ Str::limit($templates->firstWhere('id', request('template_id'))->name ?? 'N/A', 20) }}
+                        <button onclick="removeFilter('template_id')" class="ml-1.5 text-blue-600 hover:text-blue-900">×</button>
+                    </span>
+                @endif
+                @if(request('shop_id') && $shops)
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-200 text-blue-800">
+                        {{ Str::limit($shops->firstWhere('id', request('shop_id'))->shop_name ?? 'N/A', 20) }}
+                        <button onclick="removeFilter('shop_id')" class="ml-1.5 text-blue-600 hover:text-blue-900">×</button>
+                    </span>
+                @endif
+                @if(request('collection_id'))
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-200 text-blue-800">
+                        {{ Str::limit($collections->firstWhere('id', request('collection_id'))->name ?? 'N/A', 20) }}
+                        <button onclick="removeFilter('collection_id')" class="ml-1.5 text-blue-600 hover:text-blue-900">×</button>
+                    </span>
+                @endif
+            </div>
+            <span class="text-xs text-blue-700 font-medium">{{ $products->total() }} found</span>
+        </div>
+    </div>
+    @endif
 
     <!-- Products Table -->
     @if($products->count() > 0)
@@ -676,14 +813,19 @@ function toggleSelectAll(checkbox) {
 function updateBulkDeleteButton() {
     const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const feedToGMCBtn = document.getElementById('feedToGMCBtn');
     const selectedCount = document.getElementById('selectedCount');
+    const gmcSelectedCount = document.getElementById('gmcSelectedCount');
     const selectAllCheckbox = document.getElementById('selectAll');
     
     if (checkedBoxes.length > 0) {
-        bulkDeleteBtn.classList.remove('hidden');
+        bulkDeleteBtn.style.display = 'inline-flex';
+        feedToGMCBtn.style.display = 'inline-flex';
         selectedCount.textContent = checkedBoxes.length;
+        gmcSelectedCount.textContent = checkedBoxes.length;
     } else {
-        bulkDeleteBtn.classList.add('hidden');
+        bulkDeleteBtn.style.display = 'none';
+        feedToGMCBtn.style.display = 'none';
     }
     
     // Update "Select All" checkbox state
@@ -877,5 +1019,134 @@ document.addEventListener('click', function(event) {
         closeBulkDeleteModal();
     }
 });
+
+// Filter Functions
+function removeFilter(filterName) {
+    const url = new URL(window.location.href);
+    url.searchParams.delete(filterName);
+    if (filterName === 'price_min' || filterName === 'price_max') {
+        url.searchParams.delete('price_min');
+        url.searchParams.delete('price_max');
+    }
+    window.location.href = url.toString();
+}
+
+// Auto-submit on filter change (optional - can be enabled)
+// document.addEventListener('DOMContentLoaded', function() {
+//     const filterInputs = document.querySelectorAll('#filterForm select, #filterForm input[type="number"]');
+//     filterInputs.forEach(input => {
+//         input.addEventListener('change', function() {
+//             document.getElementById('filterForm').submit();
+//         });
+//     });
+// });
+
+// Feed to Google Merchant Center
+async function feedToGMC() {
+    const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+    const productIds = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    if (productIds.length === 0) {
+        alert('Vui lòng chọn ít nhất một sản phẩm để feed lên Google Merchant Center.');
+        return;
+    }
+    
+    // Show loading state
+    const feedBtn = document.getElementById('feedToGMCBtn');
+    const originalHTML = feedBtn.innerHTML;
+    feedBtn.disabled = true;
+    feedBtn.innerHTML = '<svg class="w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Đang upload...';
+    
+    try {
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        
+        // Use fetch API to upload via API
+        const response = await fetch('{{ route("admin.products.feed-to-gmc") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                product_ids: productIds,
+                method: 'api' // Use API method
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            // Show success message with details
+            let message = data.message || 'Upload thành công!';
+            if (data.results) {
+                const results = data.results;
+                message += `\n\nChi tiết:\n- Thành công: ${results.success_count}/${results.total}`;
+                if (results.failed_count > 0) {
+                    message += `\n- Thất bại: ${results.failed_count}`;
+                }
+            }
+            alert(message);
+            
+            // Reload page to show updated status
+            window.location.reload();
+        } else {
+            // If API fails, try XML download as fallback
+            if (data.error && (data.error.includes('not configured') || data.error.includes('credentials'))) {
+                const useXML = confirm('API chưa được cấu hình. Bạn có muốn tải file XML thay thế không?');
+                if (useXML) {
+                    // Download XML instead
+                    downloadGMCXML(productIds);
+                }
+            } else {
+                alert('Lỗi: ' + (data.message || data.error || 'Có lỗi xảy ra khi upload lên Google Merchant Center.'));
+            }
+        }
+    } catch (error) {
+        console.error('GMC Feed error:', error);
+        alert('Có lỗi xảy ra khi upload. Vui lòng thử lại hoặc tải file XML.');
+    } finally {
+        feedBtn.disabled = false;
+        feedBtn.innerHTML = originalHTML;
+    }
+}
+
+// Download XML feed as fallback
+function downloadGMCXML(productIds) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+    
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ route("admin.products.feed-to-gmc") }}';
+    form.style.display = 'none';
+    
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = '_token';
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
+    
+    const methodInput = document.createElement('input');
+    methodInput.type = 'hidden';
+    methodInput.name = 'method';
+    methodInput.value = 'xml';
+    form.appendChild(methodInput);
+    
+    productIds.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'product_ids[]';
+        input.value = id;
+        form.appendChild(input);
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+    
+    setTimeout(() => {
+        document.body.removeChild(form);
+    }, 1000);
+}
 </script>
 @endsection
