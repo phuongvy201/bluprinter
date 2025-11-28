@@ -1220,25 +1220,8 @@ class ProductController extends Controller
             ]
         ];
 
-        // Get age_group, color, gender from product attributes or use defaults
-        // These are required for apparel products in UK
-        $ageGroup = $product->age_group ?? $product->template->age_group ?? 'adult';
-        $color = $product->color ?? $product->template->color ?? 'Multi';
-        $gender = $product->gender ?? $product->template->gender ?? 'unisex';
-
-        // Validate age_group values (newborn, infant, toddler, kids, adult)
-        $validAgeGroups = ['newborn', 'infant', 'toddler', 'kids', 'adult'];
-        if (!in_array(strtolower($ageGroup), $validAgeGroups)) {
-            $ageGroup = 'adult'; // Default to adult if invalid
-        }
-
-        // Validate gender values (male, female, unisex)
-        $validGenders = ['male', 'female', 'unisex'];
-        if (!in_array(strtolower($gender), $validGenders)) {
-            $gender = 'unisex'; // Default to unisex if invalid
-        }
-
-        return [
+        // Base product data
+        $productData = [
             'offer_id' => $offerId,
             'title' => Str::limit($product->name, 150),
             'description' => $description,
@@ -1256,10 +1239,72 @@ class ProductController extends Controller
             'target_country' => $targetCountry,
             'additional_image_links' => array_values($additionalImages),
             'shipping' => $shipping,
-            'age_group' => strtolower($ageGroup),
-            'color' => $color,
-            'gender' => strtolower($gender),
         ];
+
+        // Only add gender, color, and age_group for Clothing category
+        $isClothing = stripos($category, 'clothing') !== false ||
+            stripos($category, 'apparel') !== false ||
+            stripos($category, 'Clothing') !== false ||
+            stripos($category, 'Apparel') !== false;
+
+        if ($isClothing) {
+            // Get age_group, color, gender from product attributes or use defaults
+            // These are required for apparel/clothing products
+            $ageGroup = $product->age_group ?? $product->template->age_group ?? 'adult';
+            $gender = $product->gender ?? $product->template->gender ?? 'unisex';
+
+            // Get all colors from product variants
+            $colors = [];
+            if ($product->variants && $product->variants->count() > 0) {
+                foreach ($product->variants as $variant) {
+                    if ($variant->attributes && is_array($variant->attributes)) {
+                        // Check for Color attribute (case-insensitive)
+                        foreach ($variant->attributes as $key => $value) {
+                            if (strtolower($key) === 'color' || strtolower($key) === 'colour') {
+                                if (!empty($value) && !in_array($value, $colors)) {
+                                    $colors[] = $value;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If no colors from variants, try product/template color
+            if (empty($colors)) {
+                if (!empty($product->color)) {
+                    $colors[] = $product->color;
+                } elseif (!empty($product->template->color)) {
+                    $colors[] = $product->template->color;
+                }
+            }
+
+            // If still no colors, use 'Multi' as fallback
+            if (empty($colors)) {
+                $colors = ['Multi'];
+            }
+
+            // Join all colors with comma (Google Merchant Center accepts comma-separated colors)
+            $color = implode(', ', $colors);
+
+            // Validate age_group values (newborn, infant, toddler, kids, adult)
+            $validAgeGroups = ['newborn', 'infant', 'toddler', 'kids', 'adult'];
+            if (!in_array(strtolower($ageGroup), $validAgeGroups)) {
+                $ageGroup = 'adult'; // Default to adult if invalid
+            }
+
+            // Validate gender values (male, female, unisex)
+            $validGenders = ['male', 'female', 'unisex'];
+            if (!in_array(strtolower($gender), $validGenders)) {
+                $gender = 'unisex'; // Default to unisex if invalid
+            }
+
+            $productData['age_group'] = strtolower($ageGroup);
+            $productData['color'] = $color;
+            $productData['gender'] = strtolower($gender);
+        }
+
+        return $productData;
     }
 
     /**

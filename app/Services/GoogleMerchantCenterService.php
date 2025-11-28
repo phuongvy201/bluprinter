@@ -206,28 +206,18 @@ class GoogleMerchantCenterService
                 $googleProduct->setShipping($shippingArray);
             }
 
-            // Set age_group (required for apparel products)
+            // Set age_group, color, gender (only for Clothing/Apparel products)
+            // Only set these if they are provided in productData
             if (isset($productData['age_group'])) {
                 $googleProduct->setAgeGroup($productData['age_group']);
-            } else {
-                // Default to adult if not specified
-                $googleProduct->setAgeGroup('adult');
             }
 
-            // Set color (required for apparel products)
             if (isset($productData['color'])) {
                 $googleProduct->setColor($productData['color']);
-            } else {
-                // Default to a generic color if not specified
-                $googleProduct->setColor('Multi');
             }
 
-            // Set gender (required for apparel products)
             if (isset($productData['gender'])) {
                 $googleProduct->setGender($productData['gender']);
-            } else {
-                // Default to unisex if not specified
-                $googleProduct->setGender('unisex');
             }
 
             // Log the request
