@@ -1205,9 +1205,15 @@ class ProductController extends Controller
         $currency = $gmcConfig->currency;
         $contentLanguage = $gmcConfig->content_language;
 
+        // Force USD for US and UK markets
+        if (in_array($targetCountry, ['US', 'UK', 'GB'])) {
+            $currency = 'USD';
+        }
+
         // Convert product price from USD to target currency
         // Products are stored in USD, but need to be converted for different markets
         // Uses currency_rate from GMC config if available
+        // For US/UK, keep USD (no conversion needed)
         $productPriceUSD = (float)$product->price;
         $productPrice = $this->convertProductPrice($productPriceUSD, $currency, $gmcConfig);
 
@@ -1231,11 +1237,19 @@ class ProductController extends Controller
 
         // Convert to target currency if needed
         // Uses currency_rate from GMC config if available
+        // For US/UK, keep USD (no conversion needed)
         $shippingCost = $this->convertShippingCurrency($shippingCostUSD, $currency, $targetCountry, $gmcConfig);
 
         // Fallback to default if calculation failed
         if ($shippingCost <= 0) {
-            $shippingCost = $targetCountry === 'GB' ? '5.00' : ($targetCountry === 'VN' ? '30000' : '15.00');
+            // For US/UK, use USD. For VN, use VND. Others use USD.
+            if (in_array($targetCountry, ['US', 'UK', 'GB'])) {
+                $shippingCost = '15.00'; // USD
+            } elseif ($targetCountry === 'VN') {
+                $shippingCost = '30000'; // VND
+            } else {
+                $shippingCost = '15.00'; // USD default
+            }
         } else {
             // Format to 2 decimal places
             $shippingCost = number_format((float)$shippingCost, 2, '.', '');
@@ -1320,6 +1334,11 @@ class ProductController extends Controller
         $currency = $gmcConfig->currency;
         $targetCountry = $gmcConfig->target_country;
 
+        // Force USD for US and UK markets
+        if (in_array($targetCountry, ['US', 'UK', 'GB'])) {
+            $currency = 'USD';
+        }
+
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">' . "\n";
         $xml .= '  <channel>' . "\n";
@@ -1377,6 +1396,7 @@ class ProductController extends Controller
 
             // Convert product price from USD to target currency for XML feed
             // Uses currency_rate from GMC config if available
+            // For US/UK, keep USD (no conversion needed)
             $productPriceUSD = (float)$product->price;
             $productPrice = $this->convertProductPrice($productPriceUSD, $currency, $gmcConfig);
 
