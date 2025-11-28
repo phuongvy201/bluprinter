@@ -11,6 +11,7 @@ use App\Models\Category;
 use App\Models\Collection;
 use App\Models\GmcConfig;
 use App\Services\GoogleMerchantCenterService;
+use App\Services\ShippingCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
@@ -1204,18 +1205,42 @@ class ProductController extends Controller
         $currency = $gmcConfig->currency;
         $contentLanguage = $gmcConfig->content_language;
 
-        // Shipping info - IMPORTANT: currency must match product currency
-        // Default shipping cost for UK
-        $defaultShippingCost = $targetCountry === 'GB' ? '5.00' : ($targetCountry === 'VN' ? '30000' : '15.00');
-        // Use the same currency as product to avoid mismatch error
-        $shippingCurrency = $currency; // This will be used in product data
+        // Calculate shipping cost from database using ShippingCalculator
+        $shippingCalculator = new ShippingCalculator();
+
+        // Prepare cart item format for shipping calculation (single product, quantity 1)
+        $cartItems = collect([
+            [
+                'product_id' => $product->id,
+                'quantity' => 1,
+                'price' => $product->price
+            ]
+        ]);
+
+        // Calculate shipping using the same method as cart
+        $shippingResult = $shippingCalculator->calculateShipping($cartItems, $targetCountry);
+
+        // Get shipping cost (in USD from database)
+        $shippingCostUSD = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
+
+        // Convert to target currency if needed
+        // Note: This is a simple conversion. You may want to use a currency conversion service
+        $shippingCost = $this->convertShippingCurrency($shippingCostUSD, $currency, $targetCountry);
+
+        // Fallback to default if calculation failed
+        if ($shippingCost <= 0) {
+            $shippingCost = $targetCountry === 'GB' ? '5.00' : ($targetCountry === 'VN' ? '30000' : '15.00');
+        } else {
+            // Format to 2 decimal places
+            $shippingCost = number_format((float)$shippingCost, 2, '.', '');
+        }
 
         $shipping = [
             [
                 'country' => $targetCountry,
                 'price' => [
-                    'value' => $defaultShippingCost,
-                    'currency' => $shippingCurrency // Must match product currency
+                    'value' => $shippingCost,
+                    'currency' => $currency // Must match product currency
                 ]
             ]
         ];
@@ -1253,39 +1278,8 @@ class ProductController extends Controller
             $ageGroup = $product->age_group ?? $product->template->age_group ?? 'adult';
             $gender = $product->gender ?? $product->template->gender ?? 'unisex';
 
-            // Get all colors from product variants
-            $colors = [];
-            if ($product->variants && $product->variants->count() > 0) {
-                foreach ($product->variants as $variant) {
-                    if ($variant->attributes && is_array($variant->attributes)) {
-                        // Check for Color attribute (case-insensitive)
-                        foreach ($variant->attributes as $key => $value) {
-                            if (strtolower($key) === 'color' || strtolower($key) === 'colour') {
-                                if (!empty($value) && !in_array($value, $colors)) {
-                                    $colors[] = $value;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // If no colors from variants, try product/template color
-            if (empty($colors)) {
-                if (!empty($product->color)) {
-                    $colors[] = $product->color;
-                } elseif (!empty($product->template->color)) {
-                    $colors[] = $product->template->color;
-                }
-            }
-
-            // If still no colors, use 'Multi' as fallback
-            if (empty($colors)) {
-                $colors = ['Multi'];
-            }
-
-            // Join all colors with comma (Google Merchant Center accepts comma-separated colors)
-            $color = implode(', ', $colors);
+            // For clothing products, always use "Black" as default color
+            $color = 'Black';
 
             // Validate age_group values (newborn, infant, toddler, kids, adult)
             $validAgeGroups = ['newborn', 'infant', 'toddler', 'kids', 'adult'];
@@ -1401,6 +1395,40 @@ class ProductController extends Controller
         $xml .= '</rss>';
 
         return $xml;
+    }
+
+    /**
+     * Convert shipping cost from USD to target currency
+     * Simple conversion rates - you may want to use a currency conversion service
+     */
+    private function convertShippingCurrency(float $usdAmount, string $targetCurrency, string $targetCountry): float
+    {
+        // Simple currency conversion rates (you may want to use a live API)
+        $conversionRates = [
+            'GBP' => 0.79,  // 1 USD = 0.79 GBP
+            'VND' => 25000, // 1 USD = 25000 VND
+            'EUR' => 0.92,  // 1 USD = 0.92 EUR
+            'CAD' => 1.35,  // 1 USD = 1.35 CAD
+            'AUD' => 1.52,  // 1 USD = 1.52 AUD
+        ];
+
+        // If currency is USD, return as is
+        if ($targetCurrency === 'USD') {
+            return $usdAmount;
+        }
+
+        // Convert if rate exists
+        if (isset($conversionRates[$targetCurrency])) {
+            return $usdAmount * $conversionRates[$targetCurrency];
+        }
+
+        // Fallback: return USD amount if conversion rate not found
+        Log::warning('Shipping currency conversion rate not found', [
+            'target_currency' => $targetCurrency,
+            'usd_amount' => $usdAmount
+        ]);
+
+        return $usdAmount;
     }
 
     /**
