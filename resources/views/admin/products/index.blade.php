@@ -1051,6 +1051,12 @@ async function feedToGMC() {
         return;
     }
     
+    // Show modal to select target country
+    const targetCountry = await showTargetCountryModal();
+    if (!targetCountry) {
+        return; // User cancelled
+    }
+    
     // Show loading state
     const feedBtn = document.getElementById('feedToGMCBtn');
     const originalHTML = feedBtn.innerHTML;
@@ -1071,7 +1077,8 @@ async function feedToGMC() {
             },
             body: JSON.stringify({
                 product_ids: productIds,
-                method: 'api' // Use API method
+                method: 'api',
+                target_country: targetCountry
             })
         });
         
@@ -1112,8 +1119,99 @@ async function feedToGMC() {
     }
 }
 
+// Show modal to select target country
+function showTargetCountryModal() {
+    return new Promise((resolve) => {
+        // Get available GMC configs from server (only active configs for current domain)
+        const availableConfigs = @json($availableGmcConfigs ?? []);
+        
+        if (availableConfigs.length === 0) {
+            alert('Chưa có cấu hình GMC nào cho domain này. Vui lòng tạo cấu hình GMC trước tại /admin/settings/gmc-config');
+            resolve(null);
+            return;
+        }
+
+        // Country labels mapping
+        const countryLabels = {
+            'US': 'United States (USD)',
+            'GB': 'United Kingdom (GBP)',
+            'VN': 'Vietnam (VND)',
+            'CA': 'Canada (CAD)',
+            'AU': 'Australia (AUD)',
+            'DE': 'Germany (EUR)',
+            'FR': 'France (EUR)',
+            'IT': 'Italy (EUR)',
+            'ES': 'Spain (EUR)',
+        };
+
+        // Get current domain from window location
+        const currentDomain = window.location.hostname.replace(/^www\./, '');
+
+        // Build options from available configs
+        const options = availableConfigs.map(config => {
+            const countryCode = config.target_country;
+            const label = countryLabels[countryCode] || `${countryCode} (${config.currency})`;
+            return `<option value="${countryCode}">${label} - ${config.name}</option>`;
+        }).join('');
+
+        // Create modal
+        const modal = document.createElement('div');
+        modal.id = 'gmcTargetCountryModal';
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center';
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+                <h3 class="text-xl font-bold text-gray-900 mb-4">Chọn thị trường</h3>
+                <p class="text-sm text-gray-600 mb-2">Vui lòng chọn thị trường để gửi sản phẩm lên Google Merchant Center:</p>
+                <div class="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                    <p class="text-xs text-blue-800">
+                        <strong>Domain sẽ sử dụng:</strong> <span class="font-mono">${currentDomain}</span>
+                    </p>
+                    <p class="text-xs text-blue-600 mt-1">
+                        Chỉ hiển thị các thị trường đã được cấu hình GMC cho domain này.
+                    </p>
+                </div>
+                <select id="targetCountrySelect" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-4">
+                    <option value="">-- Chọn thị trường --</option>
+                    ${options}
+                </select>
+                <div class="flex justify-end gap-3">
+                    <button onclick="closeGMCModal(null)" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                        Hủy
+                    </button>
+                    <button onclick="confirmGMCModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        Xác nhận
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // Close modal function
+        window.closeGMCModal = function(result) {
+            document.body.removeChild(modal);
+            resolve(result);
+        };
+
+        // Confirm function
+        window.confirmGMCModal = function() {
+            const select = document.getElementById('targetCountrySelect');
+            const value = select.value;
+            if (!value) {
+                alert('Vui lòng chọn thị trường!');
+                return;
+            }
+            closeGMCModal(value);
+        };
+    });
+}
+
 // Download XML feed as fallback
-function downloadGMCXML(productIds) {
+async function downloadGMCXML(productIds) {
+    const targetCountry = await showTargetCountryModal();
+    if (!targetCountry) {
+        return;
+    }
+
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
     
     const form = document.createElement('form');
@@ -1132,6 +1230,12 @@ function downloadGMCXML(productIds) {
     methodInput.name = 'method';
     methodInput.value = 'xml';
     form.appendChild(methodInput);
+
+    const targetCountryInput = document.createElement('input');
+    targetCountryInput.type = 'hidden';
+    targetCountryInput.name = 'target_country';
+    targetCountryInput.value = targetCountry;
+    form.appendChild(targetCountryInput);
     
     productIds.forEach(id => {
         const input = document.createElement('input');

@@ -8,6 +8,7 @@ use Google\Service\ShoppingContent\Product as GoogleProduct;
 use Google\Service\ShoppingContent\Price;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use App\Models\GmcConfig;
 
 class GoogleMerchantCenterService
 {
@@ -19,19 +20,56 @@ class GoogleMerchantCenterService
     private $contentLanguage;
     private $shoppingContentService;
 
-    public function __construct()
+    /**
+     * Create instance with GmcConfig from database
+     */
+    public static function fromConfig(GmcConfig $config): self
     {
-        $this->merchantId = config('services.google.merchant_id');
-        $this->dataSourceId = config('services.google.data_source_id', 'PRODUCT_FEED_API');
-        $this->targetCountry = config('services.google.target_country', 'GB');
-        $this->currency = config('services.google.currency', 'GBP');
-        $this->contentLanguage = config('services.google.content_language', 'en');
-        $credentialsPath = config('services.google.merchant_credentials_path');
+        $instance = new self();
+        $instance->merchantId = $config->merchant_id;
+        $instance->dataSourceId = $config->data_source_id;
+        $instance->targetCountry = $config->target_country;
+        $instance->currency = $config->currency;
+        $instance->contentLanguage = $config->content_language;
 
-        if (!$this->merchantId || !$credentialsPath) {
-            throw new \Exception('Google Merchant Center credentials not configured. Please set GMC_MERCHANT_ID and GMC_CREDENTIALS_PATH in .env');
+        $credentialsPath = $config->credentials_path;
+        $instance->initializeClient($credentialsPath);
+
+        return $instance;
+    }
+
+    public function __construct(?GmcConfig $config = null)
+    {
+        if ($config) {
+            // Use provided config from database
+            $this->merchantId = $config->merchant_id;
+            $this->dataSourceId = $config->data_source_id;
+            $this->targetCountry = $config->target_country;
+            $this->currency = $config->currency;
+            $this->contentLanguage = $config->content_language;
+            $credentialsPath = $config->credentials_path;
+        } else {
+            // Use default config from .env (backward compatibility)
+            $this->merchantId = config('services.google.merchant_id');
+            $this->dataSourceId = config('services.google.data_source_id', 'PRODUCT_FEED_API');
+            $this->targetCountry = config('services.google.target_country', 'GB');
+            $this->currency = config('services.google.currency', 'GBP');
+            $this->contentLanguage = config('services.google.content_language', 'en');
+            $credentialsPath = config('services.google.merchant_credentials_path');
         }
 
+        if (!$this->merchantId || !$credentialsPath) {
+            throw new \Exception('Google Merchant Center credentials not configured. Please set GMC_MERCHANT_ID and GMC_CREDENTIALS_PATH in .env or use GmcConfig');
+        }
+
+        $this->initializeClient($credentialsPath);
+    }
+
+    /**
+     * Initialize Google Client with credentials
+     */
+    private function initializeClient(string $credentialsPath): void
+    {
         // Check if credentials file exists
         $resolvedPath = null;
         // Use storage_path('app') to get the correct storage/app directory
@@ -75,7 +113,7 @@ class GoogleMerchantCenterService
                 'files_in_storage_app' => array_slice(scandir($storageAppPath), 2) // Skip . and ..
             ]);
 
-            throw new \Exception("Google Merchant Center credentials file not found: {$credentialsPath}. Please check GMC_CREDENTIALS_PATH in .env file. Storage app path: {$storageAppPath}");
+            throw new \Exception("Google Merchant Center credentials file not found: {$credentialsPath}. Please check GMC_CREDENTIALS_PATH in .env file or GmcConfig. Storage app path: {$storageAppPath}");
         }
 
         $credentialsPath = $resolvedPath;
@@ -149,6 +187,47 @@ class GoogleMerchantCenterService
             // Set additional images
             if (isset($productData['additional_image_links']) && is_array($productData['additional_image_links']) && !empty($productData['additional_image_links'])) {
                 $googleProduct->setAdditionalImageLinks(array_values($productData['additional_image_links']));
+            }
+
+            // Set shipping - IMPORTANT: currency must match product currency
+            if (isset($productData['shipping']) && is_array($productData['shipping'])) {
+                $shippingArray = [];
+                foreach ($productData['shipping'] as $shippingItem) {
+                    $shippingPrice = new Price();
+                    $shippingPrice->setValue($shippingItem['price']['value']);
+                    // Ensure shipping currency matches product currency
+                    $shippingPrice->setCurrency($productData['currency'] ?? $this->currency);
+
+                    $shippingArray[] = [
+                        'country' => $shippingItem['country'],
+                        'price' => $shippingPrice
+                    ];
+                }
+                $googleProduct->setShipping($shippingArray);
+            }
+
+            // Set age_group (required for apparel products)
+            if (isset($productData['age_group'])) {
+                $googleProduct->setAgeGroup($productData['age_group']);
+            } else {
+                // Default to adult if not specified
+                $googleProduct->setAgeGroup('adult');
+            }
+
+            // Set color (required for apparel products)
+            if (isset($productData['color'])) {
+                $googleProduct->setColor($productData['color']);
+            } else {
+                // Default to a generic color if not specified
+                $googleProduct->setColor('Multi');
+            }
+
+            // Set gender (required for apparel products)
+            if (isset($productData['gender'])) {
+                $googleProduct->setGender($productData['gender']);
+            } else {
+                // Default to unisex if not specified
+                $googleProduct->setGender('unisex');
             }
 
             // Log the request

@@ -15,6 +15,7 @@ use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Admin\AnalyticsSettingsController;
 use App\Http\Controllers\Admin\DomainAnalyticsConfigController;
+use App\Http\Controllers\Admin\GmcConfigController;
 use App\Http\Controllers\Admin\ShopController as AdminShopController;
 use App\Http\Controllers\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Seller\SellerDashboardController;
@@ -552,6 +553,16 @@ Route::middleware('auth')->group(function () {
             'edit' => 'settings.domain-analytics.edit',
             'update' => 'settings.domain-analytics.update',
             'destroy' => 'settings.domain-analytics.destroy',
+        ]);
+
+        // GMC Configs
+        Route::resource('settings/gmc-config', GmcConfigController::class)->names([
+            'index' => 'settings.gmc-config.index',
+            'create' => 'settings.gmc-config.create',
+            'store' => 'settings.gmc-config.store',
+            'edit' => 'settings.gmc-config.edit',
+            'update' => 'settings.gmc-config.update',
+            'destroy' => 'settings.gmc-config.destroy',
         ]);
 
         // Analytics Dashboard

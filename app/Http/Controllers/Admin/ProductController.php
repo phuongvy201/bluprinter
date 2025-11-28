@@ -9,6 +9,7 @@ use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\Category;
 use App\Models\Collection;
+use App\Models\GmcConfig;
 use App\Services\GoogleMerchantCenterService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -91,7 +92,15 @@ class ProductController extends Controller
         // Paginate
         $products = $productsQuery->paginate(12)->withQueryString();
 
-        return view('admin.products.index', compact('products', 'categories', 'templates', 'shops', 'collections'));
+        // Get GMC configs for current domain (to show only available markets in modal)
+        $currentDomain = $request->getHost();
+        $currentDomain = preg_replace('/^www\./', '', $currentDomain);
+        $availableGmcConfigs = GmcConfig::where('domain', $currentDomain)
+            ->where('is_active', true)
+            ->orderBy('target_country')
+            ->get();
+
+        return view('admin.products.index', compact('products', 'categories', 'templates', 'shops', 'collections', 'availableGmcConfigs'));
     }
 
     /**
@@ -879,8 +888,25 @@ class ProductController extends Controller
                 abort(403, 'Unauthorized');
             }
 
+            // Get current domain from request
+            $currentDomain = $request->getHost();
+            $currentDomain = preg_replace('/^www\./', '', $currentDomain);
+
+            // Get target country from request or use default
+            $targetCountry = strtoupper($request->input('target_country', 'GB'));
+
+            // Get GMC config for current domain and target country
+            $gmcConfig = GmcConfig::getConfigForDomainAndCountry($currentDomain, $targetCountry);
+
+            if (!$gmcConfig) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Không tìm thấy cấu hình GMC cho domain '{$currentDomain}' và thị trường '{$targetCountry}'. Vui lòng cấu hình GMC trước."
+                ], 400);
+            }
+
             // Prepare product data
-            $productData = $this->prepareProductForGMC($product);
+            $productData = $this->prepareProductForGMC($product, $gmcConfig, $currentDomain);
 
             if (!$productData) {
                 return response()->json([
@@ -891,7 +917,7 @@ class ProductController extends Controller
 
             // Use service to prepare final API format
             try {
-                $gmcService = new GoogleMerchantCenterService();
+                $gmcService = GoogleMerchantCenterService::fromConfig($gmcConfig);
                 $apiData = $gmcService->prepareProductData($productData);
                 $apiEndpoint = $gmcService->getApiEndpoint();
 
@@ -935,12 +961,14 @@ class ProductController extends Controller
                 'product_ids' => 'required|array',
                 'product_ids.*' => 'exists:products,id',
                 'method' => 'nullable|in:api,xml', // api or xml
+                'target_country' => 'required|string|size:2', // US, GB, VN, etc.
             ]);
 
             $productIds = $request->product_ids;
             $method = $request->input('method', 'api'); // Default to API
+            $targetCountry = strtoupper($request->target_country);
 
-            // Get products with relationships
+            // Get products with relationships first to determine domain
             $productsQuery = Product::with(['template.category', 'shop', 'variants'])
                 ->whereIn('id', $productIds);
 
@@ -961,15 +989,53 @@ class ProductController extends Controller
                 return back()->with('error', 'No products found or you do not have permission to access these products.');
             }
 
+            // Get domain from current request host (where admin is accessing from)
+            // This ensures we use the correct domain for the GMC config
+            $currentDomain = $request->getHost();
+            // Remove www. if present
+            $currentDomain = preg_replace('/^www\./', '', $currentDomain);
+
+            // Get GMC config for domain and target country
+            $gmcConfig = GmcConfig::getConfigForDomainAndCountry($currentDomain, $targetCountry);
+
+            if (!$gmcConfig) {
+                $errorMessage = "Không tìm thấy cấu hình GMC cho domain '{$currentDomain}' và thị trường '{$targetCountry}'. Vui lòng cấu hình GMC trước.";
+
+                Log::warning('GMC Config not found', [
+                    'domain' => $currentDomain,
+                    'target_country' => $targetCountry,
+                    'request_host' => $request->getHost()
+                ]);
+
+                if ($request->expectsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $errorMessage
+                    ], 400);
+                }
+                return back()->with('error', $errorMessage);
+            }
+
+            // Log domain being used
+            Log::info('GMC Feed - Domain determined', [
+                'domain_used' => $currentDomain,
+                'target_country' => $targetCountry,
+                'request_host' => $request->getHost(),
+                'gmc_config_id' => $gmcConfig->id,
+                'gmc_config_name' => $gmcConfig->name,
+                'product_count' => $products->count()
+            ]);
+
             // Use API method if requested and configured
             if ($method === 'api') {
                 try {
-                    $gmcService = new GoogleMerchantCenterService();
+                    // Create GMC service with config from database
+                    $gmcService = GoogleMerchantCenterService::fromConfig($gmcConfig);
 
-                    // Prepare products data for API
+                    // Prepare products data for API - use current domain
                     $productsData = [];
                     foreach ($products as $product) {
-                        $productData = $this->prepareProductForGMC($product);
+                        $productData = $this->prepareProductForGMC($product, $gmcConfig, $currentDomain);
                         if ($productData) {
                             $productsData[] = $productData;
                         }
@@ -1030,7 +1096,7 @@ class ProductController extends Controller
 
             // Generate XML feed (fallback or if explicitly requested)
             if ($method === 'xml') {
-                $xml = $this->generateGMCXML($products);
+                $xml = $this->generateGMCXML($products, $gmcConfig, $currentDomain);
 
                 // Return XML response
                 return response($xml, 200)
@@ -1061,27 +1127,16 @@ class ProductController extends Controller
     /**
      * Prepare product data for Google Merchant Center API
      */
-    private function prepareProductForGMC(Product $product): ?array
+    private function prepareProductForGMC(Product $product, GmcConfig $gmcConfig, string $currentDomain): ?array
     {
         // Skip products without required data
         if (!$product->name || !$product->price) {
             return null;
         }
 
-        // Get base URL from shop's website_url if available, otherwise use config
-        $baseUrl = null;
-        if ($product->shop && $product->shop->website_url) {
-            // Extract domain from website_url (remove path if any)
-            $parsedUrl = parse_url($product->shop->website_url);
-            if ($parsedUrl && isset($parsedUrl['scheme']) && isset($parsedUrl['host'])) {
-                $baseUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'];
-            }
-        }
-
-        // Fallback to config if no shop website_url
-        if (!$baseUrl) {
-            $baseUrl = config('app.url');
-        }
+        // Use current domain to build base URL
+        $scheme = request()->getScheme(); // http or https
+        $baseUrl = $scheme . '://' . $currentDomain;
 
         // Ensure baseUrl doesn't end with slash
         $baseUrl = rtrim($baseUrl, '/');
@@ -1144,10 +1199,10 @@ class ProductController extends Controller
             $additionalImages = array_filter($additionalImages);
         }
 
-        // Get default country and currency from config
-        $targetCountry = config('services.google.target_country', 'GB');
-        $currency = config('services.google.currency', 'GBP');
-        $contentLanguage = config('services.google.content_language', 'en');
+        // Get country, currency, and language from GMC config
+        $targetCountry = $gmcConfig->target_country;
+        $currency = $gmcConfig->currency;
+        $contentLanguage = $gmcConfig->content_language;
 
         // Shipping info - IMPORTANT: currency must match product currency
         // Default shipping cost for UK
@@ -1164,6 +1219,24 @@ class ProductController extends Controller
                 ]
             ]
         ];
+
+        // Get age_group, color, gender from product attributes or use defaults
+        // These are required for apparel products in UK
+        $ageGroup = $product->age_group ?? $product->template->age_group ?? 'adult';
+        $color = $product->color ?? $product->template->color ?? 'Multi';
+        $gender = $product->gender ?? $product->template->gender ?? 'unisex';
+
+        // Validate age_group values (newborn, infant, toddler, kids, adult)
+        $validAgeGroups = ['newborn', 'infant', 'toddler', 'kids', 'adult'];
+        if (!in_array(strtolower($ageGroup), $validAgeGroups)) {
+            $ageGroup = 'adult'; // Default to adult if invalid
+        }
+
+        // Validate gender values (male, female, unisex)
+        $validGenders = ['male', 'female', 'unisex'];
+        if (!in_array(strtolower($gender), $validGenders)) {
+            $gender = 'unisex'; // Default to unisex if invalid
+        }
 
         return [
             'offer_id' => $offerId,
@@ -1183,15 +1256,24 @@ class ProductController extends Controller
             'target_country' => $targetCountry,
             'additional_image_links' => array_values($additionalImages),
             'shipping' => $shipping,
+            'age_group' => strtolower($ageGroup),
+            'color' => $color,
+            'gender' => strtolower($gender),
         ];
     }
 
     /**
      * Generate XML feed in Google Merchant Center format
      */
-    private function generateGMCXML($products)
+    private function generateGMCXML($products, GmcConfig $gmcConfig, string $currentDomain)
     {
-        $baseUrl = config('app.url');
+        // Use current domain to build base URL
+        $scheme = request()->getScheme(); // http or https
+        $baseUrl = $scheme . '://' . $currentDomain;
+
+        // Get currency from GMC config
+        $currency = $gmcConfig->currency;
+        $targetCountry = $gmcConfig->target_country;
 
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">' . "\n";
@@ -1248,7 +1330,7 @@ class ProductController extends Controller
                 $xml .= '      <g:image_link>' . htmlspecialchars($primaryImage, ENT_XML1, 'UTF-8') . '</g:image_link>' . "\n";
             }
 
-            $xml .= '      <g:price>' . number_format($product->price, 2, '.', '') . ' USD</g:price>' . "\n";
+            $xml .= '      <g:price>' . number_format($product->price, 2, '.', '') . ' ' . $currency . '</g:price>' . "\n";
             $xml .= '      <g:availability>' . $availability . '</g:availability>' . "\n";
             $xml .= '      <g:condition>new</g:condition>' . "\n";
             $xml .= '      <g:brand>' . htmlspecialchars($brand, ENT_XML1, 'UTF-8') . '</g:brand>' . "\n";
