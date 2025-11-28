@@ -57,6 +57,7 @@ class GmcConfigController extends Controller
             'data_source_id' => ['nullable', 'string', 'max:255'],
             'credentials_file' => ['required', 'file', 'mimes:json', 'max:2048'],
             'currency' => ['required', 'string', 'size:3'],
+            'currency_rate' => ['nullable', 'numeric', 'min:0', 'max:999999'],
             'content_language' => ['required', 'string', 'max:5'],
             'is_active' => ['nullable', 'boolean'],
         ]);
@@ -91,6 +92,23 @@ class GmcConfigController extends Controller
         $validated['data_source_id'] = $validated['data_source_id'] ?? 'PRODUCT_FEED_API';
         $validated['target_country'] = strtoupper($validated['target_country']);
         $validated['is_active'] = $request->has('is_active');
+
+        // Set default currency_rate if not provided and currency is not USD
+        if (!isset($validated['currency_rate']) || empty($validated['currency_rate'])) {
+            if ($validated['currency'] !== 'USD') {
+                // Set default rate based on currency
+                $defaultRates = [
+                    'GBP' => 0.79,
+                    'VND' => 25000,
+                    'EUR' => 0.92,
+                    'CAD' => 1.35,
+                    'AUD' => 1.52,
+                ];
+                $validated['currency_rate'] = $defaultRates[$validated['currency']] ?? null;
+            } else {
+                $validated['currency_rate'] = 1.0; // USD to USD = 1
+            }
+        }
 
         GmcConfig::create($validated);
 
@@ -141,6 +159,7 @@ class GmcConfigController extends Controller
             'data_source_id' => ['nullable', 'string', 'max:255'],
             'credentials_file' => ['nullable', 'file', 'mimes:json', 'max:2048'],
             'currency' => ['required', 'string', 'size:3'],
+            'currency_rate' => ['nullable', 'numeric', 'min:0', 'max:999999'],
             'content_language' => ['required', 'string', 'max:5'],
             'is_active' => ['nullable', 'boolean'],
         ]);
@@ -189,6 +208,23 @@ class GmcConfigController extends Controller
         $validated['data_source_id'] = $validated['data_source_id'] ?? 'PRODUCT_FEED_API';
         $validated['target_country'] = strtoupper($validated['target_country']);
         $validated['is_active'] = $request->has('is_active');
+
+        // Set default currency_rate if not provided and currency is not USD
+        if (!isset($validated['currency_rate']) || empty($validated['currency_rate'])) {
+            if ($validated['currency'] !== 'USD') {
+                // Set default rate based on currency
+                $defaultRates = [
+                    'GBP' => 0.79,
+                    'VND' => 25000,
+                    'EUR' => 0.92,
+                    'CAD' => 1.35,
+                    'AUD' => 1.52,
+                ];
+                $validated['currency_rate'] = $defaultRates[$validated['currency']] ?? null;
+            } else {
+                $validated['currency_rate'] = 1.0; // USD to USD = 1
+            }
+        }
 
         $config->update($validated);
 

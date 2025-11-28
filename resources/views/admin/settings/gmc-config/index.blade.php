@@ -35,6 +35,7 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thị trường</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Merchant ID</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Currency</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tỉ giá</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
                     </tr>
@@ -59,6 +60,13 @@
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="text-sm text-gray-900">{{ $config->currency }}</span>
                                 <span class="text-xs text-gray-500 ml-1">({{ $config->content_language }})</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                @if($config->currency_rate)
+                                    <span class="text-sm text-gray-900 font-mono">1 USD = {{ number_format($config->currency_rate, $config->currency === 'VND' ? 0 : 6) }} {{ $config->currency }}</span>
+                                @else
+                                    <span class="text-xs text-gray-400">Mặc định</span>
+                                @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 @if($config->is_active)

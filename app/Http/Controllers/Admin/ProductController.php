@@ -1205,6 +1205,12 @@ class ProductController extends Controller
         $currency = $gmcConfig->currency;
         $contentLanguage = $gmcConfig->content_language;
 
+        // Convert product price from USD to target currency
+        // Products are stored in USD, but need to be converted for different markets
+        // Uses currency_rate from GMC config if available
+        $productPriceUSD = (float)$product->price;
+        $productPrice = $this->convertProductPrice($productPriceUSD, $currency, $gmcConfig);
+
         // Calculate shipping cost from database using ShippingCalculator
         $shippingCalculator = new ShippingCalculator();
 
@@ -1224,8 +1230,8 @@ class ProductController extends Controller
         $shippingCostUSD = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
 
         // Convert to target currency if needed
-        // Note: This is a simple conversion. You may want to use a currency conversion service
-        $shippingCost = $this->convertShippingCurrency($shippingCostUSD, $currency, $targetCountry);
+        // Uses currency_rate from GMC config if available
+        $shippingCost = $this->convertShippingCurrency($shippingCostUSD, $currency, $targetCountry, $gmcConfig);
 
         // Fallback to default if calculation failed
         if ($shippingCost <= 0) {
@@ -1252,7 +1258,7 @@ class ProductController extends Controller
             'description' => $description,
             'link' => $productUrl,
             'image_link' => $primaryImage,
-            'price' => number_format($product->price, 2, '.', ''),
+            'price' => number_format($productPrice, 2, '.', ''),
             'currency' => $currency,
             'availability' => $availability,
             'condition' => 'new',
@@ -1369,7 +1375,12 @@ class ProductController extends Controller
                 $xml .= '      <g:image_link>' . htmlspecialchars($primaryImage, ENT_XML1, 'UTF-8') . '</g:image_link>' . "\n";
             }
 
-            $xml .= '      <g:price>' . number_format($product->price, 2, '.', '') . ' ' . $currency . '</g:price>' . "\n";
+            // Convert product price from USD to target currency for XML feed
+            // Uses currency_rate from GMC config if available
+            $productPriceUSD = (float)$product->price;
+            $productPrice = $this->convertProductPrice($productPriceUSD, $currency, $gmcConfig);
+
+            $xml .= '      <g:price>' . number_format($productPrice, 2, '.', '') . ' ' . $currency . '</g:price>' . "\n";
             $xml .= '      <g:availability>' . $availability . '</g:availability>' . "\n";
             $xml .= '      <g:condition>new</g:condition>' . "\n";
             $xml .= '      <g:brand>' . htmlspecialchars($brand, ENT_XML1, 'UTF-8') . '</g:brand>' . "\n";
@@ -1398,12 +1409,49 @@ class ProductController extends Controller
     }
 
     /**
-     * Convert shipping cost from USD to target currency
-     * Simple conversion rates - you may want to use a currency conversion service
+     * Convert product price from USD to target currency
+     * Products are stored in USD, but need to be converted for different markets
+     * Uses currency_rate from GMC config if available, otherwise falls back to default rates
      */
-    private function convertShippingCurrency(float $usdAmount, string $targetCurrency, string $targetCountry): float
+    private function convertProductPrice(float $usdPrice, string $targetCurrency, ?GmcConfig $gmcConfig = null): float
     {
-        // Simple currency conversion rates (you may want to use a live API)
+        // If currency is USD, return as is
+        if ($targetCurrency === 'USD') {
+            return $usdPrice;
+        }
+
+        // Get conversion rate from GMC config if available
+        $conversionRate = null;
+        if ($gmcConfig && $gmcConfig->currency_rate) {
+            $conversionRate = (float)$gmcConfig->currency_rate;
+        }
+
+        // Fallback to default rates if not set in config
+        if (!$conversionRate) {
+            $conversionRate = $this->getDefaultCurrencyConversionRate($targetCurrency);
+        }
+
+        if ($conversionRate) {
+            return $usdPrice * $conversionRate;
+        }
+
+        // Fallback: return USD price if conversion rate not found
+        Log::warning('Product price currency conversion rate not found', [
+            'target_currency' => $targetCurrency,
+            'usd_price' => $usdPrice,
+            'gmc_config_id' => $gmcConfig?->id
+        ]);
+
+        return $usdPrice;
+    }
+
+    /**
+     * Get default currency conversion rate from USD (fallback)
+     * Used when currency_rate is not set in GMC config
+     */
+    private function getDefaultCurrencyConversionRate(string $targetCurrency): ?float
+    {
+        // Default currency conversion rates (fallback)
         $conversionRates = [
             'GBP' => 0.79,  // 1 USD = 0.79 GBP
             'VND' => 25000, // 1 USD = 25000 VND
@@ -1412,20 +1460,40 @@ class ProductController extends Controller
             'AUD' => 1.52,  // 1 USD = 1.52 AUD
         ];
 
+        return $conversionRates[$targetCurrency] ?? null;
+    }
+
+    /**
+     * Convert shipping cost from USD to target currency
+     * Uses currency_rate from GMC config if available, otherwise falls back to default rates
+     */
+    private function convertShippingCurrency(float $usdAmount, string $targetCurrency, string $targetCountry, ?GmcConfig $gmcConfig = null): float
+    {
         // If currency is USD, return as is
         if ($targetCurrency === 'USD') {
             return $usdAmount;
         }
 
-        // Convert if rate exists
-        if (isset($conversionRates[$targetCurrency])) {
-            return $usdAmount * $conversionRates[$targetCurrency];
+        // Get conversion rate from GMC config if available
+        $conversionRate = null;
+        if ($gmcConfig && $gmcConfig->currency_rate) {
+            $conversionRate = (float)$gmcConfig->currency_rate;
+        }
+
+        // Fallback to default rates if not set in config
+        if (!$conversionRate) {
+            $conversionRate = $this->getDefaultCurrencyConversionRate($targetCurrency);
+        }
+
+        if ($conversionRate) {
+            return $usdAmount * $conversionRate;
         }
 
         // Fallback: return USD amount if conversion rate not found
         Log::warning('Shipping currency conversion rate not found', [
             'target_currency' => $targetCurrency,
-            'usd_amount' => $usdAmount
+            'usd_amount' => $usdAmount,
+            'gmc_config_id' => $gmcConfig?->id
         ]);
 
         return $usdAmount;

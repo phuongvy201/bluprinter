@@ -150,10 +150,34 @@
                     required
                     maxlength="3"
                     class="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200/50 @error('currency') border-red-500 @enderror"
+                    onchange="updateCurrencyRate(this.value)"
                 >
                 @error('currency')
                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                 @enderror
+            </div>
+
+            <div>
+                <label for="currency_rate" class="block text-sm font-semibold text-gray-900 mb-1">
+                    Tỉ giá (USD → Currency) <span class="text-gray-500 text-xs">(Tùy chọn)</span>
+                </label>
+                <input
+                    type="number"
+                    name="currency_rate"
+                    id="currency_rate"
+                    value="{{ old('currency_rate', $config->currency_rate) }}"
+                    placeholder="0.79"
+                    step="0.000001"
+                    min="0"
+                    class="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200/50 @error('currency_rate') border-red-500 @enderror"
+                >
+                @error('currency_rate')
+                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+                <p class="mt-2 text-xs text-gray-500">
+                    Tỉ giá chuyển đổi từ USD. Ví dụ: 0.79 cho GBP (1 USD = 0.79 GBP), 25000 cho VND (1 USD = 25000 VND). 
+                    Có thể cập nhật khi tỉ giá thay đổi.
+                </p>
             </div>
 
             <div>
@@ -213,6 +237,25 @@ function updateCurrencyAndLanguage(countryCode) {
     if (countryCode && currencyMap[countryCode]) {
         document.getElementById('currency').value = currencyMap[countryCode];
         document.getElementById('content_language').value = languageMap[countryCode] || 'en';
+        // Update currency rate when currency changes
+        updateCurrencyRate(currencyMap[countryCode]);
+    }
+}
+
+function updateCurrencyRate(currency) {
+    const defaultRates = {
+        'USD': 1.0,
+        'GBP': 0.79,
+        'VND': 25000,
+        'EUR': 0.92,
+        'CAD': 1.35,
+        'AUD': 1.52,
+    };
+    
+    const rateInput = document.getElementById('currency_rate');
+    if (rateInput && !rateInput.value && defaultRates[currency]) {
+        rateInput.value = defaultRates[currency];
+        rateInput.placeholder = defaultRates[currency].toString();
     }
 }
 </script>

@@ -14,12 +14,14 @@ class GmcConfig extends Model
         'data_source_id',
         'credentials_path',
         'currency',
+        'currency_rate',
         'content_language',
         'is_active',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'currency_rate' => 'decimal:6',
     ];
 
     // Helper Methods
