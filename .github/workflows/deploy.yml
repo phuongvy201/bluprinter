@@ -9,61 +9,59 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
+
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 3.107.252.204 >> ~/.ssh/known_hosts
+
       - name: Deploy to EC2
         run: |
           ssh -i ~/.ssh/id_ed25519 ec2-user@3.107.252.204 << 'EOF'
             set -e
             cd /var/www/html
-               # 🔧 Fix Git "dubious ownership"
+
+            # 🔧 Fix Git "dubious ownership"
             git config --global --add safe.directory /var/www/html
+
             echo "🔄 Pulling latest code..."
             git fetch origin main
             git reset --hard origin/main
+
             echo "🔐 Fixing permissions..."
             sudo chown -R ec2-user:nginx /var/www/html/storage
             sudo chown -R ec2-user:nginx /var/www/html/bootstrap/cache
             sudo chmod -R 775 /var/www/html/storage
             sudo chmod -R 775 /var/www/html/bootstrap/cache
-            echo "📦 Installing composer dependencies..."
-            sudo composer install --no-dev --optimize-autoloader
+
+            # 📦 Composer install if needed
+            if ! cmp -s composer.json composer.lock; then
+              echo "📦 composer.json changed, installing dependencies..."
+              sudo composer install --no-dev --optimize-autoloader
+            else
+              echo "📦 No composer changes, skipping composer install"
+            fi
+
+            # 🗄 Run migrations
+            echo "🗄 Running migrations..."
+            php artisan migrate --force
+
             echo "🧹 Clearing Laravel cache..."
-            if ! php artisan config:clear; then
-              echo "❌ Failed to clear config cache"
-              exit 1
-            fi
-            if ! php artisan cache:clear; then
-              echo "❌ Failed to clear application cache"
-              exit 1
-            fi
-            if ! php artisan route:clear; then
-              echo "❌ Failed to clear route cache"
-              exit 1
-            fi
-            if ! php artisan view:clear; then
-              echo "❌ Failed to clear view cache"
-              exit 1
-            fi
+            php artisan config:clear || { echo "❌ Failed to clear config cache"; exit 1; }
+            php artisan cache:clear || { echo "❌ Failed to clear application cache"; exit 1; }
+            php artisan route:clear || { echo "❌ Failed to clear route cache"; exit 1; }
+            php artisan view:clear || { echo "❌ Failed to clear view cache"; exit 1; }
+
             echo "⚙️ Optimizing Laravel..."
-            if ! php artisan config:cache; then
-              echo "❌ Failed to cache config"
-              exit 1
-            fi
-            if ! php artisan route:cache; then
-              echo "❌ Failed to cache routes"
-              exit 1
-            fi
-            if ! php artisan view:cache; then
-              echo "❌ Failed to cache views"
-              exit 1
-            fi
+            php artisan config:cache || { echo "❌ Failed to cache config"; exit 1; }
+            php artisan route:cache || { echo "❌ Failed to cache routes"; exit 1; }
+            php artisan view:cache || { echo "❌ Failed to cache views"; exit 1; }
+
             echo "🚀 Restarting PHP-FPM and Nginx..."
             sudo systemctl restart php-fpm
             sudo systemctl restart nginx
+
             echo "✅ Deployment completed successfully!"
           EOF
