@@ -16,6 +16,7 @@
     
     // Get currency for current domain
     $currentCurrency = currency();
+    $currencySymbol = currency_symbol();
     $productPriceUSD = (float) ($product->price ?? $product->base_price);
     $productPriceConverted = convert_currency($productPriceUSD);
     $productBasePriceUSD = (float) ($product->base_price ?? 0);
@@ -28,6 +29,7 @@ const TIKTOK_PRODUCT_NAME = {!! json_encode($product->name) !!};
 const TIKTOK_PRIMARY_CATEGORY = @json($primaryCategory);
 const TIKTOK_PRODUCT_PRICE = {{ $productPriceConverted }};
 const CURRENT_CURRENCY = @json($currentCurrency);
+const CURRENCY_SYMBOL = @json($currencySymbol);
 
 // Track Facebook Pixel ViewContent for product detail page
 document.addEventListener('DOMContentLoaded', function() {
@@ -798,7 +800,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                                 <input type="radio" 
                                                        name="customization_{{ $index }}_{{ $customization['type'] ?? 'option' }}" 
                                                        value="{{ $option['value'] ?? $option['label'] ?? $option }}" 
-                                                       data-price="{{ $option['price'] ?? 0 }}"
+                                                       data-price="{{ convert_currency((float)($option['price'] ?? 0)) }}"
                                                        onchange="updateCustomizationPrice()"
                                                        {{ (isset($customization['required']) && $customization['required']) ? 'required' : '' }}
                                                        class="customization-input text-[#005366] focus:ring-[#005366] w-4 h-4">
@@ -819,7 +821,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <textarea name="customization_{{ $index }}_{{ $customization['type'] ?? 'customization' }}"
                                                   placeholder="{{ $customization['placeholder'] ?? 'Enter your text here...' }}" 
                                                   rows="{{ $customization['rows'] ?? 3 }}"
-                                                  data-price="{{ $customization['price'] ?? 0 }}"
+                                                  data-price="{{ convert_currency((float)($customization['price'] ?? 0)) }}"
                                                   data-label="{{ $customization['label'] ?? $customization['type'] ?? 'Customization' }}"
                                                   oninput="updateCustomizationPrice()"
                                                   {{ (isset($customization['required']) && $customization['required']) ? 'required' : '' }}
@@ -834,7 +836,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                                name="customization_{{ $index }}_{{ $customization['type'] ?? 'customization' }}"
                                                placeholder="{{ $customization['placeholder'] ?? 'Enter ' . ($customization['type'] ?? 'customization') . '...' }}" 
                                                value="{{ old('customization_' . $index) }}"
-                                               data-price="{{ $customization['price'] ?? 0 }}"
+                                               data-price="{{ convert_currency((float)($customization['price'] ?? 0)) }}"
                                                data-label="{{ $customization['label'] ?? $customization['type'] ?? 'Customization' }}"
                                                oninput="updateCustomizationPrice()"
                                                {{ (isset($customization['required']) && $customization['required']) ? 'required' : '' }}
@@ -1071,13 +1073,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     <!-- Hidden data for JavaScript -->
                     <script type="application/json" id="variants-data">
                         {!! $variants->map(function($variant) use ($product) {
+                            $variantPriceUSD = (float) ($variant->price ?? $product->base_price);
+                            $variantPriceConverted = convert_currency($variantPriceUSD);
                             return [
                                 'id' => $variant->id,
                                 'attributes' => $variant->attributes ?? [],
                                 'size' => $variant->attributes['Size'] ?? null,
                                 'color' => $variant->attributes['Color'] ?? null,
                                 'colour' => $variant->attributes['Colour'] ?? null,
-                                'price' => $variant->price ?? $product->base_price,
+                                'price' => $variantPriceConverted,
+                                'price_usd' => $variantPriceUSD, // Giữ giá USD gốc để tính toán
                                 'quantity' => $variant->quantity,
                                 'variant_name' => $variant->variant_name,
                                 'media' => $variant->media
@@ -2826,7 +2831,7 @@ function updateVariantSelection() {
         document.getElementById('selected-variant-name').textContent = variantName;
         
         // Update price
-        document.getElementById('selected-variant-price').textContent = `$${parseFloat(matchingVariant.price).toFixed(2)}`;
+        document.getElementById('selected-variant-price').textContent = `${CURRENCY_SYMBOL}${parseFloat(matchingVariant.price).toFixed(2)}`;
         
         // Update stock
         const stockElement = document.getElementById('selected-variant-stock');
@@ -2911,7 +2916,7 @@ function updateVariantSelection() {
         // Update main price display
         const mainPriceElement = document.querySelector('.text-4xl.font-bold.text-\\[\\#E2150C\\]');
         if (mainPriceElement) {
-            mainPriceElement.textContent = `$${parseFloat(matchingVariant.price).toFixed(2)}`;
+            mainPriceElement.textContent = `${CURRENCY_SYMBOL}${parseFloat(matchingVariant.price).toFixed(2)}`;
         }
     } else {
         // No matching variant found, enable button and reset text
@@ -3043,7 +3048,7 @@ function loadRecentlyViewed() {
                     ${product.name.length > 30 ? product.name.substring(0, 30) + '...' : product.name}
                 </h4>
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-[#E2150C]">$${parseFloat(product.price).toFixed(2)}</span>
+                    <span class="text-xs font-bold text-[#E2150C]">${CURRENCY_SYMBOL}${parseFloat(product.price).toFixed(2)}</span>
                     <div class="flex items-center text-xs text-gray-500">
                         <svg class="w-3 h-3 text-yellow-400 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
@@ -3910,8 +3915,12 @@ function showCartPopup(addedProduct) {
 function renderCartPopup(popup, cartItems, summary, shippingDetails) {
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
     
-    // Calculate subtotal including customizations
-    const subtotal = parseFloat(summary.subtotal || cartItems.reduce((sum, item) => {
+    // Get currency and rate from summary or use defaults
+    const currency = summary.currency || CURRENT_CURRENCY || 'USD';
+    const currencyRate = parseFloat(summary.currency_rate || 1.0);
+    
+    // Calculate subtotal including customizations (use converted if available)
+    const baseSubtotal = parseFloat(summary.subtotal || cartItems.reduce((sum, item) => {
         const basePrice = parseFloat(item.price) || 0;
         let customizationTotal = 0;
         
@@ -3927,9 +3936,17 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
         return sum + ((basePrice + customizationTotal) * item.quantity);
     }, 0));
     
-    // Check if order qualifies for free shipping (>= $100)
-    const qualifiesForFreeShipping = subtotal >= 100;
-    const shippingCost = qualifiesForFreeShipping ? 0 : (summary.shipping || 0);
+    // Use converted subtotal if available, otherwise convert from base
+    const subtotal = summary.converted_subtotal !== undefined 
+        ? parseFloat(summary.converted_subtotal) 
+        : (currency !== 'USD' ? baseSubtotal * currencyRate : baseSubtotal);
+    
+    // Check if order qualifies for free shipping (>= $100 in base currency)
+    const qualifiesForFreeShipping = baseSubtotal >= 100;
+    const baseShipping = parseFloat(summary.shipping || 0);
+    const shippingCost = qualifiesForFreeShipping ? 0 : (summary.converted_shipping !== undefined 
+        ? parseFloat(summary.converted_shipping) 
+        : (currency !== 'USD' ? baseShipping * currencyRate : baseShipping));
     const totalPrice = subtotal + shippingCost;
     
     console.log('Cart popup calculations:', {
@@ -3960,9 +3977,22 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
         <!-- Total Section -->
         <div class="border-t border-gray-200 p-6 bg-gray-50">
             <div class="space-y-2 mb-4">
+                <!-- Exchange Rate Display (only show if currency is not USD) -->
+                ${currency !== 'USD' && currencyRate !== 1.0 ? 
+                    `<div class="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-200 mb-3">
+                        <div class="flex justify-between items-center">
+                            <span>Exchange Rate:</span>
+                            <span class="font-medium">1 USD = ${currencyRate.toFixed(4)} ${currency}</span>
+                        </div>
+                        <div class="text-[10px] text-gray-400 mt-1">
+                            Prices converted from USD
+                        </div>
+                    </div>` : ''
+                }
+                
                 <div class="flex justify-between text-gray-600">
                     <span>Subtotal (${totalItems} items)</span>
-                    <span class="font-semibold">$${subtotal.toFixed(2)}</span>
+                    <span class="font-semibold">${CURRENCY_SYMBOL}${subtotal.toFixed(2)}</span>
                 </div>
                 ${qualifiesForFreeShipping ? 
                     `<div class="flex justify-between text-gray-600">
@@ -3978,7 +4008,7 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
                             <div class="relative">
                                 <select id="popupShippingCountry" class="text-sm border-2 border-gray-200 rounded-lg px-3 py-2 appearance-none bg-white pr-8 cursor-pointer hover:border-gray-300 focus:border-[#005366] focus:outline-none transition-colors min-w-[80px] [&::-ms-expand]:hidden [&::-webkit-appearance]:none">
                                     <option value="US">🇺🇸 US</option>
-                                    <option value="UK">🇺k UK</option>
+                                    <option value="GB">🇬🇧 GB</option>
                                 </select>
                                 <div class="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
                                     <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3990,14 +4020,14 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
                                 ${summary.shipping !== undefined ? 
                                     (summary.shipping == 0 ? 
                                         '<span class="text-green-600">FREE</span>' : 
-                                        '$' + parseFloat(summary.shipping).toFixed(2)
+                                        CURRENCY_SYMBOL + (summary.converted_shipping !== undefined ? parseFloat(summary.converted_shipping).toFixed(2) : parseFloat(summary.shipping).toFixed(2))
                                     ) : 'Calculating...'
                                 }
                             </span>
                         </div>
                     </div>
                     <div class="text-xs text-blue-600">
-                        Add $${(100 - subtotal).toFixed(2)} more for free shipping!
+                        Add ${CURRENCY_SYMBOL}${(currency !== 'USD' ? (100 * currencyRate - subtotal).toFixed(2) : (100 - subtotal).toFixed(2))} more for free shipping!
                     </div>`
                 }
                 <div class="text-xs text-gray-500">
@@ -4007,7 +4037,7 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
             </div>
             <div class="border-t pt-3 flex justify-between items-center text-xl font-bold">
                 <span>Total:</span>
-                <span class="text-[#005366]">$${parseFloat(totalPrice).toFixed(2)}</span>
+                <span class="text-[#005366]">${CURRENCY_SYMBOL}${parseFloat(totalPrice).toFixed(2)}</span>
             </div>
         </div>
         
@@ -4061,7 +4091,7 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
             if (popupShippingCost && summary.shipping !== undefined) {
                 popupShippingCost.innerHTML = summary.shipping == 0 ? 
                     '<span class="text-green-600">FREE</span>' : 
-                    '$' + parseFloat(summary.shipping).toFixed(2);
+                    CURRENCY_SYMBOL + parseFloat(summary.shipping).toFixed(2);
             }
         }
         
@@ -4236,7 +4266,7 @@ function generateCartPopupItems(cartItems) {
                 ${item.customizations && Object.keys(item.customizations).length > 0 ? `
                     <div class="text-xs text-gray-600 mb-2">
                         ${Object.entries(item.customizations).map(([key, custom]) => 
-                                    `<div>${key}: ${custom.value}${custom.price > 0 ? ` (+$${parseFloat(custom.price).toFixed(2)})` : ''}</div>`
+                                    `<div>${key}: ${custom.value}${custom.price > 0 ? ` (+${CURRENCY_SYMBOL}${parseFloat(custom.price).toFixed(2)})` : ''}</div>`
                                 ).join('')}
                     </div>
                 ` : ''}
@@ -4262,9 +4292,9 @@ function generateCartPopupItems(cartItems) {
                         </button>
                     </div>
                             <div class="text-right">
-                                <p class="text-lg font-bold text-[#005366]">$${calculateItemTotal(item).toFixed(2)}</p>
+                                <p class="text-lg font-bold text-[#005366]">${CURRENCY_SYMBOL}${calculateItemTotal(item).toFixed(2)}</p>
                                 ${item.quantity > 1 ? `
-                                    <p class="text-xs text-gray-500">$${parseFloat(item.price).toFixed(2)} each</p>
+                                    <p class="text-xs text-gray-500">${CURRENCY_SYMBOL}${parseFloat(item.price).toFixed(2)} each</p>
                                 ` : ''}
                 </div>
             </div>
@@ -4443,25 +4473,63 @@ function refreshCartPopupContent() {
             // Update totals
             const totalItems = data.cart_items.reduce((sum, item) => sum + item.quantity, 0);
             const summary = data.summary || {};
+            const currency = data.currency || CURRENT_CURRENCY || 'USD';
+            const currencyRate = parseFloat(data.currency_rate || 1.0);
+            
+            // Use converted subtotal if available
+            const baseSubtotal = parseFloat(summary.subtotal || 0);
+            const convertedSubtotal = summary.converted_subtotal !== undefined 
+                ? parseFloat(summary.converted_subtotal) 
+                : (currency !== 'USD' ? baseSubtotal * currencyRate : baseSubtotal);
             
             // Update subtotal
             const subtotalElements = document.querySelectorAll('#cart-popup-overlay .space-y-2 .flex.justify-between');
             if (subtotalElements[0]) {
                 const subtotalSpan = subtotalElements[0].querySelector('span:last-child');
                 const subtotalLabel = subtotalElements[0].querySelector('span:first-child');
-                if (subtotalSpan) subtotalSpan.textContent = `$${parseFloat(summary.subtotal || 0).toFixed(2)}`;
+                if (subtotalSpan) subtotalSpan.textContent = `${CURRENCY_SYMBOL}${convertedSubtotal.toFixed(2)}`;
                 if (subtotalLabel) subtotalLabel.textContent = `Subtotal (${totalItems} items)`;
             }
             
-            // Update shipping with freeship logic
-            const subtotal = parseFloat(summary.subtotal || 0);
-            const qualifiesForFreeShipping = subtotal >= 100;
-            const actualShipping = qualifiesForFreeShipping ? 0 : (summary.shipping || 0);
+            // Update exchange rate display if needed
+            const exchangeRateDisplay = document.querySelector('#cart-popup-overlay .text-xs.text-gray-500.bg-gray-50');
+            if (currency !== 'USD' && currencyRate !== 1.0) {
+                if (!exchangeRateDisplay) {
+                    // Add exchange rate display before subtotal
+                    const totalsSection = document.querySelector('#cart-popup-overlay .space-y-2');
+                    if (totalsSection) {
+                        const exchangeRateDiv = document.createElement('div');
+                        exchangeRateDiv.className = 'text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-200 mb-3';
+                        exchangeRateDiv.innerHTML = `
+                            <div class="flex justify-between items-center">
+                                <span>Exchange Rate:</span>
+                                <span class="font-medium">1 USD = ${currencyRate.toFixed(4)} ${currency}</span>
+                            </div>
+                            <div class="text-[10px] text-gray-400 mt-1">
+                                Prices converted from USD
+                            </div>
+                        `;
+                        totalsSection.insertBefore(exchangeRateDiv, totalsSection.firstChild);
+                    }
+                }
+            } else if (exchangeRateDisplay) {
+                exchangeRateDisplay.remove();
+            }
+            
+            // Update shipping with freeship logic (use base USD amount for freeship check)
+            const qualifiesForFreeShipping = baseSubtotal >= 100;
+            const baseShipping = parseFloat(summary.shipping || 0);
+            const convertedShipping = summary.converted_shipping !== undefined 
+                ? parseFloat(summary.converted_shipping) 
+                : (currency !== 'USD' ? baseShipping * currencyRate : baseShipping);
+            const actualShipping = qualifiesForFreeShipping ? 0 : convertedShipping;
             
             console.log('Refresh popup freeship check:', {
-                subtotal: subtotal,
+                baseSubtotal: baseSubtotal,
+                convertedSubtotal: convertedSubtotal,
                 qualifiesForFreeShipping: qualifiesForFreeShipping,
-                originalShipping: summary.shipping,
+                baseShipping: baseShipping,
+                convertedShipping: convertedShipping,
                 actualShipping: actualShipping
             });
             
@@ -4473,7 +4541,7 @@ function refreshCartPopupContent() {
                 } else {
                     popupShippingCost.innerHTML = actualShipping === 0 ? 
                         '<span class="text-green-600">FREE</span>' : 
-                        '$' + parseFloat(actualShipping).toFixed(2);
+                        CURRENCY_SYMBOL + actualShipping.toFixed(2);
                 }
             }
             
@@ -4486,7 +4554,7 @@ function refreshCartPopupContent() {
                         shippingSpan.innerHTML = '<span class="text-green-600">FREE</span>';
                     } else {
                         shippingSpan.className = 'font-semibold';
-                        shippingSpan.textContent = `$${parseFloat(actualShipping).toFixed(2)}`;
+                        shippingSpan.textContent = `${CURRENCY_SYMBOL}${parseFloat(actualShipping).toFixed(2)}`;
                     }
                 }
             }
@@ -4543,9 +4611,11 @@ function refreshCartPopupContent() {
             // Update total with correct shipping cost (considering freeship)
             const totalElement = document.querySelector('#cart-popup-overlay .border-t.pt-3 span:last-child');
             if (totalElement) {
-                const newTotal = subtotal + actualShipping;
-                totalElement.textContent = `$${newTotal.toFixed(2)}`;
-                console.log('Updated total with freeship:', newTotal);
+                const convertedTotal = summary.converted_total !== undefined 
+                    ? parseFloat(summary.converted_total) 
+                    : (convertedSubtotal + actualShipping);
+                totalElement.textContent = `${CURRENCY_SYMBOL}${convertedTotal.toFixed(2)}`;
+                console.log('Updated total with freeship:', convertedTotal);
             }
             
             // Update header cart count
@@ -4733,9 +4803,9 @@ function generateCrossSellProducts() {
             <h4 class="font-medium text-gray-900 text-xs line-clamp-2 mb-1">${product.name}</h4>
             <div class="flex items-center justify-between">
                 <div class="flex flex-col">
-                    <span class="text-sm font-bold text-[#005366]">$${product.price}</span>
+                    <span class="text-sm font-bold text-[#005366]">${CURRENCY_SYMBOL}${product.price}</span>
                     ${product.originalPrice && product.originalPrice > product.price ? `
-                        <span class="text-xs text-gray-500 line-through">$${product.originalPrice}</span>
+                        <span class="text-xs text-gray-500 line-through">${CURRENCY_SYMBOL}${product.originalPrice}</span>
                     ` : ''}
                 </div>
                 <button class="cross-sell-add-btn bg-[#005366] text-white text-xs px-3 py-1 rounded hover:bg-[#003d4d] transition-colors flex items-center space-x-1">
@@ -4959,7 +5029,8 @@ function updateCustomizationPrice() {
     
     // Update display
     const basePriceElement = document.getElementById('base-price');
-    const basePrice = parseFloat(basePriceElement.dataset.price) || 0;
+    // Sử dụng data-price-converted (đã convert) thay vì data-price (USD gốc)
+    const basePrice = parseFloat(basePriceElement.dataset.priceConverted || basePriceElement.dataset.price) || 0;
     const totalPrice = basePrice + customizationTotal;
     
     const customizationPriceElement = document.getElementById('customization-price');
@@ -4968,8 +5039,8 @@ function updateCustomizationPrice() {
     
     if (customizationTotal > 0) {
         priceDisplay.classList.remove('hidden');
-        customizationPriceElement.textContent = '+$' + customizationTotal.toFixed(2);
-        totalPriceElement.textContent = '$' + totalPrice.toFixed(2);
+        customizationPriceElement.textContent = '+' + CURRENCY_SYMBOL + customizationTotal.toFixed(2);
+        totalPriceElement.textContent = CURRENCY_SYMBOL + totalPrice.toFixed(2);
     } else {
         priceDisplay.classList.add('hidden');
     }
@@ -5391,30 +5462,44 @@ async function handlePopupCountryChange() {
         console.log('Shipping calculation response:', data);
         
         if (data.success && data.shipping) {
-            const shipping = parseFloat(data.shipping.total_shipping || 0);
-            console.log('New shipping cost:', shipping);
+            const baseShipping = parseFloat(data.shipping.total_shipping || 0);
+            const currency = data.currency || CURRENT_CURRENCY || 'USD';
+            const currencyRate = parseFloat(data.currency_rate || 1.0);
+            const convertedShipping = data.converted_shipping !== undefined 
+                ? parseFloat(data.converted_shipping) 
+                : (currency !== 'USD' ? baseShipping * currencyRate : baseShipping);
             
-            // Get current subtotal to check for freeship qualification
+            console.log('New shipping cost:', {
+                base: baseShipping,
+                converted: convertedShipping,
+                currency: currency,
+                rate: currencyRate
+            });
+            
+            // Get current subtotal to check for freeship qualification (use base USD amount)
             const subtotalElements = document.querySelectorAll('#cart-popup-overlay .space-y-2 .flex.justify-between');
-            let subtotal = 0;
+            let baseSubtotal = 0;
             
             subtotalElements.forEach(element => {
                 const text = element.textContent;
                 if (text.includes('items')) {
                     const subtotalSpan = element.querySelector('span:last-child');
                     if (subtotalSpan) {
-                        subtotal = parseFloat(subtotalSpan.textContent.replace('$', '').replace(',', '')) || 0;
+                        // Extract numeric value and convert back to USD if needed
+                        const displayedValue = parseFloat(subtotalSpan.textContent.replace(CURRENCY_SYMBOL, '').replace(',', '')) || 0;
+                        baseSubtotal = currency !== 'USD' ? displayedValue / currencyRate : displayedValue;
                     }
                 }
             });
             
-            const qualifiesForFreeShipping = subtotal >= 100;
-            const displayShipping = qualifiesForFreeShipping ? 0 : shipping;
+            const qualifiesForFreeShipping = baseSubtotal >= 100;
+            const displayShipping = qualifiesForFreeShipping ? 0 : convertedShipping;
             
             console.log('Freeship check:', {
-                subtotal: subtotal,
+                baseSubtotal: baseSubtotal,
                 qualifiesForFreeShipping: qualifiesForFreeShipping,
-                originalShipping: shipping,
+                originalShipping: baseShipping,
+                convertedShipping: convertedShipping,
                 displayShipping: displayShipping
             });
             
@@ -5425,7 +5510,7 @@ async function handlePopupCountryChange() {
                 } else {
                     popupShippingCost.innerHTML = displayShipping === 0 ? 
                         '<span class="text-green-600">FREE</span>' : 
-                        '$' + displayShipping.toFixed(2);
+                        CURRENCY_SYMBOL + displayShipping.toFixed(2);
                 }
                 console.log('Updated shipping cost element');
             }
@@ -5499,15 +5584,15 @@ function updatePopupTotal(newShipping) {
         } else {
             popupShippingCost.innerHTML = actualShipping === 0 ? 
                 '<span class="text-green-600">FREE</span>' : 
-                '$' + actualShipping.toFixed(2);
+                CURRENCY_SYMBOL + actualShipping.toFixed(2);
         }
     }
     
     // Update total display
     const totalElement = document.querySelector('#cart-popup-overlay .border-t.pt-3 span:last-child');
     if (totalElement) {
-        totalElement.textContent = '$' + newTotal.toFixed(2);
-        console.log('Updated total to:', '$' + newTotal.toFixed(2));
+        totalElement.textContent = CURRENCY_SYMBOL + newTotal.toFixed(2);
+        console.log('Updated total to:', CURRENCY_SYMBOL + newTotal.toFixed(2));
     } else {
         console.error('Total element not found');
     }

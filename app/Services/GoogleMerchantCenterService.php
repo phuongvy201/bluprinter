@@ -29,7 +29,8 @@ class GoogleMerchantCenterService
         $instance->merchantId = $config->merchant_id;
         $instance->dataSourceId = $config->data_source_id;
         $instance->targetCountry = $config->target_country;
-        $instance->currency = $config->currency;
+        // Get currency from DomainCurrencyConfig
+        $instance->currency = \App\Models\DomainCurrencyConfig::getCurrencyForDomain($config->domain) ?? 'USD';
         $instance->contentLanguage = $config->content_language;
 
         $credentialsPath = $config->credentials_path;
@@ -45,7 +46,8 @@ class GoogleMerchantCenterService
             $this->merchantId = $config->merchant_id;
             $this->dataSourceId = $config->data_source_id;
             $this->targetCountry = $config->target_country;
-            $this->currency = $config->currency;
+            // Get currency from DomainCurrencyConfig
+            $this->currency = \App\Models\DomainCurrencyConfig::getCurrencyForDomain($config->domain) ?? 'USD';
             $this->contentLanguage = $config->content_language;
             $credentialsPath = $config->credentials_path;
         } else {

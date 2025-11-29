@@ -3,6 +3,10 @@
 @section('title', 'Shopping Cart')
 
 @section('content')
+@php
+    $currentCurrency = currency();
+    $currencySymbol = currency_symbol();
+@endphp
 <div class="bg-gray-50 min-h-screen py-8">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Header -->
@@ -115,7 +119,7 @@
                                                 <p class="text-sm text-gray-700">
                                                     <span class="font-medium">{{ $key }}:</span> {{ $customization['value'] }}
                                                     @if(isset($customization['price']) && $customization['price'] > 0)
-                                                        <span class="text-[#005366]">(+${{ number_format($customization['price'], 2) }})</span>
+                                                        <span class="text-[#005366]">(+{{ format_price_usd((float) $customization['price']) }})</span>
                                                     @endif
                                                 </p>
                                             @endforeach
@@ -141,9 +145,9 @@
                                             </button>
                                         </div>
                                         <div class="text-right">
-                                            <p class="text-2xl font-bold text-[#005366]">${{ number_format($item->getTotalPriceWithCustomizations(), 2) }}</p>
+                                            <p class="text-2xl font-bold text-[#005366]">{{ format_price_usd((float) $item->getTotalPriceWithCustomizations()) }}</p>
                                             @if($item->quantity > 1)
-                                                <p class="text-sm text-gray-500">${{ number_format($item->getTotalPriceWithCustomizations() / $item->quantity, 2) }} each</p>
+                                                <p class="text-sm text-gray-500">{{ format_price_usd((float) ($item->getTotalPriceWithCustomizations() / $item->quantity)) }} each</p>
                                             @endif
                                         </div>
                                     </div>
@@ -161,7 +165,7 @@
                         <div class="space-y-3 mb-6">
                             <div class="flex justify-between text-gray-600">
                                 <span>Subtotal ({{ $cartItems->sum('quantity') }} items)</span>
-                                <span class="font-semibold">${{ number_format($subtotal, 2) }}</span>
+                                <span class="font-semibold">{{ format_price_usd((float) $subtotal) }}</span>
                             </div>
                             
                         <!-- Delivery Information -->
@@ -194,14 +198,14 @@
                                     @if($actualShipping == 0)
                                         <span class="text-green-600">FREE</span>
                                     @else
-                                        ${{ number_format($actualShipping, 2) }}
+                                        {{ format_price_usd((float) $actualShipping) }}
                                     @endif
                                 </span>
                             </div>
                             
                             <div class="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
                                 <span>Total</span>
-                                <span class="text-[#005366]">${{ number_format($actualTotal, 2) }}</span>
+                                <span class="text-[#005366]">{{ format_price_usd((float) $actualTotal) }}</span>
                             </div>
                             
                             {{-- Freeship Messages --}}
@@ -211,7 +215,7 @@
                                 </div>
                             @else
                                 <div class="text-xs text-blue-600 mt-2">
-                                    Add ${{ number_format(100 - $subtotal, 2) }} more for free shipping!
+                                    Add {{ format_price_usd((float) (100 - $subtotal)) }} more for free shipping!
                                 </div>
                             @endif
                         </div>
@@ -362,7 +366,7 @@
                                         </div>
                                     </div>
                                     <div class="text-right">
-                                        <div class="text-sm font-medium text-gray-900">${{ number_format($shippingCost, 2) }}</div>
+                                    <div class="text-sm font-medium text-gray-900">{{ format_price_usd((float) $shippingCost) }}</div>
                                         <div class="text-xs text-gray-500">{{ $rateName }}</div>
                                     </div>
                                 </div>
@@ -532,7 +536,7 @@ function buildEditCartModalContent(cartItem) {
                 <img src="${getProductImage(product)}" alt="${product.name}" class="w-24 h-24 object-cover rounded-lg">
                 <div>
                     <h3 class="text-lg font-semibold text-gray-900">${product.name}</h3>
-                    <p class="text-gray-600">$${parseFloat(cartItem.price).toFixed(2)} each</p>
+                    <p class="text-gray-600">${CURRENCY_SYMBOL}${parseFloat(cartItem.price).toFixed(2)} each</p>
                 </div>
             </div>
             
@@ -591,7 +595,7 @@ function buildEditCartModalContent(cartItem) {
             <div class="border-t pt-4">
                 <div class="flex justify-between items-center">
                     <span class="text-lg font-semibold text-gray-900">Total</span>
-                    <span class="text-2xl font-bold text-[#005366]" id="modalTotal${cartItem.id}">$${(parseFloat(cartItem.price) * cartItem.quantity).toFixed(2)}</span>
+                    <span class="text-2xl font-bold text-[#005366]" id="modalTotal${cartItem.id}">${CURRENCY_SYMBOL}${(parseFloat(cartItem.price) * cartItem.quantity).toFixed(2)}</span>
                 </div>
             </div>
             
@@ -842,7 +846,7 @@ function loadRecentlyViewed() {
                         </div>
                         <span class="text-xs text-gray-500">4.5</span>
                     </div>
-                    <p class="text-base font-bold text-[#005366]">$${parseFloat(product.price).toFixed(2)}</p>
+                    <p class="text-base font-bold text-[#005366]">${CURRENCY_SYMBOL}${parseFloat(product.price).toFixed(2)}</p>
                 </div>
             </a>
         </div>
@@ -972,14 +976,14 @@ async function updateShippingForCountry(countryCode, countryName) {
                 if (qualifiesForFreeShipping) {
                     shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
                 } else {
-                    shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
+                    shippingCostElement.innerHTML = `${CURRENCY_SYMBOL}${newShipping.toFixed(2)}`;
                 }
             }
             
             // Update total
             const totalElement = document.querySelector('.text-\\[\\#005366\\]');
             if (totalElement) {
-                totalElement.textContent = `$${newTotal.toFixed(2)}`;
+                totalElement.textContent = `${CURRENCY_SYMBOL}${newTotal.toFixed(2)}`;
             }
             
             // Update freeship messages
@@ -1030,7 +1034,7 @@ function updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShippi
             const remainingAmount = (100 - subtotal).toFixed(2);
             const progressMsg = document.createElement('div');
             progressMsg.className = 'freeship-progress text-xs text-blue-600 mt-2';
-            progressMsg.textContent = `Add $${remainingAmount} more for free shipping!`;
+            progressMsg.textContent = `Add ${CURRENCY_SYMBOL}${remainingAmount} more for free shipping!`;
             shippingSection.insertBefore(progressMsg, shippingSection.querySelector('.border-t.pt-3'));
         }
     }
@@ -1169,7 +1173,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const remainingAmount = (100 - subtotal).toFixed(2);
                 const progressMsg = document.createElement('div');
                 progressMsg.className = 'freeship-progress text-xs text-blue-600 mt-2';
-                progressMsg.textContent = `Add $${remainingAmount} more for free shipping!`;
+                progressMsg.textContent = `Add ${CURRENCY_SYMBOL}${remainingAmount} more for free shipping!`;
                 shippingSection.insertBefore(progressMsg, shippingSection.querySelector('.border-t.pt-3'));
             }
         }

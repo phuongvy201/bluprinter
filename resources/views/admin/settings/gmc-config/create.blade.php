@@ -129,46 +129,10 @@
                 @enderror
             </div>
 
-            <div>
-                <label for="currency" class="block text-sm font-semibold text-gray-900 mb-1">
-                    Currency <span class="text-red-500">*</span>
-                </label>
-                <input
-                    type="text"
-                    name="currency"
-                    id="currency"
-                    value="{{ old('currency') }}"
-                    placeholder="GBP, USD, VND"
-                    required
-                    maxlength="3"
-                    class="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200/50 @error('currency') border-red-500 @enderror"
-                    onchange="updateCurrencyRate(this.value)"
-                >
-                @error('currency')
-                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                @enderror
-            </div>
-
-            <div>
-                <label for="currency_rate" class="block text-sm font-semibold text-gray-900 mb-1">
-                    Tỉ giá (USD → Currency) <span class="text-gray-500 text-xs">(Tùy chọn)</span>
-                </label>
-                <input
-                    type="number"
-                    name="currency_rate"
-                    id="currency_rate"
-                    value="{{ old('currency_rate') }}"
-                    placeholder="0.79"
-                    step="0.000001"
-                    min="0"
-                    class="w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200/50 @error('currency_rate') border-red-500 @enderror"
-                >
-                @error('currency_rate')
-                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                @enderror
-                <p class="mt-2 text-xs text-gray-500">
-                    Tỉ giá chuyển đổi từ USD. Ví dụ: 0.79 cho GBP (1 USD = 0.79 GBP), 25000 cho VND (1 USD = 25000 VND). 
-                    Nếu để trống, hệ thống sẽ tự động điền tỉ giá mặc định.
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p class="text-sm text-blue-800">
+                    <strong>Lưu ý:</strong> Currency và tỉ giá sẽ được tự động lấy từ cấu hình Domain Currency của domain này.
+                    Vui lòng đảm bảo đã cấu hình Domain Currency trước khi tạo GMC config.
                 </p>
             </div>
 
@@ -218,36 +182,12 @@
 
 <script>
 function updateCurrencyAndLanguage(countryCode) {
-    const currencyMap = {
-        'US': 'USD', 'GB': 'GBP', 'VN': 'VND', 'CA': 'CAD', 'AU': 'AUD',
-        'DE': 'EUR', 'FR': 'EUR', 'IT': 'EUR', 'ES': 'EUR',
-    };
     const languageMap = {
         'US': 'en', 'GB': 'en', 'VN': 'vi', 'CA': 'en', 'AU': 'en',
         'DE': 'de', 'FR': 'fr', 'IT': 'it', 'ES': 'es',
     };
-    if (countryCode && currencyMap[countryCode]) {
-        document.getElementById('currency').value = currencyMap[countryCode];
+    if (countryCode && languageMap[countryCode]) {
         document.getElementById('content_language').value = languageMap[countryCode] || 'en';
-        // Update currency rate when currency changes
-        updateCurrencyRate(currencyMap[countryCode]);
-    }
-}
-
-function updateCurrencyRate(currency) {
-    const defaultRates = {
-        'USD': 1.0,
-        'GBP': 0.79,
-        'VND': 25000,
-        'EUR': 0.92,
-        'CAD': 1.35,
-        'AUD': 1.52,
-    };
-    
-    const rateInput = document.getElementById('currency_rate');
-    if (rateInput && !rateInput.value && defaultRates[currency]) {
-        rateInput.value = defaultRates[currency];
-        rateInput.placeholder = defaultRates[currency].toString();
     }
 }
 </script>

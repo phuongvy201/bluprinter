@@ -1200,9 +1200,10 @@ class ProductController extends Controller
             $additionalImages = array_filter($additionalImages);
         }
 
-        // Get country, currency, and language from GMC config
+        // Get country and language from GMC config
         $targetCountry = $gmcConfig->target_country;
-        $currency = $gmcConfig->currency;
+        // Get currency from DomainCurrencyConfig
+        $currency = \App\Models\DomainCurrencyConfig::getCurrencyForDomain($gmcConfig->domain) ?? 'USD';
         $contentLanguage = $gmcConfig->content_language;
 
         // Force USD for US and UK markets
@@ -1330,8 +1331,8 @@ class ProductController extends Controller
         $scheme = request()->getScheme(); // http or https
         $baseUrl = $scheme . '://' . $currentDomain;
 
-        // Get currency from GMC config
-        $currency = $gmcConfig->currency;
+        // Get currency from DomainCurrencyConfig
+        $currency = \App\Models\DomainCurrencyConfig::getCurrencyForDomain($gmcConfig->domain) ?? 'USD';
         $targetCountry = $gmcConfig->target_country;
 
         // Force USD for US and UK markets
@@ -1440,10 +1441,13 @@ class ProductController extends Controller
             return $usdPrice;
         }
 
-        // Get conversion rate from GMC config if available
+        // Get conversion rate from DomainCurrencyConfig if available
         $conversionRate = null;
-        if ($gmcConfig && $gmcConfig->currency_rate) {
-            $conversionRate = (float)$gmcConfig->currency_rate;
+        if ($gmcConfig) {
+            $conversionRate = \App\Models\DomainCurrencyConfig::getCurrencyRateForDomain($gmcConfig->domain);
+            if ($conversionRate) {
+                $conversionRate = (float)$conversionRate;
+            }
         }
 
         // Fallback to default rates if not set in config
@@ -1494,10 +1498,13 @@ class ProductController extends Controller
             return $usdAmount;
         }
 
-        // Get conversion rate from GMC config if available
+        // Get conversion rate from DomainCurrencyConfig if available
         $conversionRate = null;
-        if ($gmcConfig && $gmcConfig->currency_rate) {
-            $conversionRate = (float)$gmcConfig->currency_rate;
+        if ($gmcConfig) {
+            $conversionRate = \App\Models\DomainCurrencyConfig::getCurrencyRateForDomain($gmcConfig->domain);
+            if ($conversionRate) {
+                $conversionRate = (float)$conversionRate;
+            }
         }
 
         // Fallback to default rates if not set in config

@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', function() {
             content_ids: productIds,
             content_type: 'product',
             value: '{{ $order->total_amount }}',
-            currency: 'USD',
+            currency: '{{ $currency ?? "USD" }}',
             transaction_id: '{{ $order->order_number }}',
             num_items: {{ $order->items->count() }}
         });
@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const gaItems = @json($gaItems);
 
         gtag('event', 'purchase', {
-            currency: 'USD',
+            currency: '{{ $currency ?? "USD" }}',
             transaction_id: '{{ $order->order_number }}',
             value: Number('{{ $order->total_amount }}'),
             tax: Number('{{ $order->tax_amount }}'),
@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const tiktokPayloadBase = {
             contents: Array.isArray(tiktokOrderContents) ? tiktokOrderContents : [],
             value: tiktokOrderValue,
-            currency: 'USD',
+            currency: '{{ $currency ?? "USD" }}',
             order_id: '{{ $order->order_number }}'
         };
 
@@ -250,10 +250,25 @@ document.addEventListener('DOMContentLoaded', function() {
                                     </div>
                                     <div class="flex-1 min-w-0">
                                         <h4 class="font-medium text-gray-900 truncate">{{ $item->product_name }}</h4>
-                                        <p class="text-sm text-gray-600">Qty: {{ $item->quantity }} × ${{ number_format($item->unit_price, 2) }}</p>
+                                        <p class="text-sm text-gray-600">
+                                            Qty: {{ $item->quantity }} × 
+                                            @php
+                                                $itemUnitPrice = ($currency ?? 'USD') !== 'USD' && isset($currencyRate) 
+                                                    ? $item->unit_price * $currencyRate 
+                                                    : $item->unit_price;
+                                                echo \App\Services\CurrencyService::formatPrice($itemUnitPrice, $currency ?? 'USD');
+                                            @endphp
+                                        </p>
                                     </div>
                                     <div class="text-right flex-shrink-0">
-                                        <p class="font-semibold text-gray-900">${{ number_format($item->total_price, 2) }}</p>
+                                        <p class="font-semibold text-gray-900">
+                                            @php
+                                                $itemTotalPrice = ($currency ?? 'USD') !== 'USD' && isset($currencyRate) 
+                                                    ? $item->total_price * $currencyRate 
+                                                    : $item->total_price;
+                                                echo \App\Services\CurrencyService::formatPrice($itemTotalPrice, $currency ?? 'USD');
+                                            @endphp
+                                        </p>
                                     </div>
                                 </div>
                             @endforeach
@@ -263,27 +278,40 @@ document.addEventListener('DOMContentLoaded', function() {
                     <!-- Order Totals -->
                     <div class="border-t border-gray-200 pt-4">
                         <div class="space-y-2">
+                            <!-- Exchange Rate Display (only show if currency is not USD) -->
+                            @if(($currency ?? 'USD') !== 'USD' && isset($currencyRate))
+                            <div class="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-200 mb-3">
+                                <div class="flex justify-between items-center">
+                                    <span>Exchange Rate:</span>
+                                    <span class="font-medium">1 USD = {{ number_format($currencyRate, 4) }} {{ $currency }}</span>
+                                </div>
+                                <div class="text-[10px] text-gray-400 mt-1">
+                                    Prices converted from USD
+                                </div>
+                            </div>
+                            @endif
+                            
                             <div class="flex justify-between text-gray-600">
                                 <span>Subtotal</span>
-                                <span>${{ number_format($order->subtotal, 2) }}</span>
+                                <span>{{ \App\Services\CurrencyService::formatPrice($convertedSubtotal ?? $order->subtotal, $currency ?? 'USD') }}</span>
                             </div>
                             <div class="flex justify-between text-gray-600">
                                 <span>Shipping</span>
-                                <span>${{ number_format($order->shipping_cost, 2) }}</span>
+                                <span>{{ \App\Services\CurrencyService::formatPrice($convertedShipping ?? $order->shipping_cost, $currency ?? 'USD') }}</span>
                             </div>
                             <div class="flex justify-between text-gray-600">
                                 <span>Tax</span>
-                                <span>${{ number_format($order->tax_amount, 2) }}</span>
+                                <span>{{ \App\Services\CurrencyService::formatPrice($convertedTax ?? $order->tax_amount, $currency ?? 'USD') }}</span>
                             </div>
                             @if($order->tip_amount > 0)
                             <div class="flex justify-between text-gray-600">
                                 <span>Tips</span>
-                                <span>${{ number_format($order->tip_amount, 2) }}</span>
+                                <span>{{ \App\Services\CurrencyService::formatPrice($convertedTip ?? $order->tip_amount, $currency ?? 'USD') }}</span>
                             </div>
                             @endif
                             <div class="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-2">
                                 <span>Total</span>
-                                <span>${{ number_format($order->total_amount, 2) }}</span>
+                                <span>{{ \App\Services\CurrencyService::formatPrice($convertedTotal ?? $order->total_amount, $currency ?? 'USD') }}</span>
                             </div>
                         </div>
                     </div>

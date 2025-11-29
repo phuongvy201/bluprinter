@@ -51,20 +51,10 @@ class CurrencyService
         $cacheKey = "currency_for_domain_{$domain}";
 
         return Cache::remember($cacheKey, 3600, function () use ($domain) {
-            // Ưu tiên 1: Lấy từ DomainCurrencyConfig (cấu hình đơn giản)
+            // Lấy từ DomainCurrencyConfig
             $domainCurrencyConfig = \App\Models\DomainCurrencyConfig::getForDomain($domain);
             if ($domainCurrencyConfig && $domainCurrencyConfig->currency) {
                 return $domainCurrencyConfig->currency;
-            }
-
-            // Ưu tiên 2: Lấy từ GMC config active đầu tiên cho domain này
-            $gmcConfig = GmcConfig::where('domain', $domain)
-                ->where('is_active', true)
-                ->orderBy('created_at', 'asc')
-                ->first();
-
-            if ($gmcConfig && $gmcConfig->currency) {
-                return $gmcConfig->currency;
             }
 
             // Fallback: thử lấy từ country mapping nếu không có config
@@ -92,31 +82,13 @@ class CurrencyService
         $cacheKey = "currency_rate_for_domain_{$domain}";
 
         return Cache::remember($cacheKey, 3600, function () use ($domain) {
-            // Ưu tiên 1: Lấy từ DomainCurrencyConfig (cấu hình đơn giản)
+            // Lấy từ DomainCurrencyConfig
             $domainCurrencyConfig = \App\Models\DomainCurrencyConfig::getForDomain($domain);
             if ($domainCurrencyConfig) {
                 if ($domainCurrencyConfig->currency_rate) {
                     return (float) $domainCurrencyConfig->currency_rate;
                 }
                 if ($domainCurrencyConfig->currency === 'USD') {
-                    return 1.0;
-                }
-            }
-
-            // Ưu tiên 2: Lấy từ GMC config
-            $gmcConfig = GmcConfig::where('domain', $domain)
-                ->where('is_active', true)
-                ->orderBy('created_at', 'asc')
-                ->first();
-
-            if ($gmcConfig) {
-                // Nếu có currency_rate, trả về
-                if ($gmcConfig->currency_rate) {
-                    return (float) $gmcConfig->currency_rate;
-                }
-
-                // Nếu currency là USD, rate = 1.0
-                if ($gmcConfig->currency === 'USD') {
                     return 1.0;
                 }
             }
@@ -168,6 +140,19 @@ class CurrencyService
                 'currency' => $currency,
                 'amount' => $usdAmount
             ]);
+            return $usdAmount;
+        }
+
+        return $usdAmount * $rate;
+    }
+
+    /**
+     * Convert giá từ USD sang currency với rate cụ thể
+     */
+    public static function convertFromUSDWithRate(float $usdAmount, string $currency, float $rate): float
+    {
+        // Nếu là USD, không cần convert
+        if ($currency === 'USD') {
             return $usdAmount;
         }
 

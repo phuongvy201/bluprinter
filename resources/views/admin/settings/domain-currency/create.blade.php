@@ -145,3 +145,4 @@ function updateCurrencyRate(currency) {
 </script>
 @endsection
 
+

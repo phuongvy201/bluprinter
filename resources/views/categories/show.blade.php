@@ -4,6 +4,10 @@
 @section('meta_description', $category->meta_description ?? 'Browse ' . $category->name . ' products and designs')
 
 @section('content')
+@php
+    $currentCurrency = currency();
+    $currencySymbol = currency_symbol();
+@endphp
 <script>
 // Track Facebook Pixel ViewContent for category page
 document.addEventListener('DOMContentLoaded', function() {
@@ -335,7 +339,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     {{ $product->name }}
                                 </h3>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-2xl font-bold text-[#005366]">${{ number_format($product->base_price, 2) }}</span>
+                                    <span class="text-2xl font-bold text-[#005366]">{{ format_price_usd((float) $product->base_price) }}</span>
                                     @if($product->shop)
                                         <span class="text-sm text-gray-500">{{ $product->shop->shop_name }}</span>
                                     @endif
@@ -529,7 +533,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${product.name.length > 30 ? product.name.substring(0, 30) + '...' : product.name}
                     </h4>
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-[#E2150C]">$${parseFloat(product.price).toFixed(2)}</span>
+                        <span class="text-xs font-bold text-[#E2150C]">${CURRENCY_SYMBOL}${parseFloat(product.price).toFixed(2)}</span>
                         <div class="flex items-center text-xs text-gray-500">
                             <svg class="w-3 h-3 text-yellow-400 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>

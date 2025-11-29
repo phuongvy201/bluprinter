@@ -13,15 +13,12 @@ class GmcConfig extends Model
         'merchant_id',
         'data_source_id',
         'credentials_path',
-        'currency',
-        'currency_rate',
         'content_language',
         'is_active',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
-        'currency_rate' => 'decimal:6',
     ];
 
     // Helper Methods
@@ -98,37 +95,34 @@ class GmcConfig extends Model
     }
 
     /**
-     * Lấy currency cho domain (lấy config active đầu tiên)
+     * Lấy currency cho domain từ DomainCurrencyConfig
      */
     public static function getCurrencyForDomain(string $domain): ?string
     {
-        $config = self::where('domain', $domain)
-            ->where('is_active', true)
-            ->orderBy('created_at', 'asc')
-            ->first();
-
-        return $config?->currency;
+        return DomainCurrencyConfig::getCurrencyForDomain($domain);
     }
 
     /**
-     * Lấy currency rate cho domain
+     * Lấy currency rate cho domain từ DomainCurrencyConfig
      */
     public static function getCurrencyRateForDomain(string $domain): ?float
     {
-        $config = self::where('domain', $domain)
-            ->where('is_active', true)
-            ->orderBy('created_at', 'asc')
-            ->first();
+        return DomainCurrencyConfig::getCurrencyRateForDomain($domain);
+    }
 
-        if ($config) {
-            if ($config->currency_rate) {
-                return (float) $config->currency_rate;
-            }
-            if ($config->currency === 'USD') {
-                return 1.0;
-            }
-        }
+    /**
+     * Get currency for this config's domain
+     */
+    public function getCurrencyAttribute(): ?string
+    {
+        return DomainCurrencyConfig::getCurrencyForDomain($this->domain);
+    }
 
-        return null;
+    /**
+     * Get currency rate for this config's domain
+     */
+    public function getCurrencyRateAttribute(): ?float
+    {
+        return DomainCurrencyConfig::getCurrencyRateForDomain($this->domain);
     }
 }

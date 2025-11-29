@@ -3,6 +3,10 @@
 @section('title', 'My Wishlist')
 
 @section('content')
+@php
+    $currentCurrency = currency();
+    $currencySymbol = currency_symbol();
+@endphp
 <style>
     .wishlist-card {
         transition: all 0.3s ease;
@@ -211,7 +215,7 @@
                             @if($wishlistItem->product)
                                 <div class="flex items-center justify-between">
                                     <span class="text-lg font-bold text-blue-600">
-                                        ${{ number_format($wishlistItem->product->base_price, 2) }}
+                                        {{ format_price_usd((float) $wishlistItem->product->base_price) }}
                                     </span>
                                     @if($wishlistItem->product->shop)
                                         <span class="text-sm text-gray-500">

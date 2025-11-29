@@ -5,8 +5,8 @@
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<!-- PayPal SDK -->
-<script src="https://www.paypal.com/sdk/js?client-id={{ config('services.paypal.client_id') }}&currency=USD&intent=capture&components=buttons"></script>
+<!-- PayPal SDK - Currency from domain config -->
+<script src="https://www.paypal.com/sdk/js?client-id={{ config('services.paypal.client_id') }}&currency={{ $currency ?? 'USD' }}&intent=capture&components=buttons"></script>
 
 <!-- Stripe JS SDK -->
 <script src="https://js.stripe.com/v3/"></script>
@@ -67,16 +67,24 @@
 @endphp
 
 <script>
+// Global constants - must be declared before any code that uses them
 const TIKTOK_CHECKOUT_CONTENTS = {!! json_encode($tiktokContents, JSON_UNESCAPED_UNICODE) !!};
 const TIKTOK_CHECKOUT_VALUE = {{ $checkoutTotal }};
-const TIKTOK_CHECKOUT_CURRENCY = 'USD';
+const CHECKOUT_CURRENCY = '{{ $currency ?? "USD" }}';
+const CHECKOUT_CURRENCY_RATE = {{ $currencyRate ?? 1.0 }};
+const CHECKOUT_BASE_SUBTOTAL = {{ $subtotal }};
+const CHECKOUT_BASE_SHIPPING = {{ $shippingCost }};
+const CHECKOUT_BASE_TOTAL = {{ $total }};
+const CHECKOUT_CONVERTED_SUBTOTAL = {{ $convertedSubtotal ?? $subtotal }};
+const CHECKOUT_CONVERTED_SHIPPING = {{ $convertedShipping ?? $shippingCost }};
+const CHECKOUT_CONVERTED_TOTAL = {{ $convertedTotal ?? $total }};
 
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof gtag === 'function') {
         const checkoutItems = @json($gtagItems);
         gtag('event', 'begin_checkout', {
-            currency: 'USD',
-            value: {{ $checkoutTotal }},
+            currency: '{{ $currency ?? "USD" }}',
+            value: {{ $convertedTotal ?? $checkoutTotal }},
             items: checkoutItems
         });
         console.log('✅ Google Tag: begin_checkout tracked', {
@@ -89,7 +97,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.tiktokCheckoutPayload = {
             contents: Array.isArray(TIKTOK_CHECKOUT_CONTENTS) ? TIKTOK_CHECKOUT_CONTENTS : [],
             value: Number(TIKTOK_CHECKOUT_VALUE) || 0,
-            currency: TIKTOK_CHECKOUT_CURRENCY
+            currency: CHECKOUT_CURRENCY
         };
 
         if (window.ttq) {
@@ -459,6 +467,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                     <form id="checkout-form" method="POST" action="{{ route('checkout.process') }}" class="space-y-8">
                         @csrf
                         <input type="hidden" id="tip_amount" name="tip_amount" value="0">
+                        <input type="hidden" id="currency" name="currency" value="{{ $currency ?? 'USD' }}">
                         
                         <!-- Contact Information -->
                         <div class="space-y-5">
@@ -971,7 +980,14 @@ function buildCheckoutCustomizationInputs(customizations) {
                                             <button onclick="openCheckoutEditCartModal({{ $item['cart_item']->id }})" class="p-1.5 text-gray-400 hover:text-blue-600" title="Edit item">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                             </button>
-                                            <p class="font-semibold text-gray-900">${{ number_format($item['total'], 2) }}</p>
+                                            <p class="font-semibold text-gray-900">
+                                                @php
+                                                    $itemPrice = ($currency ?? 'USD') !== 'USD' && isset($currencyRate) 
+                                                        ? $item['total'] * $currencyRate 
+                                                        : $item['total'];
+                                                    echo \App\Services\CurrencyService::formatPrice($itemPrice, $currency ?? 'USD');
+                                                @endphp
+                                            </p>
                                         </div>
                                     </div>
                                     <p class="text-[11px] text-gray-500 mt-0.5">Qty: {{ $item['quantity'] }}</p>
@@ -1029,13 +1045,19 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 <span class="text-sm font-medium text-gray-700">No tips</span>
                             </button>
                             <button type="button" onclick="selectTip(5)" class="tip-option p-3 border-2 border-gray-200 rounded-lg text-center hover:border-green-500 transition-all duration-200" data-tip="5">
-                                <span class="text-sm font-medium text-gray-700">$5.00</span>
+                                <span class="text-sm font-medium text-gray-700 tip-amount-5">
+                                    {{ \App\Services\CurrencyService::formatPrice(($currency ?? 'USD') !== 'USD' && isset($currencyRate) ? 5 * $currencyRate : 5, $currency ?? 'USD') }}
+                                </span>
                             </button>
                             <button type="button" onclick="selectTip(3)" class="tip-option p-3 border-2 border-gray-200 rounded-lg text-center hover:border-green-500 transition-all duration-200" data-tip="3">
-                                <span class="text-sm font-medium text-gray-700">$3.00</span>
+                                <span class="text-sm font-medium text-gray-700 tip-amount-3">
+                                    {{ \App\Services\CurrencyService::formatPrice(($currency ?? 'USD') !== 'USD' && isset($currencyRate) ? 3 * $currencyRate : 3, $currency ?? 'USD') }}
+                                </span>
                             </button>
                             <button type="button" onclick="selectTip(3.15)" class="tip-option p-3 border-2 border-gray-200 rounded-lg text-center hover:border-green-500 transition-all duration-200" data-tip="3.15">
-                                <span class="text-sm font-medium text-gray-700">$3.15</span>
+                                <span class="text-sm font-medium text-gray-700 tip-amount-3.15">
+                                    {{ \App\Services\CurrencyService::formatPrice(($currency ?? 'USD') !== 'USD' && isset($currencyRate) ? 3.15 * $currencyRate : 3.15, $currency ?? 'USD') }}
+                                </span>
                             </button>
                         </div>
                         
@@ -1051,7 +1073,26 @@ function buildCheckoutCustomizationInputs(customizations) {
                     <div class="border-t border-gray-200 pt-4 space-y-3">
                         <div class="flex justify-between text-gray-600">
                             <span>Subtotal</span>
-                            <span>${{ number_format($subtotal, 2) }}</span>
+                            <span class="subtotal-display">
+                                {{ \App\Services\CurrencyService::formatPrice($convertedSubtotal ?? $subtotal, $currency ?? 'USD') }}
+                            </span>
+                        </div>
+                        
+                        <!-- Exchange Rate Display (only show if currency is not USD) -->
+                        <div id="exchange-rate-display" class="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-200" style="display: {{ ($currency ?? 'USD') !== 'USD' && isset($currencyRate) ? 'block' : 'none' }};">
+                            <div class="flex justify-between items-center">
+                                <span>Exchange Rate:</span>
+                                <span class="font-medium" id="exchange-rate-value">
+                                    @if(($currency ?? 'USD') !== 'USD' && isset($currencyRate))
+                                        1 USD = {{ number_format($currencyRate, 4) }} {{ $currency }}
+                                    @else
+                                        1 USD = 1.0000 USD
+                                    @endif
+                                </span>
+                            </div>
+                            <div class="text-[10px] text-gray-400 mt-1">
+                                Prices converted from USD
+                            </div>
                         </div>
                         
                         <!-- Delivery Information -->
@@ -1073,17 +1114,21 @@ function buildCheckoutCustomizationInputs(customizations) {
                         
                         <div class="flex justify-between text-gray-600">
                             <span>Shipping</span>
-                            <span class="shipping-cost-display">${{ number_format($shippingCost, 2) }}</span>
+                            <span class="shipping-cost-display">
+                                {{ \App\Services\CurrencyService::formatPrice($convertedShipping ?? $shippingCost, $currency ?? 'USD') }}
+                            </span>
                         </div>
                         
                         <div class="flex justify-between text-gray-600" id="tip-line" style="display: none;">
                             <span>Tips</span>
-                            <span class="tip-amount-display">$0.00</span>
+                            <span class="tip-amount-display">{{ \App\Services\CurrencyService::getCurrencySymbol($currency ?? 'USD') }}0.00</span>
                         </div>
                         
                         <div class="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-3 mt-3">
                             <span>Total</span>
-                            <span class="text-blue-600 total-display">${{ number_format($total, 2) }}</span>
+                            <span class="text-blue-600 total-display">
+                                {{ \App\Services\CurrencyService::formatPrice($convertedTotal ?? $total, $currency ?? 'USD') }}
+                            </span>
                         </div>
                     </div>
 
@@ -1168,6 +1213,59 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Global currency variables - must be declared before functions that use them
+let currentCurrency = CHECKOUT_CURRENCY || 'USD';
+let currentCurrencyRate = CHECKOUT_CURRENCY_RATE || 1.0;
+
+// Currency mapping
+const countryToCurrency = {
+    'US': 'USD',
+    'GB': 'GBP',
+    'CA': 'CAD',
+    'AU': 'AUD',
+    'NZ': 'NZD',
+    'JP': 'JPY',
+    'CN': 'CNY',
+    'HK': 'HKD',
+    'SG': 'SGD',
+};
+
+// Default currency rates (can be updated from server)
+let currencyRates = {
+    'USD': 1.0,
+    'GBP': 0.79,
+    'EUR': 0.92,
+    'CAD': 1.35,
+    'AUD': 1.52,
+};
+
+// Get currency from country
+function getCurrencyFromCountry(country) {
+    return countryToCurrency[country] || 'USD';
+}
+
+// Format price with currency symbol
+function formatPrice(amount, currency) {
+    const symbols = {
+        'USD': '$',
+        'GBP': '£',
+        'EUR': '€',
+        'CAD': 'C$',
+        'AUD': 'A$',
+        'JPY': '¥',
+        'CNY': '¥',
+    };
+    const symbol = symbols[currency] || currency;
+    return symbol + parseFloat(amount).toFixed(2);
+}
+
+// Convert amount from USD to target currency
+function convertFromUSD(usdAmount, targetCurrency) {
+    if (targetCurrency === 'USD') return usdAmount;
+    const rate = currencyRates[targetCurrency] || 1.0;
+    return usdAmount * rate;
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📅 DOM Content Loaded at:', new Date().toISOString());
@@ -1704,12 +1802,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         console.log('✅ Form validation passed, creating PayPal order...');
                         
-                        // Calculate total amount for PayPal
-                        const subtotal = parseFloat('{{ $subtotal }}');
-                        const tax = parseFloat('{{ $taxAmount }}');
-                        const shipping = parseFloat('{{ $shippingCost }}');
+                        // Calculate total amount for PayPal (convert to current currency)
+                        const baseSubtotal = parseFloat(CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+                        const baseTax = parseFloat('{{ $taxAmount }}');
+                        const baseShipping = parseFloat(CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
                         const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-                        const total = subtotal + tax + shipping + tip;
+                        const baseTotal = baseSubtotal + baseTax + baseShipping + tip;
+                        
+                        // Convert to current currency
+                        const total = convertFromUSD(baseTotal, currentCurrency);
                         
                         // Build description from product SKUs
                         const skuList = [];
@@ -1735,7 +1836,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             purchase_units: [{
                                 amount: {
                                     value: total.toFixed(2),
-                                    currency_code: 'USD'
+                                    currency_code: currentCurrency
                                 },
                                 description: description,
                                 custom_id: 'order-' + Date.now()
@@ -2217,12 +2318,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Stripe not initialized. Please refresh and try again.');
             }
             
-            // Calculate total amount
-            const subtotal = parseFloat('{{ $subtotal }}');
-            const tax = parseFloat('{{ $taxAmount }}');
-            const shipping = parseFloat('{{ $shippingCost }}');
+            // Calculate total amount (convert to current currency)
+            const baseSubtotal = parseFloat(CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+            const baseTax = parseFloat('{{ $taxAmount }}');
+            const baseShipping = parseFloat(CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
             const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-            const total = subtotal + tax + shipping + tip;
+            const baseTotal = baseSubtotal + baseTax + baseShipping + tip;
+            
+            // Convert to current currency
+            const total = convertFromUSD(baseTotal, currentCurrency);
             
             // Create Payment Intent on server
             console.log('📝 Creating Payment Intent...');
@@ -2235,7 +2339,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     amount: total,
-                    currency: 'usd',
+                    currency: currentCurrency.toLowerCase(),
                 }),
             });
             
@@ -2562,6 +2666,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Don't update currency here - wait for server response
+            // Currency should come from domain config, not country
+            
             try {
                 // Ensure HTTPS for shipping calculation
                 const shippingUrl = new URL('{{ route('checkout.calculate-shipping') }}', window.location.origin);
@@ -2582,25 +2689,64 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success && data.shipping) {
+                    // Update currency and rate from server response
+                    if (data.currency && data.currency_rate) {
+                        currentCurrency = data.currency;
+                        currentCurrencyRate = parseFloat(data.currency_rate);
+                        
+                        // Update currency hidden input
+                        const currencyInput = document.getElementById('currency');
+                        if (currencyInput) {
+                            currencyInput.value = currentCurrency;
+                        }
+                        
+                        // Update currency rates object
+                        currencyRates[currentCurrency] = currentCurrencyRate;
+                        
+                        // Update tip buttons and exchange rate display
+                        updateTipButtons();
+                        updateExchangeRateDisplay();
+                    }
+                    
                     // Update shipping cost display
                     const shippingCostElement = document.querySelector('.shipping-cost-display');
+                    const subtotalElement = document.querySelector('.subtotal-display');
                     const totalElement = document.querySelector('.total-display');
                     
                     if (shippingCostElement) {
-                        const newShipping = parseFloat(data.shipping.total_shipping);
-                        shippingCostElement.textContent = '$' + newShipping.toFixed(2);
+                        // Use converted shipping from server if available, otherwise convert client-side
+                        const baseShipping = parseFloat(data.shipping.total_shipping);
+                        const convertedShipping = data.converted_shipping 
+                            ? parseFloat(data.converted_shipping)
+                            : convertFromUSD(baseShipping, currentCurrency);
+                        
+                        shippingCostElement.textContent = formatPrice(convertedShipping, currentCurrency);
                         
                         // Recalculate total
-                        const subtotal = parseFloat('{{ $subtotal }}');
-                        const tax = parseFloat('{{ $taxAmount }}');
-                        const newTotal = subtotal + tax + newShipping;
+                        const baseSubtotal = parseFloat(CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+                        const baseTax = parseFloat('{{ $taxAmount }}');
+                        const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
+                        const baseTotal = baseSubtotal + baseTax + baseShipping + tip;
                         
-                        if (totalElement) {
-                            totalElement.textContent = '$' + newTotal.toFixed(2);
+                        const convertedSubtotal = convertFromUSD(baseSubtotal, currentCurrency);
+                        const convertedTip = convertFromUSD(tip, currentCurrency);
+                        const convertedTotal = convertFromUSD(baseTotal, currentCurrency);
+                        
+                        if (subtotalElement) {
+                            subtotalElement.textContent = formatPrice(convertedSubtotal, currentCurrency);
                         }
                         
-                        // showToast('success', 'Shipping Updated', 
-                        //     `Shipping to ${data.shipping.zone_name}: $${newShipping.toFixed(2)}`);
+                        // Update tip line if tip exists
+                        const tipLine = document.getElementById('tip-line');
+                        const tipAmountDisplay = document.querySelector('.tip-amount-display');
+                        if (tip > 0 && tipLine && tipAmountDisplay) {
+                            tipLine.style.display = 'flex';
+                            tipAmountDisplay.textContent = formatPrice(convertedTip, currentCurrency);
+                        }
+                        
+                        if (totalElement) {
+                            totalElement.textContent = formatPrice(convertedTotal, currentCurrency);
+                        }
                     }
                 } else {
                     // showToast('error', 'Shipping Error', data.message || 'Could not calculate shipping');
@@ -2618,6 +2764,11 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.country_code) {
                 const countrySelect = document.getElementById('country');
+                if (!countrySelect) {
+                    console.log('Country select element not found');
+                    return;
+                }
+                
                 // Only allow US and GB, fallback to US if detected country is not available
                 let selectedCountry = data.country_code;
                 if (data.country_code !== 'US' && data.country_code !== 'GB') {
@@ -2653,6 +2804,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         updatePayPalButtonState();
         initializeTipSelection();
+        updateTipButtons();
+        updateExchangeRateDisplay();
     }, 500);
     
     // Initialize tip selection on page load
@@ -2759,28 +2912,82 @@ document.addEventListener('DOMContentLoaded', function() {
         updateTotal();
     };
     
+    // Update tip buttons with current currency
+    function updateTipButtons() {
+        const tipAmounts = [5, 3, 3.15];
+        tipAmounts.forEach(amount => {
+            const button = document.querySelector(`[data-tip="${amount}"]`);
+            if (button) {
+                // Find span with class tip-amount-{amount} (escape dots for CSS selector)
+                const className = `tip-amount-${amount}`.replace(/\./g, '\\.');
+                let span = button.querySelector(`.${className}`);
+                if (!span) {
+                    // Fallback: find any span with text-sm class inside button
+                    span = button.querySelector('span.text-sm');
+                }
+                if (span && amount !== 0) {
+                    const convertedAmount = convertFromUSD(amount, currentCurrency);
+                    span.textContent = formatPrice(convertedAmount, currentCurrency);
+                }
+            }
+        });
+    }
+    
+    // Update exchange rate display
+    function updateExchangeRateDisplay() {
+        const exchangeRateDisplay = document.getElementById('exchange-rate-display');
+        const exchangeRateValue = document.getElementById('exchange-rate-value');
+        
+        if (currentCurrency !== 'USD' && currentCurrencyRate) {
+            if (exchangeRateDisplay) {
+                exchangeRateDisplay.style.display = 'block';
+            }
+            if (exchangeRateValue) {
+                exchangeRateValue.textContent = `1 USD = ${currentCurrencyRate.toFixed(4)} ${currentCurrency}`;
+            }
+        } else {
+            if (exchangeRateDisplay) {
+                exchangeRateDisplay.style.display = 'none';
+            }
+        }
+    }
+    
     function updateTotal() {
-        const subtotal = parseFloat('{{ $subtotal }}');
-        const shipping = parseFloat('{{ $shippingCost }}');
+        const baseSubtotal = parseFloat(CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+        const baseShipping = parseFloat(CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
         const tip = selectedTipAmount;
-        const total = subtotal + shipping + tip;
+        const baseTotal = baseSubtotal + baseShipping + tip;
+        
+        // Convert to current currency
+        const convertedSubtotal = convertFromUSD(baseSubtotal, currentCurrency);
+        const convertedShipping = convertFromUSD(baseShipping, currentCurrency);
+        const convertedTip = convertFromUSD(tip, currentCurrency);
+        const convertedTotal = convertFromUSD(baseTotal, currentCurrency);
         
         // Update tip line visibility
         const tipLine = document.getElementById('tip-line');
         const tipAmountDisplay = document.querySelector('.tip-amount-display');
         const totalDisplay = document.querySelector('.total-display');
+        const subtotalDisplay = document.querySelector('.subtotal-display');
+        const shippingDisplay = document.querySelector('.shipping-cost-display');
         
         if (tip > 0) {
             tipLine.style.display = 'flex';
-            tipAmountDisplay.textContent = '$' + tip.toFixed(2);
+            tipAmountDisplay.textContent = formatPrice(convertedTip, currentCurrency);
         } else {
             tipLine.style.display = 'none';
         }
         
-        // Update total
-        totalDisplay.textContent = '$' + total.toFixed(2);
+        // Update all displays
+        if (subtotalDisplay) {
+            subtotalDisplay.textContent = formatPrice(convertedSubtotal, currentCurrency);
+        }
+        if (shippingDisplay) {
+            shippingDisplay.textContent = formatPrice(convertedShipping, currentCurrency);
+        }
+        totalDisplay.textContent = formatPrice(convertedTotal, currentCurrency);
         
-        // Store tip amount for form submission
+        // Store tip amount for form submission (in USD)
         const tipInput = document.getElementById('tip_amount');
         if (tipInput) {
             tipInput.value = tip;

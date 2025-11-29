@@ -4,6 +4,10 @@
 
 @section('content')
 @php
+    $currentCurrency = currency();
+    $currencySymbol = currency_symbol();
+@endphp
+@php
     $gtagItems = collect($products->items())->map(function ($product, $loopIndex) use ($products) {
         $categories = $product->categories ?? collect();
         if (!($categories instanceof \Illuminate\Support\Collection)) {
@@ -216,10 +220,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="flex items-center justify-between">
                             <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
                                 @if($product->template && $product->template->base_price > $product->price)
-                                    <span class="text-xs sm:text-sm text-gray-500 line-through">${{ number_format($product->template->base_price, 2) }}</span>
-                                    <span class="text-base sm:text-lg font-bold text-[#E2150C]">${{ number_format($product->price, 2) }}</span>
+                                    <span class="text-xs sm:text-sm text-gray-500 line-through">{{ format_price_usd((float) $product->template->base_price) }}</span>
+                                    <span class="text-base sm:text-lg font-bold text-[#E2150C]">{{ format_price_usd((float) $product->price) }}</span>
                                 @else
-                                    <span class="text-base sm:text-lg font-bold text-[#E2150C]">${{ number_format($product->base_price, 2) }}</span>
+                                    <span class="text-base sm:text-lg font-bold text-[#E2150C]">{{ format_price_usd((float) $product->base_price) }}</span>
                                 @endif
                             </div>
                         </div>

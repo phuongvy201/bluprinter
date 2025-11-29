@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Cart;
 use App\Services\LianLianPayServiceV2;
+use App\Services\CurrencyService;
 use App\Mail\OrderConfirmation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -1126,6 +1127,24 @@ class LianLianPayController extends Controller
             $tipAmount = $orderData['tip_amount'] ?? 0; // Get tip amount
             $totalAmount = $subtotal + $shippingCost + $taxAmount + $tipAmount;
 
+            // Get currency from request or domain config
+            $orderCurrency = $orderData['currency'] ?? CurrencyService::getCurrencyForDomain();
+            if (!$orderCurrency || $orderCurrency === 'USD') {
+                // Fallback to country-based currency
+                $countryToCurrency = [
+                    'US' => 'USD',
+                    'GB' => 'GBP',
+                    'CA' => 'CAD',
+                    'AU' => 'AUD',
+                    'NZ' => 'NZD',
+                    'JP' => 'JPY',
+                    'CN' => 'CNY',
+                    'HK' => 'HKD',
+                    'SG' => 'SGD',
+                ];
+                $orderCurrency = $countryToCurrency[strtoupper($orderData['country'])] ?? 'USD';
+            }
+
             // Create order
             $order = \App\Models\Order::create([
                 'user_id' => $userId,
@@ -1144,6 +1163,7 @@ class LianLianPayController extends Controller
                 'tax_amount' => $taxAmount,
                 'tip_amount' => $tipAmount,
                 'total_amount' => $totalAmount,
+                'currency' => $orderCurrency,
                 'payment_method' => 'lianlian_pay',
                 'payment_status' => 'pending',
                 'status' => 'pending'

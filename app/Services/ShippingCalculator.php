@@ -99,6 +99,7 @@ class ShippingCalculator
             'success' => true,
             'zone_id' => $zone->id,
             'zone_name' => $zone->name,
+            'country' => $countryCode,
             'total_shipping' => round($totalShipping, 2),
             'items' => $shippingDetails,
             'breakdown' => [

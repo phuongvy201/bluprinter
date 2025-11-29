@@ -226,36 +226,65 @@
                             </td>
                             <td>{{ $item->product_name }}</td>
                             <td>{{ $item->quantity }}</td>
-                            <td>${{ number_format($item->unit_price, 2) }}</td>
-                            <td>${{ number_format($item->total_price, 2) }}</td>
+                            <td>
+                                @php
+                                    $itemUnitPrice = ($currency ?? 'USD') !== 'USD' && isset($currencyRate) 
+                                        ? $item->unit_price * $currencyRate 
+                                        : $item->unit_price;
+                                    echo \App\Services\CurrencyService::formatPrice($itemUnitPrice, $currency ?? 'USD');
+                                @endphp
+                            </td>
+                            <td>
+                                @php
+                                    $itemTotalPrice = ($currency ?? 'USD') !== 'USD' && isset($currencyRate) 
+                                        ? $item->total_price * $currencyRate 
+                                        : $item->total_price;
+                                    echo \App\Services\CurrencyService::formatPrice($itemTotalPrice, $currency ?? 'USD');
+                                @endphp
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
         </div>
 
+        <!-- Exchange Rate Display (only show if currency is not USD) -->
+        @if(($currency ?? 'USD') !== 'USD' && isset($currencyRate))
+        <div class="section" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <p style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                <strong>{{ $locale === 'vi' ? 'Tỷ giá hối đoái:' : 'Exchange Rate:' }}</strong>
+            </p>
+            <p style="font-size: 14px; color: #333; font-weight: bold;">
+                1 USD = {{ number_format($currencyRate, 4) }} {{ $currency }}
+            </p>
+            <p style="font-size: 11px; color: #999; margin-top: 5px;">
+                {{ $locale === 'vi' ? 'Giá được chuyển đổi từ USD' : 'Prices converted from USD' }}
+            </p>
+        </div>
+        @endif
+
         <div class="totals">
             <div class="total-row">
                 <span>{{ $locale === 'vi' ? 'Tạm tính:' : 'Subtotal:' }}</span>
-                <span>${{ number_format($order->subtotal, 2) }}</span>
+                <span>{{ \App\Services\CurrencyService::formatPrice($convertedSubtotal ?? $order->subtotal, $currency ?? 'USD') }}</span>
             </div>
             <div class="total-row">
                 <span>{{ $locale === 'vi' ? 'Phí vận chuyển:' : 'Shipping:' }}</span>
-                <span>${{ number_format($order->shipping_cost, 2) }}</span>
+                <span>{{ \App\Services\CurrencyService::formatPrice($convertedShipping ?? $order->shipping_cost, $currency ?? 'USD') }}</span>
             </div>
             <div class="total-row">
                 <span>{{ $locale === 'vi' ? 'Thuế:' : 'Tax:' }}</span>
-                <span>${{ number_format($order->tax_amount, 2) }}</span>
+                <span>{{ \App\Services\CurrencyService::formatPrice($convertedTax ?? $order->tax_amount, $currency ?? 'USD') }}</span>
             </div>
             @if($order->tip_amount > 0)
                 <div class="total-row">
                     <span>{{ $locale === 'vi' ? 'Tiền tip:' : 'Tips:' }}</span>
-                    <span>${{ number_format($order->tip_amount, 2) }}</span>
+                    <span>{{ \App\Services\CurrencyService::formatPrice($convertedTip ?? $order->tip_amount, $currency ?? 'USD') }}</span>
                 </div>
             @endif
             <div class="total-row final">
                 <span>{{ $locale === 'vi' ? 'Tổng cộng:' : 'Total:' }}</span>
-                <span>${{ number_format($order->total_amount, 2) }}</span>
+                <span>{{ \App\Services\CurrencyService::formatPrice($convertedTotal ?? $order->total_amount, $currency ?? 'USD') }}</span>
             </div>
         </div>
 

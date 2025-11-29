@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\ShippingCalculator;
 use App\Services\TikTokEventsService;
+use App\Services\CurrencyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -222,6 +223,24 @@ class StripePaymentController extends Controller
                 );
             }
 
+            // Get currency from request or domain config
+            $orderCurrency = $validated['currency'] ?? CurrencyService::getCurrencyForDomain();
+            if (!$orderCurrency || $orderCurrency === 'USD') {
+                // Fallback to country-based currency
+                $countryToCurrency = [
+                    'US' => 'USD',
+                    'GB' => 'GBP',
+                    'CA' => 'CAD',
+                    'AU' => 'AUD',
+                    'NZ' => 'NZD',
+                    'JP' => 'JPY',
+                    'CN' => 'CNY',
+                    'HK' => 'HKD',
+                    'SG' => 'SGD',
+                ];
+                $orderCurrency = $countryToCurrency[strtoupper($validated['country'])] ?? 'USD';
+            }
+
             // Create order
             $order = Order::create([
                 'user_id' => $userId,
@@ -240,6 +259,7 @@ class StripePaymentController extends Controller
                 'tax_amount' => $taxAmount,
                 'tip_amount' => $tipAmount,
                 'total_amount' => $totalAmount,
+                'currency' => $orderCurrency,
                 'payment_method' => 'stripe',
                 'payment_status' => 'paid',
                 'status' => 'processing',

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\Product;
 use App\Services\ShippingCalculator;
+use App\Services\CurrencyService;
 use App\Services\TikTokEventsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -126,6 +127,26 @@ class CartController extends Controller
                 return $item->getTotalPriceWithCustomizations();
             });
 
+            // Get currency and rate
+            $currency = CurrencyService::getCurrencyForDomain() ?? 'USD';
+            $currencyRate = CurrencyService::getCurrencyRateForDomain();
+
+            // If no rate from domain, use default rates
+            if (!$currencyRate || $currencyRate == 1.0) {
+                $defaultRates = [
+                    'USD' => 1.0,
+                    'GBP' => 0.79,
+                    'EUR' => 0.92,
+                    'CAD' => 1.35,
+                    'AUD' => 1.52,
+                    'JPY' => 150.0,
+                    'CNY' => 7.2,
+                    'HKD' => 7.8,
+                    'SGD' => 1.34,
+                ];
+                $currencyRate = $defaultRates[$currency] ?? 1.0;
+            }
+
             // Calculate summary (without tax)
             $subtotal = $totalPrice;
             $shipping = 0;
@@ -141,9 +162,10 @@ class CartController extends Controller
                     ];
                 });
 
-                // Calculate shipping for US (default)
+                // Calculate shipping for US (default) or from request
+                $country = $request->get('country', 'US');
                 $calculator = new ShippingCalculator();
-                $shippingResult = $calculator->calculateShipping($items, 'US');
+                $shippingResult = $calculator->calculateShipping($items, $country);
 
                 if ($shippingResult['success']) {
                     $shipping = $shippingResult['total_shipping'];
@@ -151,7 +173,11 @@ class CartController extends Controller
                 }
             }
 
+            // Convert amounts if currency is not USD
+            $convertedSubtotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($subtotal, $currency, $currencyRate) : $subtotal;
+            $convertedShipping = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($shipping, $currency, $currencyRate) : $shipping;
             $total = $subtotal + $shipping;
+            $convertedTotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($total, $currency, $currencyRate) : $total;
 
             return response()->json([
                 'success' => true,
@@ -161,9 +187,14 @@ class CartController extends Controller
                 'summary' => [
                     'subtotal' => $subtotal,
                     'shipping' => $shipping,
-                    'total' => $total
+                    'total' => $total,
+                    'converted_subtotal' => $convertedSubtotal,
+                    'converted_shipping' => $convertedShipping,
+                    'converted_total' => $convertedTotal,
                 ],
-                'shipping_details' => $shippingDetails
+                'shipping_details' => $shippingDetails,
+                'currency' => $currency,
+                'currency_rate' => $currencyRate,
             ]);
         } catch (\Exception $e) {
             Log::error('Error getting cart', [
