@@ -96,4 +96,39 @@ class GmcConfig extends Model
     {
         return $query->where('target_country', strtoupper($countryCode));
     }
+
+    /**
+     * Lấy currency cho domain (lấy config active đầu tiên)
+     */
+    public static function getCurrencyForDomain(string $domain): ?string
+    {
+        $config = self::where('domain', $domain)
+            ->where('is_active', true)
+            ->orderBy('created_at', 'asc')
+            ->first();
+
+        return $config?->currency;
+    }
+
+    /**
+     * Lấy currency rate cho domain
+     */
+    public static function getCurrencyRateForDomain(string $domain): ?float
+    {
+        $config = self::where('domain', $domain)
+            ->where('is_active', true)
+            ->orderBy('created_at', 'asc')
+            ->first();
+
+        if ($config) {
+            if ($config->currency_rate) {
+                return (float) $config->currency_rate;
+            }
+            if ($config->currency === 'USD') {
+                return 1.0;
+            }
+        }
+
+        return null;
+    }
 }

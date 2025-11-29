@@ -2,10 +2,12 @@
 
 namespace App\Providers;
 
+use App\Services\CurrencyService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -30,6 +32,19 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('register', function (Request $request) {
             return Limit::perMinute(5)->by($request->ip());
+        });
+
+        // Share currency information with all views
+        View::composer('*', function ($view) {
+            $currency = CurrencyService::getCurrentCurrency();
+            $currencyRate = CurrencyService::getCurrentCurrencyRate();
+            $currencySymbol = CurrencyService::getCurrencySymbol();
+            
+            $view->with([
+                'currentCurrency' => $currency,
+                'currentCurrencyRate' => $currencyRate,
+                'currentCurrencySymbol' => $currencySymbol,
+            ]);
         });
     }
 }

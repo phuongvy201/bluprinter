@@ -13,13 +13,21 @@
         $categories = collect($categories);
     }
     $primaryCategory = optional($categories->first())->name ?? null;
+    
+    // Get currency for current domain
+    $currentCurrency = currency();
+    $productPriceUSD = (float) ($product->price ?? $product->base_price);
+    $productPriceConverted = convert_currency($productPriceUSD);
+    $productBasePriceUSD = (float) ($product->base_price ?? 0);
+    $productBasePriceConverted = convert_currency($productBasePriceUSD);
 @endphp
 
 <script>
 const TIKTOK_PRODUCT_ID = {!! json_encode((string) $product->id) !!};
 const TIKTOK_PRODUCT_NAME = {!! json_encode($product->name) !!};
 const TIKTOK_PRIMARY_CATEGORY = @json($primaryCategory);
-const TIKTOK_PRODUCT_PRICE = {{ (float) ($product->base_price ?? 0) }};
+const TIKTOK_PRODUCT_PRICE = {{ $productPriceConverted }};
+const CURRENT_CURRENCY = @json($currentCurrency);
 
 // Track Facebook Pixel ViewContent for product detail page
 document.addEventListener('DOMContentLoaded', function() {
@@ -28,20 +36,20 @@ document.addEventListener('DOMContentLoaded', function() {
             content_name: '{{ addslashes($product->name) }}',
             content_ids: ['{{ $product->id }}'],
             content_type: 'product',
-            value: {{ $product->base_price }},
-            currency: 'USD'
+            value: {{ $productPriceConverted }},
+            currency: CURRENT_CURRENCY
         });
     }
 
     if (typeof gtag === 'function') {
         gtag('event', 'view_item', {
-            currency: 'USD',
-            value: {{ $product->base_price }},
+            currency: CURRENT_CURRENCY,
+            value: {{ $productPriceConverted }},
             items: [{
                 item_id: '{{ $product->sku ?? $product->id }}',
                 item_name: '{{ addslashes($product->name) }}',
                 item_category: @json($primaryCategory),
-                price: {{ $product->base_price }},
+                price: {{ $productPriceConverted }},
                 quantity: 1
             }]
         });
@@ -57,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 price: TIKTOK_PRODUCT_PRICE
             }],
             value: TIKTOK_PRODUCT_PRICE,
-            currency: 'USD'
+            currency: CURRENT_CURRENCY
         };
 
         if (TIKTOK_PRIMARY_CATEGORY) {
@@ -411,8 +419,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                                 {{ Str::limit($relatedProduct->name, 30) }}
                                             </h4>
                                             <div class="flex items-center justify-between">
-                                                <span class="text-xs font-bold text-[#E2150C]">${{ number_format($relatedProduct->base_price, 2) }}</span>
-                                                {{-- Rating disabled --}}
+                                                <span class="text-xs font-bold text-[#E2150C]">{{ format_price_usd($relatedProduct->base_price) }}</span>
+                                                <div class="flex items-center text-xs text-gray-500">
+                                                    <svg class="w-3 h-3 text-yellow-400 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                                    </svg>
+                                                    <span class="text-xs">4.5</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </a>
@@ -422,8 +435,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             @endif
-            {{-- Reviews Section (Desktop Only) - Disabled --}}
-            {{-- <div class="space-y-6 hidden lg:block">
+            <!-- Reviews Section (Desktop Only) -->
+            <div class="space-y-6 hidden lg:block">
                 <!-- Reviews Header -->
                 <div class="flex items-center justify-between">
                     <h3 class="text-2xl font-bold text-gray-900">Reviews</h3>
@@ -673,16 +686,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="mb-4">
                     <div class="flex items-center space-x-4 mb-2">
                     @if($product->template && $product->template->base_price > $product->price)
-                        <span class="text-2xl text-gray-500 line-through">${{ number_format($product->template->base_price, 2) }}</span>
-                            <span class="text-4xl font-bold text-[#E2150C]" id="base-price" data-price="{{ $product->price }}">${{ number_format($product->price, 2) }}</span>
                         @php
+                            $templateBasePriceConverted = convert_currency((float) $product->template->base_price);
                             $discount = round((($product->template->base_price - $product->price) / $product->template->base_price) * 100);
                         @endphp
+                        <span class="text-2xl text-gray-500 line-through">{{ format_price_usd((float) $product->template->base_price) }}</span>
+                            <span class="text-4xl font-bold text-[#E2150C]" id="base-price" data-price="{{ $productPriceUSD }}" data-price-converted="{{ $productPriceConverted }}">{{ format_price_usd($productPriceUSD) }}</span>
                         <span class="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
                             {{ $discount }}% OFF
                         </span>
                     @else
-                            <span class="text-4xl font-bold text-[#E2150C]" id="base-price" data-price="{{ $product->base_price }}">${{ number_format($product->base_price, 2) }}</span>
+                            <span class="text-4xl font-bold text-[#E2150C]" id="base-price" data-price="{{ $productBasePriceUSD }}" data-price-converted="{{ $productBasePriceConverted }}">{{ format_price_usd($productBasePriceUSD) }}</span>
                     @endif
                     </div>
                     
@@ -690,11 +704,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div id="customization-price-display" class="hidden mt-2">
                         <div class="flex items-center justify-between text-sm">
                             <span class="text-gray-600">Customization:</span>
-                            <span class="text-[#005366] font-medium" id="customization-price">+$0.00</span>
+                            <span class="text-[#005366] font-medium" id="customization-price">+{{ currency_symbol() }}0.00</span>
                         </div>
                         <div class="border-t border-gray-300 mt-2 pt-2 flex items-center justify-between">
                             <span class="text-gray-900 font-semibold">Total:</span>
-                            <span class="text-2xl font-bold text-[#005366]" id="total-price">${{ number_format($product->base_price, 2) }}</span>
+                            <span class="text-2xl font-bold text-[#005366]" id="total-price">{{ format_price_usd($productBasePriceUSD) }}</span>
                         </div>
                     </div>
                 </div>
@@ -756,7 +770,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">Required</span>
                                         @endif
                                         @if(isset($customization['price']) && $customization['price'] > 0)
-                                            <span class="text-sm font-medium text-[#E2150C]">+${{ number_format($customization['price'], 2) }}</span>
+                                            <span class="text-sm font-medium text-[#E2150C]">+{{ format_price_usd($customization['price'] ?? 0) }}</span>
                                         @endif
                                     </div>
                                 </div>
@@ -795,7 +809,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                                     @endif
                                                 </div>
                                                 @if(isset($option['price']) && $option['price'] > 0)
-                                                    <span class="text-xs text-[#E2150C] font-medium">+${{ number_format($option['price'], 2) }}</span>
+                                                    <span class="text-xs text-[#E2150C] font-medium">+{{ format_price_usd($option['price'] ?? 0) }}</span>
                                                 @endif
                                             </label>
                                         @endforeach
@@ -1047,7 +1061,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </div>
                                 <div class="text-right">
                                     <span class="text-lg font-bold text-[#E2150C]" id="selected-variant-price">
-                                        ${{ number_format($selectedVariant->price ?? $product->base_price, 2) }}
+                                        {{ format_price_usd($selectedVariant->price ?? $product->base_price) }}
                                     </span>
                                 </div>
                             </div>
@@ -1321,7 +1335,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                         {{ Str::limit($relatedProduct->name, 30) }}
                                     </h4>
                                     <div class="flex items-center justify-between">
-                                        <span class="text-xs font-bold text-[#E2150C]">${{ number_format($relatedProduct->base_price, 2) }}</span>
+                                        <span class="text-xs font-bold text-[#E2150C]">{{ format_price_usd($relatedProduct->base_price) }}</span>
                                         <div class="flex items-center text-xs text-gray-500">
                                             <svg class="w-3 h-3 text-yellow-400 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
                                                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
@@ -1338,8 +1352,8 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 @endif
-{{-- Reviews Section (Mobile & Tablet Only) - Disabled --}}
-{{-- <div class="lg:hidden bg-white py-8 border-t border-gray-200">
+<!-- Reviews Section (Mobile & Tablet Only) -->
+<div class="lg:hidden bg-white py-8 border-t border-gray-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="space-y-6">
             <!-- Reviews Header -->
@@ -1527,7 +1541,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         </div>
     </div>
-</div> --}}
+</div>
 
 <!-- Recently Viewed Products -->
 <div class="bg-gray-50 py-8 border-t border-gray-200">
@@ -3445,7 +3459,7 @@ function addToCart() {
             content_ids: [productData.id],
             content_type: 'product',
             value: totalPriceValue,
-            currency: 'USD'
+            currency: CURRENT_CURRENCY
         });
     }
 
@@ -3462,7 +3476,7 @@ function addToCart() {
             delete gaItem.item_variant;
         }
         gtag('event', 'add_to_cart', {
-            currency: 'USD',
+            currency: CURRENT_CURRENCY,
             value: totalPriceValue,
             items: [gaItem]
         });
@@ -3478,7 +3492,7 @@ function addToCart() {
                 price: totalPriceValue
             }],
             value: totalPriceValue,
-            currency: 'USD'
+            currency: CURRENT_CURRENCY
         };
 
         if (TIKTOK_PRIMARY_CATEGORY) {
@@ -4619,7 +4633,7 @@ function triggerCheckoutTrackingFromLocalCart() {
             content_ids: productIds,
             content_type: 'product',
             value: cartTotal.toFixed(2),
-            currency: 'USD',
+            currency: CURRENT_CURRENCY,
             num_items: cart.length
         });
 
@@ -4632,7 +4646,7 @@ function triggerCheckoutTrackingFromLocalCart() {
 
     if (typeof gtag === 'function') {
         gtag('event', 'begin_checkout', {
-            currency: 'USD',
+            currency: CURRENT_CURRENCY,
             value: Number(cartTotal.toFixed(2)),
             items: gaItems
         });
@@ -5614,7 +5628,7 @@ function buyNow() {
             content_ids: [productData.id],
             content_type: 'product',
             value: totalPriceValue,
-            currency: 'USD'
+            currency: CURRENT_CURRENCY
         });
     }
     
@@ -5631,7 +5645,7 @@ function buyNow() {
             delete gaItem.item_variant;
         }
         gtag('event', 'add_to_cart', {
-            currency: 'USD',
+            currency: CURRENT_CURRENCY,
             value: totalPriceValue,
             items: [gaItem]
         });
@@ -5647,7 +5661,7 @@ function buyNow() {
                 price: totalPriceValue
             }],
             value: totalPriceValue,
-            currency: 'USD'
+            currency: CURRENT_CURRENCY
         };
 
         if (TIKTOK_PRIMARY_CATEGORY) {
@@ -5685,7 +5699,7 @@ function buyNow() {
                     content_ids: [productData.id],
                     content_type: 'product',
                     value: totalPriceValue,
-                    currency: 'USD',
+                    currency: CURRENT_CURRENCY,
                     num_items: 1
                 });
                 
@@ -5706,7 +5720,7 @@ function buyNow() {
                 }
 
                 gtag('event', 'begin_checkout', {
-                    currency: 'USD',
+                    currency: CURRENT_CURRENCY,
                     value: totalPriceValue,
                     items: [gaItem]
                 });
@@ -5726,7 +5740,7 @@ function buyNow() {
                         price: totalPriceValue
                     }],
                     value: totalPriceValue,
-                    currency: 'USD'
+                    currency: CURRENT_CURRENCY
                 };
 
                 if (TIKTOK_PRIMARY_CATEGORY) {

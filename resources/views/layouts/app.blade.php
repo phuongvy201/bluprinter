@@ -31,7 +31,18 @@
         $tiktokPixelId = \App\Support\Settings::get('analytics.tiktok_pixel_id', config('services.tiktok.pixel_id'));
         $googleTagManagerId = \App\Support\Settings::get('analytics.google_tag_manager_id', config('services.google.tag_manager_id'));
         $googleAdsId = \App\Support\Settings::get('analytics.google_ads_id', config('services.google.ads_id'));
+        
+        // Currency configuration - available in all views
+        $siteCurrency = currency();
+        $siteCurrencyRate = currency_rate();
+        $siteCurrencySymbol = currency_symbol();
     @endphp
+    
+    <!-- Currency Configuration for JavaScript -->
+    <script>
+        window.SITE_CURRENCY = @json($siteCurrency);
+        window.SITE_CURRENCY_SYMBOL = @json($siteCurrencySymbol);
+    </script>
 
     <!-- Cookie Script -->
     <script type="text/javascript" charset="UTF-8" src="//cdn.cookie-script.com/s/4a353d27e80af68f255e8b4bff37f75c.js"></script>

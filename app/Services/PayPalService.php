@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\CurrencyService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -60,12 +61,50 @@ class PayPalService
     }
 
     /**
+     * Check if currency is supported by PayPal
+     * PayPal supports: USD, EUR, GBP, CAD, AUD, JPY, CNY, HKD, SGD, etc.
+     */
+    private function isPayPalSupportedCurrency(string $currency): bool
+    {
+        $supportedCurrencies = [
+            'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY', 
+            'HKD', 'SGD', 'NZD', 'CHF', 'DKK', 'PLN', 'NOK', 
+            'SEK', 'MXN', 'BRL', 'RUB', 'INR', 'KRW', 'THB'
+        ];
+        
+        return in_array(strtoupper($currency), $supportedCurrencies);
+    }
+
+    /**
+     * Get currency for PayPal payment (fallback to USD if not supported)
+     */
+    private function getPayPalCurrency(): string
+    {
+        $currency = CurrencyService::getCurrentCurrency();
+        
+        if ($this->isPayPalSupportedCurrency($currency)) {
+            return $currency;
+        }
+        
+        // Fallback to USD if currency not supported
+        Log::warning('PayPal currency not supported, using USD', [
+            'requested_currency' => $currency
+        ]);
+        
+        return 'USD';
+    }
+
+    /**
      * Create a PayPal payment
      */
     public function createPayment($order, $items)
     {
         $accessToken = $this->getAccessToken();
 
+        // Get PayPal currency (with fallback to USD if not supported)
+        $paypalCurrency = $this->getPayPalCurrency();
+        $isCurrencyUSD = ($paypalCurrency === 'USD');
+        
         // Build items first to calculate accurate subtotal
         $paypalItems = [];
         $itemsSubtotal = 0;
@@ -74,14 +113,22 @@ class PayPalService
         foreach ($items as $item) {
             // Calculate unit price from total (total / quantity)
             // This ensures we use the actual cart price (with variants/customizations)
-            $unitPrice = (float)$item['total'] / (int)$item['quantity'];
-            $formattedUnitPrice = number_format($unitPrice, 2, '.', '');
+            $unitPriceUSD = (float)$item['total'] / (int)$item['quantity'];
+            
+            // Convert to PayPal currency if needed
+            if (!$isCurrencyUSD) {
+                $unitPriceUSD = CurrencyService::convertFromUSD($unitPriceUSD);
+            }
+            
+            // Format based on currency (some currencies don't use decimals)
+            $decimals = in_array($paypalCurrency, ['JPY', 'KRW']) ? 0 : 2;
+            $formattedUnitPrice = number_format($unitPriceUSD, $decimals, '.', '');
 
             $paypalItems[] = [
                 'name' => $this->getGenericProductName($item['product'], $itemIndex),
                 'sku' => $item['product']->sku ?? $item['product']->id,
                 'price' => $formattedUnitPrice,
-                'currency' => 'USD',
+                'currency' => $paypalCurrency,
                 'quantity' => (int)$item['quantity']
             ];
 
@@ -90,11 +137,23 @@ class PayPalService
             $itemIndex++;
         }
 
+        // Convert amounts if needed
+        $subtotalUSD = $itemsSubtotal;
+        $taxUSD = (float)$order->tax_amount;
+        $shippingUSD = (float)$order->shipping_cost;
+        
+        if (!$isCurrencyUSD) {
+            $subtotalUSD = CurrencyService::convertFromUSD($itemsSubtotal);
+            $taxUSD = CurrencyService::convertFromUSD($taxUSD);
+            $shippingUSD = CurrencyService::convertFromUSD($shippingUSD);
+        }
+        
         // Format amounts - use calculated subtotal to avoid rounding errors
-        $subtotal = number_format($itemsSubtotal, 2, '.', '');
-        $tax = number_format((float)$order->tax_amount, 2, '.', '');
-        $shipping = number_format((float)$order->shipping_cost, 2, '.', '');
-        $total = number_format($itemsSubtotal + (float)$tax + (float)$shipping, 2, '.', '');
+        $decimals = in_array($paypalCurrency, ['JPY', 'KRW']) ? 0 : 2;
+        $subtotal = number_format($subtotalUSD, $decimals, '.', '');
+        $tax = number_format($taxUSD, $decimals, '.', '');
+        $shipping = number_format($shippingUSD, $decimals, '.', '');
+        $total = number_format($subtotalUSD + $taxUSD + $shippingUSD, $decimals, '.', '');
 
         // Build payment data
         $paymentData = [
@@ -106,7 +165,7 @@ class PayPalService
                 [
                     'amount' => [
                         'total' => $total,
-                        'currency' => 'USD',
+                        'currency' => $paypalCurrency,
                         'details' => [
                             'subtotal' => $subtotal,
                             'tax' => $tax,

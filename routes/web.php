@@ -15,6 +15,7 @@ use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Admin\AnalyticsSettingsController;
 use App\Http\Controllers\Admin\DomainAnalyticsConfigController;
+use App\Http\Controllers\Admin\DomainCurrencyConfigController;
 use App\Http\Controllers\Admin\GmcConfigController;
 use App\Http\Controllers\Admin\ShopController as AdminShopController;
 use App\Http\Controllers\Admin\PageController as AdminPageController;
@@ -553,6 +554,16 @@ Route::middleware('auth')->group(function () {
             'edit' => 'settings.domain-analytics.edit',
             'update' => 'settings.domain-analytics.update',
             'destroy' => 'settings.domain-analytics.destroy',
+        ]);
+
+        // Domain Currency Configs
+        Route::resource('settings/domain-currency', DomainCurrencyConfigController::class)->names([
+            'index' => 'settings.domain-currency.index',
+            'create' => 'settings.domain-currency.create',
+            'store' => 'settings.domain-currency.store',
+            'edit' => 'settings.domain-currency.edit',
+            'update' => 'settings.domain-currency.update',
+            'destroy' => 'settings.domain-currency.destroy',
         ]);
 
         // GMC Configs
