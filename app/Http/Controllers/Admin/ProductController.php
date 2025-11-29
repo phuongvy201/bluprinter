@@ -1415,6 +1415,172 @@ class ProductController extends Controller
     }
 
     /**
+     * Delete product(s) from Google Merchant Center
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+     */
+    public function deleteFromGMC(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            // Validate request
+            $request->validate([
+                'product_ids' => 'required|array',
+                'product_ids.*' => 'exists:products,id',
+                'target_country' => 'required|string|size:2', // US, GB, VN, etc.
+            ]);
+
+            $productIds = $request->product_ids;
+            $targetCountry = strtoupper($request->target_country);
+
+            // Get current domain
+            $currentDomain = $request->getHost();
+            // Remove port if present
+            $currentDomain = preg_replace('/:\d+$/', '', $currentDomain);
+
+            // Get GMC config for current domain and target country
+            $gmcConfig = GmcConfig::getConfigForDomainAndCountry($currentDomain, $targetCountry);
+
+            if (!$gmcConfig) {
+                $errorMessage = "Không tìm thấy cấu hình GMC cho domain '{$currentDomain}' và thị trường '{$targetCountry}'. Vui lòng cấu hình GMC trước.";
+
+                Log::warning('GMC Config not found for delete', [
+                    'domain' => $currentDomain,
+                    'target_country' => $targetCountry,
+                    'request_host' => $request->getHost()
+                ]);
+
+                if ($request->expectsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $errorMessage
+                    ], 400);
+                }
+                return back()->with('error', $errorMessage);
+            }
+
+            // Get products
+            $products = Product::whereIn('id', $productIds)->get();
+
+            if ($products->isEmpty()) {
+                $errorMessage = 'Không tìm thấy sản phẩm nào để xóa.';
+
+                if ($request->expectsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $errorMessage
+                    ], 404);
+                }
+                return back()->with('error', $errorMessage);
+            }
+
+            // Create GMC service with config from database
+            $gmcService = GoogleMerchantCenterService::fromConfig($gmcConfig);
+
+            $results = [
+                'success' => [],
+                'failed' => [],
+                'total' => $products->count(),
+                'success_count' => 0,
+                'failed_count' => 0
+            ];
+
+            // Delete each product from GMC
+            foreach ($products as $product) {
+                // Get offer_id (SKU or PRD-{id})
+                $offerId = $product->sku ?? 'PRD-' . $product->id;
+
+                try {
+                    $deleteResult = $gmcService->deleteProduct($offerId);
+
+                    if ($deleteResult['success']) {
+                        $results['success'][] = [
+                            'product_id' => $product->id,
+                            'product_name' => $product->name,
+                            'offer_id' => $offerId,
+                            'message' => $deleteResult['message']
+                        ];
+                        $results['success_count']++;
+                    } else {
+                        $results['failed'][] = [
+                            'product_id' => $product->id,
+                            'product_name' => $product->name,
+                            'offer_id' => $offerId,
+                            'error' => $deleteResult['error'] ?? 'Unknown error',
+                            'message' => $deleteResult['message']
+                        ];
+                        $results['failed_count']++;
+                    }
+                } catch (\Exception $e) {
+                    Log::error('GMC Delete Product Error', [
+                        'product_id' => $product->id,
+                        'offer_id' => $offerId,
+                        'error' => $e->getMessage()
+                    ]);
+
+                    $results['failed'][] = [
+                        'product_id' => $product->id,
+                        'product_name' => $product->name,
+                        'offer_id' => $offerId,
+                        'error' => $e->getMessage(),
+                        'message' => 'Failed to delete product from Google Merchant Center'
+                    ];
+                    $results['failed_count']++;
+                }
+
+                // Add small delay to avoid rate limiting
+                usleep(100000); // 0.1 second delay
+            }
+
+            // Log batch delete summary
+            Log::info('GMC Batch delete completed from admin panel', [
+                'user_id' => auth()->id(),
+                'user_email' => auth()->user()->email ?? 'N/A',
+                'total_products' => $results['total'],
+                'success_count' => $results['success_count'],
+                'failed_count' => $results['failed_count'],
+                'product_ids' => $productIds,
+                'results' => $results
+            ]);
+
+            // Return JSON response for AJAX requests
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => $results['success_count'] > 0,
+                    'message' => "Đã xóa {$results['success_count']} / {$results['total']} sản phẩm khỏi Google Merchant Center",
+                    'results' => $results
+                ]);
+            }
+
+            // Return redirect with results
+            $message = "Đã xóa thành công {$results['success_count']} / {$results['total']} sản phẩm khỏi Google Merchant Center";
+            if ($results['failed_count'] > 0) {
+                $message .= ". {$results['failed_count']} sản phẩm không thể xóa.";
+            }
+
+            return back()->with('success', $message)->with('gmc_delete_results', $results);
+        } catch (\Exception $e) {
+            Log::error('GMC Delete failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            $errorMessage = 'Lỗi khi xóa sản phẩm khỏi Google Merchant Center: ' . $e->getMessage();
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $errorMessage
+                ], 500);
+            }
+
+            return back()->with('error', $errorMessage);
+        }
+    }
+
+    /**
      * Convert product price from USD to target currency
      * Products are stored in USD, but need to be converted for different markets
      * Uses currency_rate from DomainCurrencyConfig, otherwise falls back to default rates

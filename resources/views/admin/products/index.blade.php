@@ -31,6 +31,16 @@
                 Feed to GMC (<span id="gmcSelectedCount">0</span>)
             </button>
             
+            <!-- Delete from GMC Button (Hidden by default) -->
+            <button id="deleteFromGMCBtn" onclick="deleteFromGMC()" 
+                    style="display: none;"
+                    class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-pink-600 text-white text-sm font-medium rounded-lg hover:from-red-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors shadow-md">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+                Delete from GMC (<span id="gmcDeleteSelectedCount">0</span>)
+            </button>
+            
             <a href="{{ route('admin.products.import') }}" 
                class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-md">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -814,18 +824,23 @@ function updateBulkDeleteButton() {
     const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     const feedToGMCBtn = document.getElementById('feedToGMCBtn');
+    const deleteFromGMCBtn = document.getElementById('deleteFromGMCBtn');
     const selectedCount = document.getElementById('selectedCount');
     const gmcSelectedCount = document.getElementById('gmcSelectedCount');
+    const gmcDeleteSelectedCount = document.getElementById('gmcDeleteSelectedCount');
     const selectAllCheckbox = document.getElementById('selectAll');
     
     if (checkedBoxes.length > 0) {
         bulkDeleteBtn.style.display = 'inline-flex';
         feedToGMCBtn.style.display = 'inline-flex';
+        deleteFromGMCBtn.style.display = 'inline-flex';
         selectedCount.textContent = checkedBoxes.length;
         gmcSelectedCount.textContent = checkedBoxes.length;
+        gmcDeleteSelectedCount.textContent = checkedBoxes.length;
     } else {
         bulkDeleteBtn.style.display = 'none';
         feedToGMCBtn.style.display = 'none';
+        deleteFromGMCBtn.style.display = 'none';
     }
     
     // Update "Select All" checkbox state
@@ -1251,6 +1266,86 @@ async function downloadGMCXML(productIds) {
     setTimeout(() => {
         document.body.removeChild(form);
     }, 1000);
+}
+
+// Delete from Google Merchant Center
+async function deleteFromGMC() {
+    const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+    const productIds = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    if (productIds.length === 0) {
+        alert('Vui lòng chọn ít nhất một sản phẩm để xóa khỏi Google Merchant Center.');
+        return;
+    }
+    
+    // Confirm deletion
+    const confirmMessage = `Bạn có chắc chắn muốn xóa ${productIds.length} sản phẩm khỏi Google Merchant Center?\n\nHành động này không thể hoàn tác.`;
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    // Show modal to select target country
+    const targetCountry = await showTargetCountryModal();
+    if (!targetCountry) {
+        return; // User cancelled
+    }
+    
+    // Show loading state
+    const deleteBtn = document.getElementById('deleteFromGMCBtn');
+    const originalHTML = deleteBtn.innerHTML;
+    deleteBtn.disabled = true;
+    deleteBtn.innerHTML = '<svg class="w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Đang xóa...';
+    
+    try {
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        
+        // Use fetch API to delete via API
+        const response = await fetch('{{ route("admin.products.delete-from-gmc") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                product_ids: productIds,
+                target_country: targetCountry
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            // Show success message with details
+            let message = data.message || 'Xóa thành công!';
+            if (data.results) {
+                const results = data.results;
+                message += `\n\nChi tiết:\n- Thành công: ${results.success_count}/${results.total}`;
+                if (results.failed_count > 0) {
+                    message += `\n- Thất bại: ${results.failed_count}`;
+                    if (results.failed && results.failed.length > 0) {
+                        message += '\n\nSản phẩm thất bại:';
+                        results.failed.forEach(item => {
+                            message += `\n- ${item.product_name} (${item.offer_id}): ${item.error || item.message}`;
+                        });
+                    }
+                }
+            }
+            alert(message);
+            
+            // Reload page to show updated status
+            window.location.reload();
+        } else {
+            alert('Lỗi: ' + (data.message || data.error || 'Có lỗi xảy ra khi xóa khỏi Google Merchant Center.'));
+        }
+    } catch (error) {
+        console.error('GMC Delete error:', error);
+        alert('Có lỗi xảy ra khi xóa. Vui lòng thử lại.');
+    } finally {
+        deleteBtn.disabled = false;
+        deleteBtn.innerHTML = originalHTML;
+    }
 }
 </script>
 @endsection
