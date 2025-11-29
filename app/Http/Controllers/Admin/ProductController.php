@@ -1202,19 +1202,13 @@ class ProductController extends Controller
 
         // Get country and language from GMC config
         $targetCountry = $gmcConfig->target_country;
-        // Get currency from DomainCurrencyConfig
+        // Get currency from DomainCurrencyConfig (respects domain currency configuration)
         $currency = \App\Models\DomainCurrencyConfig::getCurrencyForDomain($gmcConfig->domain) ?? 'USD';
         $contentLanguage = $gmcConfig->content_language;
 
-        // Force USD for US and UK markets
-        if (in_array($targetCountry, ['US', 'UK', 'GB'])) {
-            $currency = 'USD';
-        }
-
         // Convert product price from USD to target currency
         // Products are stored in USD, but need to be converted for different markets
-        // Uses currency_rate from GMC config if available
-        // For US/UK, keep USD (no conversion needed)
+        // Uses currency_rate from DomainCurrencyConfig
         $productPriceUSD = (float)$product->price;
         $productPrice = $this->convertProductPrice($productPriceUSD, $currency, $gmcConfig);
 
@@ -1237,19 +1231,16 @@ class ProductController extends Controller
         $shippingCostUSD = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
 
         // Convert to target currency if needed
-        // Uses currency_rate from GMC config if available
-        // For US/UK, keep USD (no conversion needed)
+        // Uses currency_rate from DomainCurrencyConfig
         $shippingCost = $this->convertShippingCurrency($shippingCostUSD, $currency, $targetCountry, $gmcConfig);
 
         // Fallback to default if calculation failed
         if ($shippingCost <= 0) {
-            // For US/UK, use USD. For VN, use VND. Others use USD.
-            if (in_array($targetCountry, ['US', 'UK', 'GB'])) {
-                $shippingCost = '15.00'; // USD
-            } elseif ($targetCountry === 'VN') {
+            // Use default shipping based on currency from domain config
+            if ($currency === 'VND') {
                 $shippingCost = '30000'; // VND
             } else {
-                $shippingCost = '15.00'; // USD default
+                $shippingCost = '15.00'; // Default for other currencies
             }
         } else {
             // Format to 2 decimal places
@@ -1331,14 +1322,9 @@ class ProductController extends Controller
         $scheme = request()->getScheme(); // http or https
         $baseUrl = $scheme . '://' . $currentDomain;
 
-        // Get currency from DomainCurrencyConfig
+        // Get currency from DomainCurrencyConfig (respects domain currency configuration)
         $currency = \App\Models\DomainCurrencyConfig::getCurrencyForDomain($gmcConfig->domain) ?? 'USD';
         $targetCountry = $gmcConfig->target_country;
-
-        // Force USD for US and UK markets
-        if (in_array($targetCountry, ['US', 'UK', 'GB'])) {
-            $currency = 'USD';
-        }
 
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">' . "\n";
@@ -1396,8 +1382,7 @@ class ProductController extends Controller
             }
 
             // Convert product price from USD to target currency for XML feed
-            // Uses currency_rate from GMC config if available
-            // For US/UK, keep USD (no conversion needed)
+            // Uses currency_rate from DomainCurrencyConfig
             $productPriceUSD = (float)$product->price;
             $productPrice = $this->convertProductPrice($productPriceUSD, $currency, $gmcConfig);
 
@@ -1432,7 +1417,7 @@ class ProductController extends Controller
     /**
      * Convert product price from USD to target currency
      * Products are stored in USD, but need to be converted for different markets
-     * Uses currency_rate from GMC config if available, otherwise falls back to default rates
+     * Uses currency_rate from DomainCurrencyConfig, otherwise falls back to default rates
      */
     private function convertProductPrice(float $usdPrice, string $targetCurrency, ?GmcConfig $gmcConfig = null): float
     {
@@ -1471,7 +1456,7 @@ class ProductController extends Controller
 
     /**
      * Get default currency conversion rate from USD (fallback)
-     * Used when currency_rate is not set in GMC config
+     * Used when currency_rate is not set in DomainCurrencyConfig
      */
     private function getDefaultCurrencyConversionRate(string $targetCurrency): ?float
     {
@@ -1489,7 +1474,7 @@ class ProductController extends Controller
 
     /**
      * Convert shipping cost from USD to target currency
-     * Uses currency_rate from GMC config if available, otherwise falls back to default rates
+     * Uses currency_rate from DomainCurrencyConfig, otherwise falls back to default rates
      */
     private function convertShippingCurrency(float $usdAmount, string $targetCurrency, string $targetCountry, ?GmcConfig $gmcConfig = null): float
     {
