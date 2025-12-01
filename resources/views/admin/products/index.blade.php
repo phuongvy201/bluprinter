@@ -31,16 +31,7 @@
                 Feed to GMC (<span id="gmcSelectedCount">0</span>)
             </button>
             
-            <!-- Delete from GMC Button (Hidden by default) -->
-            <button id="deleteFromGMCBtn" onclick="deleteFromGMC()" 
-                    style="display: none;"
-                    class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-pink-600 text-white text-sm font-medium rounded-lg hover:from-red-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors shadow-md">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                </svg>
-                Delete from GMC (<span id="gmcDeleteSelectedCount">0</span>)
-            </button>
-            
+       
             <a href="{{ route('admin.products.import') }}" 
                class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-md">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -824,23 +815,18 @@ function updateBulkDeleteButton() {
     const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     const feedToGMCBtn = document.getElementById('feedToGMCBtn');
-    const deleteFromGMCBtn = document.getElementById('deleteFromGMCBtn');
     const selectedCount = document.getElementById('selectedCount');
     const gmcSelectedCount = document.getElementById('gmcSelectedCount');
-    const gmcDeleteSelectedCount = document.getElementById('gmcDeleteSelectedCount');
     const selectAllCheckbox = document.getElementById('selectAll');
     
     if (checkedBoxes.length > 0) {
         bulkDeleteBtn.style.display = 'inline-flex';
         feedToGMCBtn.style.display = 'inline-flex';
-        deleteFromGMCBtn.style.display = 'inline-flex';
         selectedCount.textContent = checkedBoxes.length;
         gmcSelectedCount.textContent = checkedBoxes.length;
-        gmcDeleteSelectedCount.textContent = checkedBoxes.length;
     } else {
         bulkDeleteBtn.style.display = 'none';
         feedToGMCBtn.style.display = 'none';
-        deleteFromGMCBtn.style.display = 'none';
     }
     
     // Update "Select All" checkbox state

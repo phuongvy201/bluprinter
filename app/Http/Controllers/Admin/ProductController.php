@@ -1400,6 +1400,41 @@ class ProductController extends Controller
     }
 
     /**
+     * Show form to delete product from GMC
+     */
+    public function showDeleteFromGMCForm(Request $request)
+    {
+        // Get all unique domains from GMC configs
+        $domains = GmcConfig::where('is_active', true)
+            ->distinct()
+            ->orderBy('domain')
+            ->pluck('domain')
+            ->toArray();
+
+        // Get all GMC configs grouped by domain
+        $gmcConfigsByDomain = GmcConfig::where('is_active', true)
+            ->orderBy('domain')
+            ->orderBy('target_country')
+            ->get()
+            ->groupBy('domain');
+
+        // Country labels
+        $countryLabels = [
+            'US' => 'United States (USD)',
+            'GB' => 'United Kingdom (GBP)',
+            'VN' => 'Vietnam (VND)',
+            'CA' => 'Canada (CAD)',
+            'AU' => 'Australia (AUD)',
+            'DE' => 'Germany (EUR)',
+            'FR' => 'France (EUR)',
+            'IT' => 'Italy (EUR)',
+            'ES' => 'Spain (EUR)',
+        ];
+
+        return view('admin.products.delete-from-gmc', compact('domains', 'gmcConfigsByDomain', 'countryLabels'));
+    }
+
+    /**
      * Delete a single product from Google Merchant Center by offer_id
      * Simple API endpoint for Postman testing
      * 

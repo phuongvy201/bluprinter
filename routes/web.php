@@ -605,14 +605,17 @@ Route::middleware('auth')->group(function () {
         Route::post('products/import', [ProductImportController::class, 'import'])->name('products.import.process');
         Route::get('products/import/template', [ProductImportController::class, 'downloadTemplate'])->name('products.import.template');
 
-        // Products
-        Route::resource('products', AdminProductController::class);
-        Route::post('products/bulk-delete', [AdminProductController::class, 'bulkDelete'])->name('products.bulk-delete');
-        Route::get('products/preview-gmc-data', [AdminProductController::class, 'previewGMCData'])->name('products.preview-gmc-data');
-        Route::post('products/feed-to-gmc', [AdminProductController::class, 'feedToGMC'])->name('products.feed-to-gmc');
+        // Products - Custom routes must be defined BEFORE resource route to avoid conflicts
+        Route::get('products/delete-from-gmc', [AdminProductController::class, 'showDeleteFromGMCForm'])->name('products.show-delete-from-gmc');
         Route::post('products/delete-from-gmc', [AdminProductController::class, 'deleteFromGMC'])->name('products.delete-from-gmc');
         Route::post('products/delete-product-from-gmc', [AdminProductController::class, 'deleteProductFromGMC'])->name('products.delete-product-from-gmc');
+        Route::get('products/preview-gmc-data', [AdminProductController::class, 'previewGMCData'])->name('products.preview-gmc-data');
+        Route::post('products/feed-to-gmc', [AdminProductController::class, 'feedToGMC'])->name('products.feed-to-gmc');
+        Route::post('products/bulk-delete', [AdminProductController::class, 'bulkDelete'])->name('products.bulk-delete');
         Route::post('products/{product}/duplicate', [AdminProductController::class, 'duplicate'])->name('products.duplicate');
+
+        // Products Resource Route (must be last to avoid conflicts)
+        Route::resource('products', AdminProductController::class);
 
         // Collections
         Route::resource('collections', AdminCollectionController::class);
