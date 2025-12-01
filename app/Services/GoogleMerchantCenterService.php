@@ -349,22 +349,83 @@ class GoogleMerchantCenterService
 
     /**
      * Delete a product from Google Merchant Center
+     * Uses Content API format: channel:language:country:offerId
+     * Example: online:en:GB:SKU12345
      */
     public function deleteProduct($offerId): array
     {
+        // Build productId in the correct format: channel:language:country:offerId
+        // Channel is always "online" for web products
+        $channel = 'online';
+        $language = strtolower($this->contentLanguage ?? 'en');
+        $country = strtoupper($this->targetCountry ?? 'US');
+        $productId = "{$channel}:{$language}:{$country}:{$offerId}";
+
         try {
-            // Use ShoppingContent service to delete product
-            $this->shoppingContentService->products->delete($this->merchantId, $offerId);
+            // Get service account email from credentials for logging
+            $serviceAccountEmail = null;
+            try {
+                $credentialsPath = $this->client->getAuthConfig();
+                if (is_string($credentialsPath) && file_exists($credentialsPath)) {
+                    $credentials = json_decode(file_get_contents($credentialsPath), true);
+                    $serviceAccountEmail = $credentials['client_email'] ?? null;
+                }
+            } catch (\Exception $e) {
+                // Ignore if cannot read credentials
+            }
+
+            Log::info('GMC Delete Product - Building productId', [
+                'offer_id' => $offerId,
+                'channel' => $channel,
+                'language' => $language,
+                'country' => $country,
+                'product_id' => $productId,
+                'merchant_id' => $this->merchantId,
+                'service_account_email' => $serviceAccountEmail
+            ]);
+
+            // Use ShoppingContent service to delete product with correct productId format
+            // Format: online:en:GB:SKU12345
+            $this->shoppingContentService->products->delete($this->merchantId, $productId);
+
+            Log::info('GMC Delete Product - Success', [
+                'offer_id' => $offerId,
+                'product_id' => $productId,
+                'merchant_id' => $this->merchantId
+            ]);
 
             return [
                 'success' => true,
-                'message' => 'Product successfully deleted from Google Merchant Center'
+                'message' => 'Product successfully deleted from Google Merchant Center',
+                'product_id' => $productId,
+                'offer_id' => $offerId
             ];
         } catch (\Google\Service\Exception $e) {
             $errorMessage = $this->parseGoogleServiceError($e);
+
+            // Get service account email from credentials for better error message
+            $serviceAccountEmail = null;
+            try {
+                $credentialsPath = $this->client->getAuthConfig();
+                if (is_string($credentialsPath) && file_exists($credentialsPath)) {
+                    $credentials = json_decode(file_get_contents($credentialsPath), true);
+                    $serviceAccountEmail = $credentials['client_email'] ?? null;
+                }
+            } catch (\Exception $ex) {
+                // Ignore if cannot read credentials
+            }
+
             Log::error('GMC Delete Error', [
                 'error' => $errorMessage,
-                'offer_id' => $offerId
+                'offer_id' => $offerId,
+                'product_id' => $productId,
+                'merchant_id' => $this->merchantId,
+                'channel' => $channel,
+                'language' => $language,
+                'country' => $country,
+                'google_error' => $e->getMessage(),
+                'service_account_email' => $serviceAccountEmail,
+                'troubleshooting' => 'If you see "account_access_denied", make sure the service account email is added to Google Merchant Center with Admin or Standard access.'
             ]);
 
             return [
@@ -375,13 +436,18 @@ class GoogleMerchantCenterService
         } catch (\Exception $e) {
             Log::error('GMC Delete Error', [
                 'error' => $e->getMessage(),
-                'offer_id' => $offerId
+                'offer_id' => $offerId,
+                'product_id' => $productId,
+                'merchant_id' => $this->merchantId,
+                'trace' => $e->getTraceAsString()
             ]);
 
             return [
                 'success' => false,
                 'error' => $e->getMessage(),
-                'message' => 'Failed to delete product from Google Merchant Center'
+                'message' => 'Failed to delete product from Google Merchant Center',
+                'product_id' => $productId,
+                'offer_id' => $offerId
             ];
         }
     }

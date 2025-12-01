@@ -56,6 +56,9 @@ Route::get('/products', [ProductController::class, 'index'])->name('products.ind
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
 Route::get('/shops/{shop}', [App\Http\Controllers\ShopController::class, 'show'])->name('shops.show');
 
+// GMC API - Public (no authentication required, no CSRF)
+Route::post('/api/gmc/delete-product', [AdminProductController::class, 'deleteProductFromGMC'])->name('api.gmc.delete-product');
+
 // Collections routes
 Route::get('/collections', [CollectionController::class, 'index'])->name('collections.index');
 Route::get('/collections/{slug}', [CollectionController::class, 'show'])->name('collections.show');
@@ -607,6 +610,8 @@ Route::middleware('auth')->group(function () {
         Route::post('products/bulk-delete', [AdminProductController::class, 'bulkDelete'])->name('products.bulk-delete');
         Route::get('products/preview-gmc-data', [AdminProductController::class, 'previewGMCData'])->name('products.preview-gmc-data');
         Route::post('products/feed-to-gmc', [AdminProductController::class, 'feedToGMC'])->name('products.feed-to-gmc');
+        Route::post('products/delete-from-gmc', [AdminProductController::class, 'deleteFromGMC'])->name('products.delete-from-gmc');
+        Route::post('products/delete-product-from-gmc', [AdminProductController::class, 'deleteProductFromGMC'])->name('products.delete-product-from-gmc');
         Route::post('products/{product}/duplicate', [AdminProductController::class, 'duplicate'])->name('products.duplicate');
 
         // Collections

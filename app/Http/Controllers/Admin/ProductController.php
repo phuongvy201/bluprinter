@@ -1400,6 +1400,112 @@ class ProductController extends Controller
     }
 
     /**
+     * Delete a single product from Google Merchant Center by offer_id
+     * Simple API endpoint for Postman testing
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function deleteProductFromGMC(Request $request)
+    {
+        try {
+            // Validate request
+            $request->validate([
+                'offer_id' => 'required|string',
+                'domain' => 'nullable|string', // Optional: domain to determine GMC config
+                'target_country' => 'nullable|string|size:2', // Optional: target country (US, GB, VN, etc.)
+            ]);
+
+            $offerId = $request->offer_id;
+            $domain = $request->input('domain');
+            $targetCountry = strtoupper($request->input('target_country', 'US'));
+
+            // Get domain from request if not provided
+            if (!$domain) {
+                $domain = $request->getHost();
+                // Remove port if present
+                $domain = preg_replace('/:\d+$/', '', $domain);
+                // Remove www. if present
+                $domain = preg_replace('/^www\./', '', $domain);
+            }
+
+            // Get GMC config for domain and target country
+            $gmcConfig = GmcConfig::getConfigForDomainAndCountry($domain, $targetCountry);
+
+            if (!$gmcConfig) {
+                Log::warning('GMC Config not found for delete', [
+                    'domain' => $domain,
+                    'target_country' => $targetCountry,
+                    'offer_id' => $offerId
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => "Không tìm thấy cấu hình GMC cho domain '{$domain}' và thị trường '{$targetCountry}'. Vui lòng cấu hình GMC trước.",
+                    'domain' => $domain,
+                    'target_country' => $targetCountry,
+                    'offer_id' => $offerId
+                ], 400);
+            }
+
+            // Create GMC service with config from database
+            $gmcService = GoogleMerchantCenterService::fromConfig($gmcConfig);
+
+            // Delete product from GMC
+            $deleteResult = $gmcService->deleteProduct($offerId);
+
+            // Log the operation
+            Log::info('GMC Delete Product via API', [
+                'offer_id' => $offerId,
+                'domain' => $domain,
+                'target_country' => $targetCountry,
+                'success' => $deleteResult['success'],
+                'message' => $deleteResult['message'] ?? null,
+                'error' => $deleteResult['error'] ?? null
+            ]);
+
+            if ($deleteResult['success']) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Sản phẩm đã được xóa thành công khỏi Google Merchant Center',
+                    'offer_id' => $offerId,
+                    'domain' => $domain,
+                    'target_country' => $targetCountry,
+                    'result' => $deleteResult
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không thể xóa sản phẩm khỏi Google Merchant Center',
+                    'offer_id' => $offerId,
+                    'domain' => $domain,
+                    'target_country' => $targetCountry,
+                    'error' => $deleteResult['error'] ?? 'Unknown error',
+                    'result' => $deleteResult
+                ], 400);
+            }
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('GMC Delete Product API Error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi xóa sản phẩm khỏi Google Merchant Center: ' . $e->getMessage(),
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Delete product(s) from Google Merchant Center
      * 
      * @param Request $request
