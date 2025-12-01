@@ -143,4 +143,35 @@ class ShippingRate extends Model
     {
         return $query->orderBy('sort_order')->orderBy('first_item_cost');
     }
+
+    /**
+     * Get shipping zones that have rates for a specific category
+     * 
+     * @param int|null $categoryId Category ID (null returns empty collection)
+     * @return \Illuminate\Support\Collection Collection of ShippingZone models
+     */
+    public static function getZonesForCategory(?int $categoryId): \Illuminate\Support\Collection
+    {
+        // If no category ID provided, return empty collection
+        if ($categoryId === null) {
+            return collect();
+        }
+
+        // Get distinct zone IDs that have active rates for this specific category
+        $zoneIds = self::active()
+            ->where('category_id', $categoryId)
+            ->distinct()
+            ->pluck('shipping_zone_id');
+
+        // If no zones found for this category, return empty collection
+        if ($zoneIds->isEmpty()) {
+            return collect();
+        }
+
+        // Get the zones that are active
+        return \App\Models\ShippingZone::whereIn('id', $zoneIds)
+            ->active()
+            ->ordered()
+            ->get();
+    }
 }

@@ -30,6 +30,7 @@ const TIKTOK_PRIMARY_CATEGORY = @json($primaryCategory);
 const TIKTOK_PRODUCT_PRICE = {{ $productPriceConverted }};
 const CURRENT_CURRENCY = @json($currentCurrency);
 const CURRENCY_SYMBOL = @json($currencySymbol);
+const SHIPPING_ZONES = @json($shippingZones ?? []);
 
 // Track Facebook Pixel ViewContent for product detail page
 document.addEventListener('DOMContentLoaded', function() {
@@ -3912,6 +3913,64 @@ function showCartPopup(addedProduct) {
     document.addEventListener('keydown', handleEscape);
 }
 
+// Function to generate shipping zone options
+function generateShippingZoneOptions() {
+    if (!SHIPPING_ZONES || SHIPPING_ZONES.length === 0) {
+        // Fallback to default options if no zones available
+        return '<option value="US">🇺🇸 US</option><option value="UK">🇬🇧 UK</option>';
+    }
+    
+    const countryFlags = {
+        'US': '🇺🇸', 'GB': '🇬🇧', 'UK': '🇬🇧', 'CA': '🇨🇦', 'AU': '🇦🇺',
+        'DE': '🇩🇪', 'FR': '🇫🇷', 'IT': '🇮🇹', 'ES': '🇪🇸',
+        'JP': '🇯🇵', 'KR': '🇰🇷', 'CN': '🇨🇳', 'IN': '🇮🇳',
+        'BR': '🇧🇷', 'MX': '🇲🇽', 'RU': '🇷🇺', 'ZA': '🇿🇦',
+        'VN': '🇻🇳', 'SG': '🇸🇬', 'MY': '🇲🇾', 'TH': '🇹🇭',
+        'PH': '🇵🇭', 'ID': '🇮🇩', 'NL': '🇳🇱', 'BE': '🇧🇪',
+        'CH': '🇨🇭', 'AT': '🇦🇹', 'SE': '🇸🇪', 'NO': '🇳🇴',
+        'DK': '🇩🇰', 'FI': '🇫🇮', 'PL': '🇵🇱', 'IE': '🇮🇪'
+    };
+    
+    // Map database country codes to display codes (GB -> UK for display)
+    const displayCodeMap = {
+        'GB': 'UK'  // Display UK but keep GB for backend
+    };
+    
+    // Collect all unique countries from all zones
+    const countriesMap = new Map();
+    
+    SHIPPING_ZONES.forEach(zone => {
+        if (zone.countries && Array.isArray(zone.countries)) {
+            zone.countries.forEach(countryCode => {
+                // Use display code (UK) if mapping exists, otherwise use original code
+                const displayCode = displayCodeMap[countryCode] || countryCode;
+                
+                if (!countriesMap.has(displayCode)) {
+                    countriesMap.set(displayCode, {
+                        code: displayCode,  // Display code (UK)
+                        backendCode: countryCode,  // Original code from database (GB)
+                        flag: countryFlags[displayCode] || countryFlags[countryCode] || '🌍',
+                        zoneName: zone.name
+                    });
+                }
+            });
+        }
+    });
+    
+    // Sort: US first, then others alphabetically
+    const sortedCountries = Array.from(countriesMap.values()).sort((a, b) => {
+        if (a.code === 'US') return -1;
+        if (b.code === 'US') return 1;
+        return a.code.localeCompare(b.code);
+    });
+    
+    // Generate options - use display code but store backend code in data attribute
+    return sortedCountries.map(country => {
+        const backendCode = country.backendCode || country.code;
+        return `<option value="${country.code}" data-backend-code="${backendCode}">${country.flag} ${country.code}</option>`;
+    }).join('');
+}
+
 function renderCartPopup(popup, cartItems, summary, shippingDetails) {
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
     
@@ -4007,8 +4066,7 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
                         <div class="flex items-center space-x-3">
                             <div class="relative">
                                 <select id="popupShippingCountry" class="text-sm border-2 border-gray-200 rounded-lg px-3 py-2 appearance-none bg-white pr-8 cursor-pointer hover:border-gray-300 focus:border-[#005366] focus:outline-none transition-colors min-w-[80px] [&::-ms-expand]:hidden [&::-webkit-appearance]:none">
-                                    <option value="US">🇺🇸 US</option>
-                                    <option value="GB">🇬🇧 GB</option>
+                                    ${generateShippingZoneOptions()}
                                 </select>
                                 <div class="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
                                     <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4594,15 +4652,17 @@ function refreshCartPopupContent() {
                 }
                 
                 // Update or add progress message
-                const remainingAmount = (100 - subtotal).toFixed(2);
+                // Use baseSubtotal for freeship calculation (always in USD)
+                const remainingAmount = (100 - baseSubtotal).toFixed(2);
+                const remainingAmountDisplay = currency !== 'USD' ? (100 * currencyRate - convertedSubtotal).toFixed(2) : remainingAmount;
                 if (progressMessageContainer) {
-                    progressMessageContainer.textContent = `Add $${remainingAmount} more for free shipping!`;
+                    progressMessageContainer.textContent = `Add ${CURRENCY_SYMBOL}${remainingAmountDisplay} more for free shipping!`;
                 } else {
                     const shippingRow = document.querySelector('#cart-popup-overlay .flex.justify-between.items-center.text-gray-600');
                     if (shippingRow && shippingRow.parentNode) {
                         const progressMsg = document.createElement('div');
                         progressMsg.className = 'text-xs text-blue-600';
-                        progressMsg.textContent = `Add $${remainingAmount} more for free shipping!`;
+                        progressMsg.textContent = `Add ${CURRENCY_SYMBOL}${remainingAmountDisplay} more for free shipping!`;
                         shippingRow.parentNode.insertBefore(progressMsg, shippingRow.nextSibling);
                     }
                 }
@@ -5441,13 +5501,22 @@ function setupPopupShippingCalculator() {
 
 // Separate function for handling country change to avoid duplicate listeners
 async function handlePopupCountryChange() {
-    const country = this.value;
+    let country = this.value;
     const popupShippingCost = document.getElementById('popupShippingCost');
     const popupShippingZone = document.getElementById('popupShippingZone');
     
-    console.log('Country changed to:', country);
+    // Get backend code from data attribute if available, otherwise map UK to GB
+    const selectedOption = this.options[this.selectedIndex];
+    const backendCountry = selectedOption?.dataset?.backendCode || (country === 'UK' ? 'GB' : country);
+    
+    console.log('Country changed to:', country, '(sending as:', backendCountry, ')');
     
     try {
+        // Show loading state
+        if (popupShippingCost) {
+            popupShippingCost.innerHTML = '<span class="text-gray-500">Calculating...</span>';
+        }
+        
         const response = await fetch('/checkout/calculate-shipping', {
             method: 'POST',
             headers: {
@@ -5455,8 +5524,14 @@ async function handlePopupCountryChange() {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({ country: country })
+            body: JSON.stringify({ country: backendCountry })
         });
+        
+        // Check if response is ok
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Network error' }));
+            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        }
         
         const data = await response.json();
         console.log('Shipping calculation response:', data);
@@ -5527,15 +5602,25 @@ async function handlePopupCountryChange() {
             // Show success feedback
             console.log('Shipping updated successfully:', {
                 country: country,
-                shipping: shipping,
+                backendCountry: backendCountry,
+                shipping: displayShipping,
+                baseShipping: baseShipping,
+                convertedShipping: convertedShipping,
                 zone: data.shipping.zone_name
             });
         } else {
             console.error('Shipping calculation failed:', data);
-            // Show error to user
+            // Show error message to user
+            const errorMessage = data.message || 'Unable to calculate shipping';
             if (popupShippingCost) {
                 popupShippingCost.innerHTML = '<span class="text-red-600">Error</span>';
             }
+            // Show detailed error in console for debugging
+            console.error('Shipping error details:', {
+                country: country,
+                message: errorMessage,
+                response: data
+            });
         }
     } catch (error) {
         console.error('Popup shipping calculation error:', error);
@@ -5543,6 +5628,12 @@ async function handlePopupCountryChange() {
         if (popupShippingCost) {
             popupShippingCost.innerHTML = '<span class="text-red-600">Error</span>';
         }
+        // Log full error details
+        console.error('Full error:', {
+            country: country,
+            error: error.message,
+            stack: error.stack
+        });
     }
 }
 

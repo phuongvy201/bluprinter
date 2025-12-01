@@ -142,3 +142,4 @@ function updateCurrencyRate(currency) {
 @endsection
 
 
+

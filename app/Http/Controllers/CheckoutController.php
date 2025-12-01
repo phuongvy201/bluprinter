@@ -59,61 +59,10 @@ class CheckoutController extends Controller
             ];
         }
 
-        // Get default shipping (US) or from session
-        $defaultCountry = 'US';
-        $shippingCost = 0;
-        $shippingDetails = session()->get('shipping_details');
-
-        // Calculate default shipping for US if not in session
-        if (!$shippingDetails) {
-            // Prepare items for calculator
-            $items = $cartItems->map(function ($item) {
-                return [
-                    'product_id' => $item->product_id,
-                    'quantity' => $item->quantity,
-                    'price' => $item->product->base_price,
-                ];
-            });
-
-            $calculator = new ShippingCalculator();
-            $shippingDetails = $calculator->calculateShipping($items, $defaultCountry);
-
-            if ($shippingDetails['success']) {
-                $shippingCost = $shippingDetails['total_shipping'];
-                session()->put('shipping_details', $shippingDetails);
-            }
-        } else {
-            $shippingCost = $shippingDetails['total_shipping'] ?? 0;
-        }
-
-        // Apply freeship logic in checkout index view as well
-        $originalShippingCost = $shippingCost;
-        $qualifiesForFreeShipping = $subtotal >= 100;
-        $shippingCost = $qualifiesForFreeShipping ? 0 : $originalShippingCost;
-
-        $taxAmount = 0; // No tax
-        $total = $subtotal + $shippingCost;
-
-        // Get currency - ưu tiên từ domain config (giống các trang khác), sau đó mới fallback về country
+        // Get currency and rate first for shipping conversion
         $currency = CurrencyService::getCurrencyForDomain();
-
-        // Nếu domain không có currency config, lấy từ country
-        if (!$currency || $currency === 'USD') {
-            $defaultCountry = $shippingDetails['country'] ?? 'US';
-            $currencyFromCountry = $this->getCurrencyFromCountry($defaultCountry);
-            // Chỉ dùng currency từ country nếu domain không có config hoặc domain là USD
-            $domainCurrency = CurrencyService::getCurrencyForDomain();
-            if (!$domainCurrency || $domainCurrency === 'USD') {
-                $currency = $currencyFromCountry;
-            } else {
-                $currency = $domainCurrency;
-            }
-        }
-
-        // Get currency rate - ưu tiên từ domain config
         $currencyRate = CurrencyService::getCurrencyRateForDomain();
         if (!$currencyRate || $currencyRate == 1.0) {
-            // Use default rates if not set in domain config
             $defaultRates = [
                 'USD' => 1.0,
                 'GBP' => 0.79,
@@ -128,10 +77,126 @@ class CheckoutController extends Controller
             $currencyRate = $defaultRates[$currency] ?? 1.0;
         }
 
-        // If currency is not USD, we need to convert amounts
-        $convertedSubtotal = CurrencyService::convertFromUSDWithRate($subtotal, $currency, $currencyRate);
-        $convertedShipping = CurrencyService::convertFromUSDWithRate($shippingCost, $currency, $currencyRate);
-        $convertedTotal = CurrencyService::convertFromUSDWithRate($total, $currency, $currencyRate);
+        // Get default shipping (US) or from session
+        $defaultCountry = 'US';
+        $shippingCost = 0;
+        $shippingDetails = session()->get('shipping_details');
+
+        // Calculate default shipping for US if not in session
+        if (!$shippingDetails) {
+            // Prepare items for calculator - convert prices back to USD for shipping calculation
+            $items = $cartItems->map(function ($item) use ($currency, $currencyRate) {
+                // Use cart item price (already in current currency) and convert back to USD
+                // Cart item price includes variant pricing but not customizations (for shipping calculation)
+                $priceInUSD = $currency !== 'USD' ? ($item->price / $currencyRate) : $item->price;
+                return [
+                    'product_id' => $item->product_id,
+                    'quantity' => $item->quantity,
+                    'price' => $priceInUSD,
+                ];
+            });
+
+            $calculator = new ShippingCalculator();
+            $shippingDetails = $calculator->calculateShipping($items, $defaultCountry);
+
+            if ($shippingDetails['success']) {
+                $shippingCostUSD = $shippingDetails['total_shipping'];
+                // Convert shipping cost from USD to current currency
+                $shippingCost = $currency !== 'USD'
+                    ? CurrencyService::convertFromUSDWithRate($shippingCostUSD, $currency, $currencyRate)
+                    : $shippingCostUSD;
+                session()->put('shipping_details', $shippingDetails);
+            }
+        } else {
+            $shippingCostUSD = $shippingDetails['total_shipping'] ?? 0;
+            // Convert shipping cost from USD to current currency
+            $shippingCost = $currency !== 'USD'
+                ? CurrencyService::convertFromUSDWithRate($shippingCostUSD, $currency, $currencyRate)
+                : $shippingCostUSD;
+        }
+
+        // Store original shipping cost in USD before any currency changes
+        $originalShippingCostUSD = $shippingCostUSD ?? 0;
+
+        // Apply freeship logic in checkout index view as well
+        // Check freeship based on base USD amount (100 USD)
+        $baseSubtotal = $currency !== 'USD' ? $subtotal / $currencyRate : $subtotal;
+        $qualifiesForFreeShipping = $baseSubtotal >= 100;
+        $originalShippingCost = $shippingCost;
+        $shippingCost = $qualifiesForFreeShipping ? 0 : $originalShippingCost;
+
+        $taxAmount = 0; // No tax
+        $total = $subtotal + $shippingCost;
+
+        // Nếu domain không có currency config, lấy từ country
+        $currencyChanged = false;
+        if (!$currency || $currency === 'USD') {
+            $defaultCountry = $shippingDetails['country'] ?? 'US';
+            $currencyFromCountry = $this->getCurrencyFromCountry($defaultCountry);
+            // Chỉ dùng currency từ country nếu domain không có config hoặc domain là USD
+            $domainCurrency = CurrencyService::getCurrencyForDomain();
+            if (!$domainCurrency || $domainCurrency === 'USD') {
+                $newCurrency = $currencyFromCountry;
+            } else {
+                $newCurrency = $domainCurrency;
+            }
+
+            if ($newCurrency !== $currency) {
+                $currencyChanged = true;
+                $currency = $newCurrency;
+            }
+
+            // Update currency rate if currency changed
+            if ($currency !== 'USD') {
+                $currencyRate = CurrencyService::getCurrencyRateForDomain();
+                if (!$currencyRate || $currencyRate == 1.0) {
+                    $defaultRates = [
+                        'USD' => 1.0,
+                        'GBP' => 0.79,
+                        'EUR' => 0.92,
+                        'CAD' => 1.35,
+                        'AUD' => 1.52,
+                        'JPY' => 150.0,
+                        'CNY' => 7.2,
+                        'HKD' => 7.8,
+                        'SGD' => 1.34,
+                    ];
+                    $currencyRate = $defaultRates[$currency] ?? 1.0;
+                }
+            }
+        }
+
+        // Subtotal is already in current currency (prices in cart are already converted)
+        // If currency changed, convert shipping from USD again, otherwise use already converted shippingCost
+        $convertedSubtotal = $subtotal; // Already converted
+        if ($currencyChanged && $originalShippingCostUSD > 0) {
+            // Currency changed, convert from USD again
+            $convertedShipping = $currency !== 'USD'
+                ? CurrencyService::convertFromUSDWithRate($originalShippingCostUSD, $currency, $currencyRate)
+                : $originalShippingCostUSD;
+            // Re-apply freeship logic
+            $convertedShipping = $qualifiesForFreeShipping ? 0 : $convertedShipping;
+        } else {
+            // Currency didn't change, shippingCost is already converted
+            $convertedShipping = $shippingCost;
+        }
+        $convertedTotal = $convertedSubtotal + $convertedShipping;
+
+        // Log shipping calculation for debugging
+        Log::info('🚚 CHECKOUT CONTROLLER - Shipping Calculation', [
+            'originalShippingCostUSD' => $originalShippingCostUSD,
+            'shippingCost' => $shippingCost,
+            'convertedShipping' => $convertedShipping,
+            'currency' => $currency,
+            'currencyRate' => $currencyRate,
+            'currencyChanged' => $currencyChanged,
+            'subtotal' => $subtotal,
+            'convertedSubtotal' => $convertedSubtotal,
+            'baseSubtotal' => $baseSubtotal,
+            'qualifiesForFreeShipping' => $qualifiesForFreeShipping,
+            'note' => $currencyChanged ? 'Currency changed, converted from USD again' : 'Currency unchanged, using already converted shippingCost',
+            'source' => 'CheckoutController::index'
+        ]);
 
         // Get all active shipping zones for the delivery modal
         $shippingZones = ShippingZone::active()
@@ -162,6 +227,7 @@ class CheckoutController extends Controller
 
         return view('checkout.index', compact(
             'products',
+            'cartItems', // Add cartItems for shipping calculation in delivery modal
             'subtotal',
             'shippingCost',
             'taxAmount',
@@ -279,9 +345,32 @@ class CheckoutController extends Controller
             }
         }
 
+        // Get currency and rate for conversion
+        $orderCurrency = $request->currency ?? CurrencyService::getCurrencyForDomain();
+        if (!$orderCurrency || $orderCurrency === 'USD') {
+            // Fallback to country-based currency if domain doesn't have config
+            $orderCurrency = $this->getCurrencyFromCountry($request->country);
+        }
+
+        $currencyRate = CurrencyService::getCurrencyRateForDomain();
+        if (!$currencyRate || $currencyRate == 1.0) {
+            $defaultRates = [
+                'USD' => 1.0,
+                'GBP' => 0.79,
+                'EUR' => 0.92,
+                'CAD' => 1.35,
+                'AUD' => 1.52,
+                'JPY' => 150.0,
+                'CNY' => 7.2,
+                'HKD' => 7.8,
+                'SGD' => 1.34,
+            ];
+            $currencyRate = $defaultRates[$orderCurrency] ?? 1.0;
+        }
+
         // Calculate totals
         $subtotal = 0;
-        $originalShippingCost = $shippingDetails['total_shipping'];
+        $originalShippingCostUSD = $shippingDetails['total_shipping']; // Shipping cost in USD
         $products = [];
 
         foreach ($cartItems as $item) {
@@ -296,22 +385,44 @@ class CheckoutController extends Controller
             ];
         }
 
-        // Apply freeship logic: if subtotal >= $100, shipping is free
-        $qualifiesForFreeShipping = $subtotal >= 100;
-        $shippingCost = $qualifiesForFreeShipping ? 0 : $originalShippingCost;
+        // Check freeship based on base USD amount (100 USD)
+        // Convert subtotal back to USD to check freeship threshold
+        $baseSubtotalUSD = $orderCurrency !== 'USD' ? ($subtotal / $currencyRate) : $subtotal;
+        $qualifiesForFreeShipping = $baseSubtotalUSD >= 100;
+
+        // Convert shipping cost from USD to order currency
+        $convertedShippingCost = $orderCurrency !== 'USD'
+            ? CurrencyService::convertFromUSDWithRate($originalShippingCostUSD, $orderCurrency, $currencyRate)
+            : $originalShippingCostUSD;
+
+        // Apply freeship logic
+        $shippingCost = $qualifiesForFreeShipping ? 0 : $convertedShippingCost;
 
         $taxAmount = 0; // No tax
-        $tipAmount = $request->tip_amount ?? 0; // Get tip amount from request
-        $total = $subtotal + $shippingCost + $tipAmount;
+        $tipAmount = $request->tip_amount ?? 0; // Get tip amount from request (already in USD, will be converted if needed)
 
-        // Log freeship application for debugging
-        Log::info('🚚 FREESHIP LOGIC APPLIED', [
+        // Convert tip from USD to order currency if needed
+        $convertedTipAmount = $orderCurrency !== 'USD' && $tipAmount > 0
+            ? CurrencyService::convertFromUSDWithRate($tipAmount, $orderCurrency, $currencyRate)
+            : $tipAmount;
+
+        $total = $subtotal + $shippingCost + $convertedTipAmount;
+
+        // Log freeship application and currency conversion for debugging
+        Log::info('🚚 CHECKOUT PROCESS - Shipping & Currency Conversion', [
             'subtotal' => $subtotal,
-            'original_shipping_cost' => $originalShippingCost,
-            'qualifies_for_free_shipping' => $qualifiesForFreeShipping,
-            'final_shipping_cost' => $shippingCost,
-            'tip_amount' => $tipAmount,
-            'total_amount' => $total
+            'subtotal_currency' => $orderCurrency,
+            'baseSubtotalUSD' => $baseSubtotalUSD,
+            'originalShippingCostUSD' => $originalShippingCostUSD,
+            'convertedShippingCost' => $convertedShippingCost,
+            'qualifiesForFreeShipping' => $qualifiesForFreeShipping,
+            'finalShippingCost' => $shippingCost,
+            'tipAmountUSD' => $tipAmount,
+            'convertedTipAmount' => $convertedTipAmount,
+            'totalAmount' => $total,
+            'currency' => $orderCurrency,
+            'currencyRate' => $currencyRate,
+            'note' => 'All amounts in order currency except baseSubtotalUSD and originalShippingCostUSD'
         ]);
 
         $eventItems = collect($products)->map(function ($item) {
@@ -338,14 +449,7 @@ class CheckoutController extends Controller
             ]
         );
 
-        // Get currency from request or domain config
-        $orderCurrency = $request->currency ?? CurrencyService::getCurrencyForDomain();
-        if (!$orderCurrency || $orderCurrency === 'USD') {
-            // Fallback to country-based currency if domain doesn't have config
-            $orderCurrency = $this->getCurrencyFromCountry($request->country);
-        }
-
-        // Create order
+        // Create order with converted amounts
         $order = Order::create([
             'order_number' => Order::generateOrderNumber(),
             'user_id' => Auth::id(),
@@ -357,11 +461,11 @@ class CheckoutController extends Controller
             'state' => $request->state,
             'postal_code' => $request->postal_code,
             'country' => $request->country,
-            'subtotal' => $subtotal,
+            'subtotal' => $subtotal, // Already in order currency
             'tax_amount' => $taxAmount,
-            'shipping_cost' => $shippingCost,
-            'tip_amount' => $tipAmount,
-            'total_amount' => $total,
+            'shipping_cost' => $shippingCost, // Converted to order currency
+            'tip_amount' => $convertedTipAmount, // Converted to order currency
+            'total_amount' => $total, // All in order currency
             'currency' => $orderCurrency,
             'status' => 'pending',
             'payment_status' => 'pending',
@@ -391,8 +495,16 @@ class CheckoutController extends Controller
             // Find shipping details for this product
             $itemShipping = collect($shippingDetails['items'])->firstWhere('product_id', $item['product']->id);
 
+            // Get item shipping cost in USD
+            $itemShippingCostUSD = $itemShipping['shipping_cost'] ?? 0;
+
+            // Convert item shipping cost from USD to order currency
+            $itemShippingCostConverted = $orderCurrency !== 'USD' && $itemShippingCostUSD > 0
+                ? CurrencyService::convertFromUSDWithRate($itemShippingCostUSD, $orderCurrency, $currencyRate)
+                : $itemShippingCostUSD;
+
             // Apply freeship logic to individual item shipping cost
-            $itemShippingCost = $qualifiesForFreeShipping ? 0 : ($itemShipping['shipping_cost'] ?? 0);
+            $itemShippingCost = $qualifiesForFreeShipping ? 0 : $itemShippingCostConverted;
             $shippingNotes = $itemShipping ? "Rate: {$itemShipping['shipping_rate_name']}" : null;
 
             // Add freeship note if applicable
@@ -412,7 +524,7 @@ class CheckoutController extends Controller
                     'selected_variant' => $item['cart_item']->selected_variant,
                     'customizations' => $item['cart_item']->customizations,
                 ],
-                'shipping_cost' => $itemShippingCost,
+                'shipping_cost' => $itemShippingCost, // Converted to order currency
                 'is_first_item' => $itemShipping['is_first_item'] ?? false,
                 'shipping_notes' => $shippingNotes,
             ]);
@@ -1225,12 +1337,45 @@ class CheckoutController extends Controller
             $currencyRate = $defaultRates[$currency] ?? 1.0;
         }
 
-        // Convert amounts if currency is not USD (order amounts are stored in USD)
-        $convertedSubtotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($order->subtotal, $currency, $currencyRate) : $order->subtotal;
-        $convertedShipping = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($order->shipping_cost, $currency, $currencyRate) : $order->shipping_cost;
-        $convertedTax = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($order->tax_amount, $currency, $currencyRate) : $order->tax_amount;
-        $convertedTip = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($order->tip_amount, $currency, $currencyRate) : $order->tip_amount;
-        $convertedTotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($order->total_amount, $currency, $currencyRate) : $order->total_amount;
+        // Order amounts are already stored in the order's currency
+        // If display currency matches order currency, use order amounts directly (no conversion)
+        $orderCurrency = $order->currency ?? 'USD';
+
+        if ($currency === $orderCurrency) {
+            // Same currency, no conversion needed - amounts are already in correct currency
+            $convertedSubtotal = $order->subtotal;
+            $convertedShipping = $order->shipping_cost;
+            $convertedTax = $order->tax_amount;
+            $convertedTip = $order->tip_amount;
+            $convertedTotal = $order->total_amount;
+        } else {
+            // Different currency, need to convert from order currency to display currency
+            // Order amounts are in order currency, convert to display currency
+            // First: convert from order currency to USD
+            $orderCurrencyRate = CurrencyService::getCurrencyRateForDomain() ?? 1.0;
+            if ($orderCurrency !== 'USD' && $orderCurrencyRate != 1.0) {
+                // Convert from order currency to USD
+                $subtotalUSD = $order->subtotal / $orderCurrencyRate;
+                $shippingUSD = $order->shipping_cost / $orderCurrencyRate;
+                $taxUSD = $order->tax_amount / $orderCurrencyRate;
+                $tipUSD = $order->tip_amount / $orderCurrencyRate;
+                $totalUSD = $order->total_amount / $orderCurrencyRate;
+            } else {
+                // Order is already in USD
+                $subtotalUSD = $order->subtotal;
+                $shippingUSD = $order->shipping_cost;
+                $taxUSD = $order->tax_amount;
+                $tipUSD = $order->tip_amount;
+                $totalUSD = $order->total_amount;
+            }
+
+            // Second: convert from USD to display currency
+            $convertedSubtotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($subtotalUSD, $currency, $currencyRate) : $subtotalUSD;
+            $convertedShipping = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($shippingUSD, $currency, $currencyRate) : $shippingUSD;
+            $convertedTax = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($taxUSD, $currency, $currencyRate) : $taxUSD;
+            $convertedTip = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($tipUSD, $currency, $currencyRate) : $tipUSD;
+            $convertedTotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($totalUSD, $currency, $currencyRate) : $totalUSD;
+        }
 
         return view('checkout.success', compact('order', 'currency', 'currencyRate', 'convertedSubtotal', 'convertedShipping', 'convertedTax', 'convertedTip', 'convertedTotal'));
     }
@@ -1266,12 +1411,45 @@ class CheckoutController extends Controller
             $currencyRate = $defaultRates[$currency] ?? 1.0;
         }
 
-        // Convert amounts if currency is not USD (order amounts are stored in USD)
-        $convertedSubtotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($order->subtotal, $currency, $currencyRate) : $order->subtotal;
-        $convertedShipping = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($order->shipping_cost, $currency, $currencyRate) : $order->shipping_cost;
-        $convertedTax = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($order->tax_amount, $currency, $currencyRate) : $order->tax_amount;
-        $convertedTip = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($order->tip_amount, $currency, $currencyRate) : $order->tip_amount;
-        $convertedTotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($order->total_amount, $currency, $currencyRate) : $order->total_amount;
+        // Order amounts are already stored in the order's currency
+        // If display currency matches order currency, use order amounts directly (no conversion)
+        $orderCurrency = $order->currency ?? 'USD';
+
+        if ($currency === $orderCurrency) {
+            // Same currency, no conversion needed - amounts are already in correct currency
+            $convertedSubtotal = $order->subtotal;
+            $convertedShipping = $order->shipping_cost;
+            $convertedTax = $order->tax_amount;
+            $convertedTip = $order->tip_amount;
+            $convertedTotal = $order->total_amount;
+        } else {
+            // Different currency, need to convert from order currency to display currency
+            // Order amounts are in order currency, convert to display currency
+            // First: convert from order currency to USD
+            $orderCurrencyRate = CurrencyService::getCurrencyRateForDomain() ?? 1.0;
+            if ($orderCurrency !== 'USD' && $orderCurrencyRate != 1.0) {
+                // Convert from order currency to USD
+                $subtotalUSD = $order->subtotal / $orderCurrencyRate;
+                $shippingUSD = $order->shipping_cost / $orderCurrencyRate;
+                $taxUSD = $order->tax_amount / $orderCurrencyRate;
+                $tipUSD = $order->tip_amount / $orderCurrencyRate;
+                $totalUSD = $order->total_amount / $orderCurrencyRate;
+            } else {
+                // Order is already in USD
+                $subtotalUSD = $order->subtotal;
+                $shippingUSD = $order->shipping_cost;
+                $taxUSD = $order->tax_amount;
+                $tipUSD = $order->tip_amount;
+                $totalUSD = $order->total_amount;
+            }
+
+            // Second: convert from USD to display currency
+            $convertedSubtotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($subtotalUSD, $currency, $currencyRate) : $subtotalUSD;
+            $convertedShipping = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($shippingUSD, $currency, $currencyRate) : $shippingUSD;
+            $convertedTax = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($taxUSD, $currency, $currencyRate) : $taxUSD;
+            $convertedTip = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($tipUSD, $currency, $currencyRate) : $tipUSD;
+            $convertedTotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($totalUSD, $currency, $currencyRate) : $totalUSD;
+        }
 
         // Set locale for receipt
         app()->setLocale($locale);
@@ -1586,12 +1764,46 @@ class CheckoutController extends Controller
                 ], 400);
             }
 
-            // Prepare cart items for calculator
-            $items = $cartItems->map(function ($item) {
+            // Get currency and rate first for price conversion
+            $currency = CurrencyService::getCurrencyForDomain();
+
+            // Nếu domain không có currency config, lấy từ country
+            if (!$currency || $currency === 'USD') {
+                $currencyFromCountry = $this->getCurrencyFromCountry($request->country);
+                // Chỉ dùng currency từ country nếu domain không có config hoặc domain là USD
+                $domainCurrency = CurrencyService::getCurrencyForDomain();
+                if (!$domainCurrency || $domainCurrency === 'USD') {
+                    $currency = $currencyFromCountry;
+                } else {
+                    $currency = $domainCurrency;
+                }
+            }
+
+            // Get currency rate - ưu tiên từ domain config
+            $currencyRate = CurrencyService::getCurrencyRateForDomain();
+            if (!$currencyRate || $currencyRate == 1.0) {
+                $defaultRates = [
+                    'USD' => 1.0,
+                    'GBP' => 0.79,
+                    'EUR' => 0.92,
+                    'CAD' => 1.35,
+                    'AUD' => 1.52,
+                    'JPY' => 150.0,
+                    'CNY' => 7.2,
+                    'HKD' => 7.8,
+                    'SGD' => 1.34,
+                ];
+                $currencyRate = $defaultRates[$currency] ?? 1.0;
+            }
+
+            // Prepare cart items for calculator - convert prices back to USD
+            $items = $cartItems->map(function ($item) use ($currency, $currencyRate) {
+                // Use cart item price (already in current currency) and convert back to USD
+                $priceInUSD = $currency !== 'USD' ? ($item->price / $currencyRate) : $item->price;
                 return [
                     'product_id' => $item->product_id,
                     'quantity' => $item->quantity,
-                    'price' => $item->product->base_price,
+                    'price' => $priceInUSD,
                 ];
             });
         }
@@ -1610,39 +1822,30 @@ class CheckoutController extends Controller
         // Store shipping details in session
         session()->put('shipping_details', $shippingResult);
 
-        // Get currency - ưu tiên từ domain config (giống các trang khác), sau đó mới fallback về country
-        $currency = CurrencyService::getCurrencyForDomain();
-
-        // Nếu domain không có currency config, lấy từ country
-        if (!$currency || $currency === 'USD') {
-            $currencyFromCountry = $this->getCurrencyFromCountry($request->country);
-            // Chỉ dùng currency từ country nếu domain không có config hoặc domain là USD
-            $domainCurrency = CurrencyService::getCurrencyForDomain();
-            if (!$domainCurrency || $domainCurrency === 'USD') {
-                $currency = $currencyFromCountry;
-            } else {
-                $currency = $domainCurrency;
+        // Convert shipping cost to target currency (currency and rate already retrieved above for cart items)
+        if (!isset($currency) || !isset($currencyRate)) {
+            // Fallback if currency/rate not set (shouldn't happen for cart items, but needed for direct items)
+            $currency = CurrencyService::getCurrencyForDomain();
+            if (!$currency || $currency === 'USD') {
+                $currency = $this->getCurrencyFromCountry($request->country);
+            }
+            $currencyRate = CurrencyService::getCurrencyRateForDomain();
+            if (!$currencyRate || $currencyRate == 1.0) {
+                $defaultRates = [
+                    'USD' => 1.0,
+                    'GBP' => 0.79,
+                    'EUR' => 0.92,
+                    'CAD' => 1.35,
+                    'AUD' => 1.52,
+                    'JPY' => 150.0,
+                    'CNY' => 7.2,
+                    'HKD' => 7.8,
+                    'SGD' => 1.34,
+                ];
+                $currencyRate = $defaultRates[$currency] ?? 1.0;
             }
         }
 
-        // Get currency rate - ưu tiên từ domain config
-        $currencyRate = CurrencyService::getCurrencyRateForDomain();
-        if (!$currencyRate || $currencyRate == 1.0) {
-            $defaultRates = [
-                'USD' => 1.0,
-                'GBP' => 0.79,
-                'EUR' => 0.92,
-                'CAD' => 1.35,
-                'AUD' => 1.52,
-                'JPY' => 150.0,
-                'CNY' => 7.2,
-                'HKD' => 7.8,
-                'SGD' => 1.34,
-            ];
-            $currencyRate = $defaultRates[$currency] ?? 1.0;
-        }
-
-        // Convert shipping cost to target currency
         $convertedShipping = CurrencyService::convertFromUSDWithRate(
             $shippingResult['total_shipping'],
             $currency,

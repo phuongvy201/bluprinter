@@ -51,9 +51,13 @@ class ShippingCalculator
             $shippingRate = $this->findApplicableRate($zone->id, $categoryId, $totalItems, $totalValue);
 
             if (!$shippingRate) {
+                // Get zone name for better error message
+                $zoneName = $zone->name ?? 'this zone';
+                $categoryName = $product->template->category->name ?? 'this category';
+
                 return [
                     'success' => false,
-                    'message' => 'No shipping rate found for this combination',
+                    'message' => "No shipping rate found for {$categoryName} in {$zoneName}. Please contact support.",
                     'total_shipping' => 0,
                     'items' => []
                 ];
@@ -157,12 +161,25 @@ class ShippingCalculator
         }
 
         // Fall back to general rate (category_id is null)
-        return ShippingRate::active()
+        $generalRate = ShippingRate::active()
             ->forZone($zoneId)
             ->whereNull('category_id')
             ->ordered()
             ->get()
             ->first(fn($r) => $r->isApplicable($itemCount, $orderValue));
+
+        if ($generalRate) {
+            return $generalRate;
+        }
+
+        // If still no rate found, try to get any active rate for this zone (ignore applicability)
+        // This is a last resort fallback
+        $anyRate = ShippingRate::active()
+            ->forZone($zoneId)
+            ->ordered()
+            ->first();
+
+        return $anyRate;
     }
 
     /**

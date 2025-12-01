@@ -6,6 +6,7 @@ use App\Models\Cart;
 use App\Models\Product;
 use App\Models\ShippingZone;
 use App\Services\ShippingCalculator;
+use App\Services\CurrencyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -44,12 +45,35 @@ class CartController extends Controller
         $shippingDetails = null;
 
         if (!$cartItems->isEmpty()) {
+            // Get currency and rate for conversion
+            $currency = CurrencyService::getCurrencyForDomain() ?? 'USD';
+            $currencyRate = CurrencyService::getCurrencyRateForDomain();
+
+            // If no rate from domain, use default rates
+            if (!$currencyRate || $currencyRate == 1.0) {
+                $defaultRates = [
+                    'USD' => 1.0,
+                    'GBP' => 0.79,
+                    'EUR' => 0.92,
+                    'CAD' => 1.35,
+                    'AUD' => 1.52,
+                    'JPY' => 150.0,
+                    'CNY' => 7.2,
+                    'HKD' => 7.8,
+                    'SGD' => 1.34,
+                ];
+                $currencyRate = $defaultRates[$currency] ?? 1.0;
+            }
+
             // Prepare cart items for shipping calculation
-            $items = $cartItems->map(function ($item) {
+            // Shipping calculator expects USD prices, so we need to convert back to USD
+            $items = $cartItems->map(function ($item) use ($currency, $currencyRate) {
+                // Convert price back to USD for shipping calculation
+                $priceInUSD = $currency !== 'USD' ? $item->price / $currencyRate : $item->price;
                 return [
                     'product_id' => $item->product_id,
                     'quantity' => $item->quantity,
-                    'price' => $item->price,
+                    'price' => $priceInUSD,
                 ];
             });
 
@@ -58,8 +82,13 @@ class CartController extends Controller
             $shippingResult = $calculator->calculateShipping($items, 'US');
 
             if ($shippingResult['success']) {
-                $shipping = $shippingResult['total_shipping'];
+                $shippingUSD = $shippingResult['total_shipping'];
                 $shippingDetails = $shippingResult;
+
+                // Convert shipping from USD to current currency
+                $shipping = $currency !== 'USD'
+                    ? CurrencyService::convertFromUSDWithRate($shippingUSD, $currency, $currencyRate)
+                    : $shippingUSD;
             }
         }
 

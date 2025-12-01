@@ -252,22 +252,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <h4 class="font-medium text-gray-900 truncate">{{ $item->product_name }}</h4>
                                         <p class="text-sm text-gray-600">
                                             Qty: {{ $item->quantity }} × 
-                                            @php
-                                                $itemUnitPrice = ($currency ?? 'USD') !== 'USD' && isset($currencyRate) 
-                                                    ? $item->unit_price * $currencyRate 
-                                                    : $item->unit_price;
-                                                echo \App\Services\CurrencyService::formatPrice($itemUnitPrice, $currency ?? 'USD');
-                                            @endphp
+                                            {{ \App\Services\CurrencyService::formatPrice($item->unit_price, $currency ?? 'USD') }}
                                         </p>
                                     </div>
                                     <div class="text-right flex-shrink-0">
                                         <p class="font-semibold text-gray-900">
-                                            @php
-                                                $itemTotalPrice = ($currency ?? 'USD') !== 'USD' && isset($currencyRate) 
-                                                    ? $item->total_price * $currencyRate 
-                                                    : $item->total_price;
-                                                echo \App\Services\CurrencyService::formatPrice($itemTotalPrice, $currency ?? 'USD');
-                                            @endphp
+                                            {{ \App\Services\CurrencyService::formatPrice($item->total_price, $currency ?? 'USD') }}
                                         </p>
                                     </div>
                                 </div>

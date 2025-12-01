@@ -6,6 +6,7 @@
 @php
     $currentCurrency = currency();
     $currencySymbol = currency_symbol();
+    $currentCurrencyRate = currency_rate() ?? 1.0;
 @endphp
 <div class="bg-gray-50 min-h-screen py-8">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -119,7 +120,7 @@
                                                 <p class="text-sm text-gray-700">
                                                     <span class="font-medium">{{ $key }}:</span> {{ $customization['value'] }}
                                                     @if(isset($customization['price']) && $customization['price'] > 0)
-                                                        <span class="text-[#005366]">(+{{ format_price_usd((float) $customization['price']) }})</span>
+                                                        <span class="text-[#005366]">(+{{ format_price((float) $customization['price']) }})</span>
                                                     @endif
                                                 </p>
                                             @endforeach
@@ -145,9 +146,9 @@
                                             </button>
                                         </div>
                                         <div class="text-right">
-                                            <p class="text-2xl font-bold text-[#005366]">{{ format_price_usd((float) $item->getTotalPriceWithCustomizations()) }}</p>
+                                            <p class="text-2xl font-bold text-[#005366]">{{ format_price((float) $item->getTotalPriceWithCustomizations()) }}</p>
                                             @if($item->quantity > 1)
-                                                <p class="text-sm text-gray-500">{{ format_price_usd((float) ($item->getTotalPriceWithCustomizations() / $item->quantity)) }} each</p>
+                                                <p class="text-sm text-gray-500">{{ format_price((float) ($item->getTotalPriceWithCustomizations() / $item->quantity)) }} each</p>
                                             @endif
                                         </div>
                                     </div>
@@ -165,7 +166,7 @@
                         <div class="space-y-3 mb-6">
                             <div class="flex justify-between text-gray-600">
                                 <span>Subtotal ({{ $cartItems->sum('quantity') }} items)</span>
-                                <span class="font-semibold">{{ format_price_usd((float) $subtotal) }}</span>
+                                <span class="font-semibold">{{ format_price((float) $subtotal) }}</span>
                             </div>
                             
                         <!-- Delivery Information -->
@@ -186,7 +187,9 @@
                         </div>
                             
                             @php
-                                $qualifiesForFreeShipping = $subtotal >= 100;
+                                // Check freeship based on base USD amount (100 USD)
+                                $baseSubtotal = $currentCurrency !== 'USD' ? $subtotal / $currentCurrencyRate : $subtotal;
+                                $qualifiesForFreeShipping = $baseSubtotal >= 100;
                                 $actualShipping = $qualifiesForFreeShipping ? 0 : $shipping;
                                 $actualTotal = $subtotal + $actualShipping;
                             @endphp
@@ -198,14 +201,14 @@
                                     @if($actualShipping == 0)
                                         <span class="text-green-600">FREE</span>
                                     @else
-                                        {{ format_price_usd((float) $actualShipping) }}
+                                        {{ format_price((float) $actualShipping) }}
                                     @endif
                                 </span>
                             </div>
                             
                             <div class="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
                                 <span>Total</span>
-                                <span class="text-[#005366]">{{ format_price_usd((float) $actualTotal) }}</span>
+                                <span class="text-[#005366]">{{ format_price((float) $actualTotal) }}</span>
                             </div>
                             
                             {{-- Freeship Messages --}}
@@ -214,8 +217,14 @@
                                     🎉 You qualify for free shipping on orders $100+!
                                 </div>
                             @else
+                                @php
+                                    // Calculate remaining amount in current currency for freeship
+                                    $baseSubtotal = $currentCurrency !== 'USD' ? $subtotal / $currentCurrencyRate : $subtotal;
+                                    $remainingBaseAmount = 100 - $baseSubtotal;
+                                    $remainingAmount = $currentCurrency !== 'USD' ? $remainingBaseAmount * $currentCurrencyRate : $remainingBaseAmount;
+                                @endphp
                                 <div class="text-xs text-blue-600 mt-2">
-                                    Add {{ format_price_usd((float) (100 - $subtotal)) }} more for free shipping!
+                                    Add {{ format_price((float) $remainingAmount) }} more for free shipping!
                                 </div>
                             @endif
                         </div>
@@ -344,15 +353,21 @@
                                 
                                 // Calculate actual shipping cost for this zone based on cart items
                                 $calculator = new \App\Services\ShippingCalculator();
-                                $cartItemsForCalc = $cartItems->map(function ($item) {
+                                // Convert prices back to USD for shipping calculation (shipping calculator expects USD)
+                                $cartItemsForCalc = $cartItems->map(function ($item) use ($currentCurrency, $currentCurrencyRate) {
+                                    $priceInUSD = $currentCurrency !== 'USD' ? $item->price / $currentCurrencyRate : $item->price;
                                     return [
                                         'product_id' => $item->product_id,
                                         'quantity' => $item->quantity,
-                                        'price' => $item->price,
+                                        'price' => $priceInUSD,
                                     ];
                                 });
                                 $shippingResult = $calculator->calculateShipping($cartItemsForCalc, $firstCountry);
-                                $shippingCost = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
+                                $shippingCostUSD = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
+                                // Convert shipping cost from USD to current currency
+                                $shippingCost = $currentCurrency !== 'USD' 
+                                    ? \App\Services\CurrencyService::convertFromUSDWithRate($shippingCostUSD, $currentCurrency, $currentCurrencyRate)
+                                    : $shippingCostUSD;
                                 $rateName = $shippingResult['success'] && !empty($shippingResult['items']) ? $shippingResult['items'][0]['shipping_rate_name'] : 'Standard shipping';
                             @endphp
                             <div class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors" 
@@ -366,7 +381,7 @@
                                         </div>
                                     </div>
                                     <div class="text-right">
-                                    <div class="text-sm font-medium text-gray-900">{{ format_price_usd((float) $shippingCost) }}</div>
+                                    <div class="text-sm font-medium text-gray-900">{{ format_price((float) $shippingCost) }}</div>
                                         <div class="text-xs text-gray-500">{{ $rateName }}</div>
                                     </div>
                                 </div>
@@ -437,6 +452,9 @@
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 const cartItemsData = @json($cartItems);
+const CURRENCY_SYMBOL = @json($currencySymbol);
+const CURRENT_CURRENCY = @json($currentCurrency);
+const CURRENT_CURRENCY_RATE = {{ $currentCurrencyRate }};
 
 function updateQuantity(cartItemId, newQuantity) {
     if (newQuantity < 1) return;
@@ -734,7 +752,7 @@ function updateCartModalTotal(variants) {
     const unitTotal = unitPrice + customizationUnitTotal;
     const total = unitTotal * quantity;
     const totalDisplay = document.getElementById('modalTotal' + cartItemId);
-    if (totalDisplay) totalDisplay.textContent = '$' + total.toFixed(2);
+    if (totalDisplay) totalDisplay.textContent = `${CURRENCY_SYMBOL}${total.toFixed(2)}`;
 }
 
 function saveCartChanges(cartItemId) {
@@ -965,10 +983,21 @@ async function updateShippingForCountry(countryCode, countryName) {
         const data = await response.json();
         
         if (data.success && data.shipping) {
-            const newShipping = parseFloat(data.shipping.total_shipping);
+            // Use converted shipping if available (already converted by API)
+            const convertedShipping = data.converted_shipping !== undefined 
+                ? parseFloat(data.converted_shipping) 
+                : parseFloat(data.shipping.total_shipping);
+            
             const subtotal = {{ $subtotal }};
-            const qualifiesForFreeShipping = subtotal >= 100;
-            const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
+            
+            // Check freeship based on base USD amount (100 USD)
+            // Subtotal is already in current currency, need to check against base USD
+            const currency = data.currency || CURRENT_CURRENCY || 'USD';
+            const currencyRate = parseFloat(data.currency_rate || 1.0);
+            const baseSubtotal = currency !== 'USD' ? subtotal / currencyRate : subtotal;
+            const qualifiesForFreeShipping = baseSubtotal >= 100;
+            
+            const actualShipping = qualifiesForFreeShipping ? 0 : convertedShipping;
             const newTotal = subtotal + actualShipping;
             
             // Update shipping cost display
@@ -976,7 +1005,7 @@ async function updateShippingForCountry(countryCode, countryName) {
                 if (qualifiesForFreeShipping) {
                     shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
                 } else {
-                    shippingCostElement.innerHTML = `${CURRENCY_SYMBOL}${newShipping.toFixed(2)}`;
+                    shippingCostElement.innerHTML = `${CURRENCY_SYMBOL}${convertedShipping.toFixed(2)}`;
                 }
             }
             
@@ -987,12 +1016,13 @@ async function updateShippingForCountry(countryCode, countryName) {
             }
             
             // Update freeship messages
-            updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping);
+            updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currency, currencyRate);
             
             console.log('Shipping updated:', {
                 country: countryCode,
-                originalShipping: newShipping,
+                convertedShipping: convertedShipping,
                 actualShipping: actualShipping,
+                baseSubtotal: baseSubtotal,
                 qualifiesForFreeShipping: qualifiesForFreeShipping
             });
         } else {
@@ -1013,7 +1043,7 @@ async function updateShippingForCountry(countryCode, countryName) {
     }
 }
 
-function updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping) {
+function updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currency = 'USD', currencyRate = 1.0) {
     const shippingSection = document.querySelector('.border-t.pt-3');
     if (shippingSection) {
         // Remove existing freeship messages
@@ -1030,11 +1060,13 @@ function updateFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShippi
             successMsg.innerHTML = '🎉 You qualify for free shipping on orders $100+!';
             shippingSection.insertBefore(successMsg, shippingSection.querySelector('.border-t.pt-3'));
         } else {
-            // Add progress message
-            const remainingAmount = (100 - subtotal).toFixed(2);
+            // Add progress message - calculate remaining amount in current currency
+            const baseSubtotal = currency !== 'USD' ? subtotal / currencyRate : subtotal;
+            const remainingBaseAmount = 100 - baseSubtotal;
+            const remainingAmount = currency !== 'USD' ? remainingBaseAmount * currencyRate : remainingBaseAmount;
             const progressMsg = document.createElement('div');
             progressMsg.className = 'freeship-progress text-xs text-blue-600 mt-2';
-            progressMsg.textContent = `Add ${CURRENCY_SYMBOL}${remainingAmount} more for free shipping!`;
+            progressMsg.textContent = `Add ${CURRENCY_SYMBOL}${remainingAmount.toFixed(2)} more for free shipping!`;
             shippingSection.insertBefore(progressMsg, shippingSection.querySelector('.border-t.pt-3'));
         }
     }
@@ -1148,7 +1180,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 shippingCostElement.innerHTML = actualShipping === 0 ? 
                     '<span class="text-green-600">FREE</span>' : 
-                    '$' + actualShipping.toFixed(2);
+                    `${CURRENCY_SYMBOL}${actualShipping.toFixed(2)}`;
             }
         }
         
@@ -1197,20 +1229,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success && data.shipping) {
-                    const newShipping = parseFloat(data.shipping.total_shipping);
-                    const qualifiesForFreeShipping = subtotal >= 100;
-                    const actualShipping = applyFreeshipLogic(subtotal, newShipping);
+                    // Use converted shipping if available (already converted by API)
+                    const convertedShipping = data.converted_shipping !== undefined 
+                        ? parseFloat(data.converted_shipping) 
+                        : parseFloat(data.shipping.total_shipping);
+                    
+                    // Check freeship based on base USD amount (100 USD)
+                    const currency = data.currency || CURRENT_CURRENCY || 'USD';
+                    const currencyRate = parseFloat(data.currency_rate || 1.0);
+                    const baseSubtotal = currency !== 'USD' ? subtotal / currencyRate : subtotal;
+                    const qualifiesForFreeShipping = baseSubtotal >= 100;
+                    const actualShipping = qualifiesForFreeShipping ? 0 : convertedShipping;
                     const newTotal = subtotal + actualShipping;
                     
                     console.log('Cart shipping update:', {
                         subtotal: subtotal,
-                        originalShipping: newShipping,
+                        baseSubtotal: baseSubtotal,
+                        convertedShipping: convertedShipping,
                         actualShipping: actualShipping,
                         qualifiesForFreeShipping: qualifiesForFreeShipping
                     });
                     
                     // Update shipping cost display with freeship logic
-                    updateShippingDisplay(actualShipping, newShipping, qualifiesForFreeShipping);
+                    updateShippingDisplay(actualShipping, convertedShipping, qualifiesForFreeShipping);
                     
                     // Update zone
                     const zoneElement = document.querySelector('.text-xs.text-gray-500 span:last-child');
@@ -1220,7 +1261,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Update total
                     if (totalElement) {
-                        totalElement.textContent = '$' + newTotal.toFixed(2);
+                        totalElement.textContent = `${CURRENCY_SYMBOL}${newTotal.toFixed(2)}`;
                     }
                 }
             } catch (error) {
@@ -1231,22 +1272,26 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize freeship check on page load
     function initializeFreeshipCheck() {
-        const qualifiesForFreeShipping = subtotal >= 100;
+        // Check freeship based on base USD amount (100 USD)
+        // Subtotal is already in current currency, need to convert to USD for check
+        const baseSubtotal = CURRENT_CURRENCY !== 'USD' ? subtotal / CURRENT_CURRENCY_RATE : subtotal;
+        const qualifiesForFreeShipping = baseSubtotal >= 100;
         const currentShippingElement = document.getElementById('shippingCost');
         const currentShippingText = currentShippingElement ? currentShippingElement.textContent : '';
-        const currentShipping = currentShippingText.includes('FREE') ? 0 : parseFloat(currentShippingText.replace(/\$/g, '')) || 0;
+        const currentShipping = currentShippingText.includes('FREE') ? 0 : parseFloat(currentShippingText.replace(new RegExp(CURRENCY_SYMBOL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')) || 0;
         
         if (qualifiesForFreeShipping) {
             updateShippingDisplay(0, currentShipping, true);
             // Update total if needed
             if (totalElement) {
                 const newTotal = subtotal;
-                totalElement.textContent = '$' + newTotal.toFixed(2);
+                totalElement.textContent = `${CURRENCY_SYMBOL}${newTotal.toFixed(2)}`;
             }
         }
         
         console.log('Cart freeship initialization:', {
             subtotal: subtotal,
+            baseSubtotal: baseSubtotal,
             qualifiesForFreeShipping: qualifiesForFreeShipping,
             currentShipping: currentShipping
         });

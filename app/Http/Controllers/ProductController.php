@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Shop;
+use App\Models\ShippingRate;
 use App\Services\TikTokEventsService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
@@ -149,9 +150,13 @@ class ProductController extends Controller
         }
         $breadcrumbs[] = ['name' => $product->name, 'url' => ''];
 
+        // Get shipping zones that have rates for this product's category
+        $categoryId = $product->template->category_id ?? null;
+        $shippingZones = ShippingRate::getZonesForCategory($categoryId);
+
         $this->trackTikTokViewContent($request, $product);
 
-        return view('products.show', compact('product', 'relatedProducts', 'breadcrumbs', 'shopAvailable'));
+        return view('products.show', compact('product', 'relatedProducts', 'breadcrumbs', 'shopAvailable', 'shippingZones'));
     }
 
     private function trackTikTokViewContent(Request $request, Product $product): void

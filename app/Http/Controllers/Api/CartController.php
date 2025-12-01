@@ -148,17 +148,21 @@ class CartController extends Controller
             }
 
             // Calculate summary (without tax)
+            // Note: $totalPrice is already in the current currency (prices in cart are already converted)
             $subtotal = $totalPrice;
             $shipping = 0;
             $shippingDetails = null;
 
             if (!$cartItems->isEmpty()) {
                 // Prepare cart items for shipping calculation
-                $items = $cartItems->map(function ($item) {
+                // Shipping calculator expects USD prices, so we need to convert back to USD
+                $items = $cartItems->map(function ($item) use ($currency, $currencyRate) {
+                    // Convert price back to USD for shipping calculation
+                    $priceInUSD = $currency !== 'USD' ? $item->price / $currencyRate : $item->price;
                     return [
                         'product_id' => $item->product_id,
                         'quantity' => $item->quantity,
-                        'price' => $item->price,
+                        'price' => $priceInUSD,
                     ];
                 });
 
@@ -173,11 +177,13 @@ class CartController extends Controller
                 }
             }
 
-            // Convert amounts if currency is not USD
-            $convertedSubtotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($subtotal, $currency, $currencyRate) : $subtotal;
+            // Convert shipping from USD to current currency (shipping is always calculated in USD)
             $convertedShipping = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($shipping, $currency, $currencyRate) : $shipping;
-            $total = $subtotal + $shipping;
-            $convertedTotal = $currency !== 'USD' ? CurrencyService::convertFromUSDWithRate($total, $currency, $currencyRate) : $total;
+
+            // Subtotal is already in current currency, no need to convert
+            $convertedSubtotal = $subtotal;
+            $total = $subtotal + $convertedShipping;
+            $convertedTotal = $total;
 
             return response()->json([
                 'success' => true,

@@ -227,20 +227,10 @@
                             <td>{{ $item->product_name }}</td>
                             <td>{{ $item->quantity }}</td>
                             <td>
-                                @php
-                                    $itemUnitPrice = ($currency ?? 'USD') !== 'USD' && isset($currencyRate) 
-                                        ? $item->unit_price * $currencyRate 
-                                        : $item->unit_price;
-                                    echo \App\Services\CurrencyService::formatPrice($itemUnitPrice, $currency ?? 'USD');
-                                @endphp
+                                {{ \App\Services\CurrencyService::formatPrice($item->unit_price, $currency ?? 'USD') }}
                             </td>
                             <td>
-                                @php
-                                    $itemTotalPrice = ($currency ?? 'USD') !== 'USD' && isset($currencyRate) 
-                                        ? $item->total_price * $currencyRate 
-                                        : $item->total_price;
-                                    echo \App\Services\CurrencyService::formatPrice($itemTotalPrice, $currency ?? 'USD');
-                                @endphp
+                                {{ \App\Services\CurrencyService::formatPrice($item->total_price, $currency ?? 'USD') }}
                             </td>
                         </tr>
                     @endforeach

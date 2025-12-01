@@ -14,6 +14,10 @@
 @section('content')
 @php
     use Illuminate\Support\Collection;
+    
+    // Get currency and rate using helper functions (same as cart page)
+    $currentCurrency = currency();
+    $currentCurrencyRate = currency_rate() ?? 1.0;
 
     $gtagItems = [];
     $tiktokContents = [];
@@ -78,6 +82,7 @@ const CHECKOUT_BASE_TOTAL = {{ $total }};
 const CHECKOUT_CONVERTED_SUBTOTAL = {{ $convertedSubtotal ?? $subtotal }};
 const CHECKOUT_CONVERTED_SHIPPING = {{ $convertedShipping ?? $shippingCost }};
 const CHECKOUT_CONVERTED_TOTAL = {{ $convertedTotal ?? $total }};
+const CHECKOUT_CURRENCY_SYMBOL = @json(\App\Services\CurrencyService::getCurrencySymbol($currency ?? 'USD'));
 
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof gtag === 'function') {
@@ -981,12 +986,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                             </button>
                                             <p class="font-semibold text-gray-900">
-                                                @php
-                                                    $itemPrice = ($currency ?? 'USD') !== 'USD' && isset($currencyRate) 
-                                                        ? $item['total'] * $currencyRate 
-                                                        : $item['total'];
-                                                    echo \App\Services\CurrencyService::formatPrice($itemPrice, $currency ?? 'USD');
-                                                @endphp
+                                                {{ \App\Services\CurrencyService::formatPrice($item['total'], $currency ?? 'USD') }}
                                             </p>
                                         </div>
                                     </div>
@@ -1074,7 +1074,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                         <div class="flex justify-between text-gray-600">
                             <span>Subtotal</span>
                             <span class="subtotal-display">
-                                {{ \App\Services\CurrencyService::formatPrice($convertedSubtotal ?? $subtotal, $currency ?? 'USD') }}
+                                {{ \App\Services\CurrencyService::formatPrice($subtotal, $currency ?? 'USD') }}
                             </span>
                         </div>
                         
@@ -1112,12 +1112,56 @@ function buildCheckoutCustomizationInputs(customizations) {
                             </div>
                         </div>
                         
+                        @php
+                            // Check freeship based on base USD amount (100 USD)
+                            $baseSubtotal = ($currency ?? 'USD') !== 'USD' ? ($convertedSubtotal ?? $subtotal) / ($currencyRate ?? 1.0) : ($convertedSubtotal ?? $subtotal);
+                            $qualifiesForFreeShipping = $baseSubtotal >= 100;
+                            $actualShipping = $qualifiesForFreeShipping ? 0 : ($convertedShipping ?? $shippingCost);
+                            $actualTotal = ($convertedSubtotal ?? $subtotal) + $actualShipping;
+                            
+                            // Log shipping source on page load
+                            \Log::info('🚚 CHECKOUT PAGE LOAD - Shipping Source (PHP)', [
+                                'shippingCost' => $shippingCost ?? 'not set',
+                                'convertedShipping' => $convertedShipping ?? 'not set',
+                                'currency' => $currency ?? 'USD',
+                                'currencyRate' => $currencyRate ?? 1.0,
+                                'subtotal' => $subtotal ?? 'not set',
+                                'convertedSubtotal' => $convertedSubtotal ?? 'not set',
+                                'baseSubtotal' => $baseSubtotal,
+                                'qualifiesForFreeShipping' => $qualifiesForFreeShipping,
+                                'actualShipping' => $actualShipping,
+                                'shippingSource' => $convertedShipping ? 'convertedShipping' : ($shippingCost ? 'shippingCost' : 'not set'),
+                                'note' => 'PHP passes these values to JavaScript constants',
+                                'source' => 'PHP Server-side render'
+                            ]);
+                        @endphp
+                        
                         <div class="flex justify-between text-gray-600">
                             <span>Shipping</span>
                             <span class="shipping-cost-display">
-                                {{ \App\Services\CurrencyService::formatPrice($convertedShipping ?? $shippingCost, $currency ?? 'USD') }}
+                                @if($actualShipping == 0)
+                                    <span class="text-green-600">FREE</span>
+                                @else
+                                    {{ \App\Services\CurrencyService::formatPrice($actualShipping, $currency ?? 'USD') }}
+                                @endif
                             </span>
                         </div>
+                        
+                        {{-- Freeship Messages --}}
+                        @if($qualifiesForFreeShipping)
+                            <div class="text-xs text-green-600 bg-green-50 p-2 rounded-lg border border-green-200">
+                                🎉 You qualify for free shipping on orders $100+!
+                            </div>
+                        @else
+                            @php
+                                // Calculate remaining amount in current currency for freeship
+                                $remainingBaseAmount = 100 - $baseSubtotal;
+                                $remainingAmount = ($currency ?? 'USD') !== 'USD' ? $remainingBaseAmount * ($currencyRate ?? 1.0) : $remainingBaseAmount;
+                            @endphp
+                            <div class="text-xs text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-200">
+                                Add {{ \App\Services\CurrencyService::formatPrice($remainingAmount, $currency ?? 'USD') }} more for free shipping!
+                            </div>
+                        @endif
                         
                         <div class="flex justify-between text-gray-600" id="tip-line" style="display: none;">
                             <span>Tips</span>
@@ -1127,7 +1171,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                         <div class="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-3 mt-3">
                             <span>Total</span>
                             <span class="text-blue-600 total-display">
-                                {{ \App\Services\CurrencyService::formatPrice($convertedTotal ?? $total, $currency ?? 'USD') }}
+                                {{ \App\Services\CurrencyService::formatPrice($actualTotal, $currency ?? 'USD') }}
                             </span>
                         </div>
                     </div>
@@ -1267,6 +1311,41 @@ function convertFromUSD(usdAmount, targetCurrency) {
     return usdAmount * rate;
 }
 
+// Update freeship messages in checkout (global function)
+function updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currency = 'USD', currencyRate = 1.0) {
+    // Find the shipping section (after shipping cost display)
+    const shippingSection = document.querySelector('.shipping-cost-display')?.parentElement?.parentElement;
+    if (!shippingSection) return;
+    
+    // Remove existing freeship messages
+    const existingFreeshipMsg = shippingSection.querySelector('.freeship-message');
+    const existingProgressMsg = shippingSection.querySelector('.freeship-progress');
+    
+    if (existingFreeshipMsg) existingFreeshipMsg.remove();
+    if (existingProgressMsg) existingProgressMsg.remove();
+    
+    // Find the shipping cost display element to insert after
+    const shippingCostDisplay = shippingSection.querySelector('.shipping-cost-display')?.parentElement;
+    if (!shippingCostDisplay) return;
+    
+    if (qualifiesForFreeShipping) {
+        // Add success message
+        const successMsg = document.createElement('div');
+        successMsg.className = 'freeship-message text-xs text-green-600 bg-green-50 p-2 rounded-lg border border-green-200 mt-2';
+        successMsg.innerHTML = '🎉 You qualify for free shipping on orders $100+!';
+        shippingCostDisplay.insertAdjacentElement('afterend', successMsg);
+    } else {
+        // Add progress message - calculate remaining amount in current currency
+        const baseSubtotal = currency !== 'USD' ? subtotal / currencyRate : subtotal;
+        const remainingBaseAmount = 100 - baseSubtotal;
+        const remainingAmount = currency !== 'USD' ? remainingBaseAmount * currencyRate : remainingBaseAmount;
+        const progressMsg = document.createElement('div');
+        progressMsg.className = 'freeship-progress text-xs text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-200 mt-2';
+        progressMsg.textContent = `Add ${formatPrice(remainingAmount, currency)} more for free shipping!`;
+        shippingCostDisplay.insertAdjacentElement('afterend', progressMsg);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📅 DOM Content Loaded at:', new Date().toISOString());
     console.log('📱 User Agent:', navigator.userAgent);
@@ -1274,6 +1353,18 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('🔒 Current protocol:', window.location.protocol);
     console.log('🔒 Current origin:', window.location.origin);
     console.log('🔒 Full URL:', window.location.href);
+    
+    // Log shipping constants from server
+    console.log('🚚 CHECKOUT PAGE LOAD - Shipping Constants from Server:', {
+        'CHECKOUT_BASE_SHIPPING': CHECKOUT_BASE_SHIPPING,
+        'CHECKOUT_CONVERTED_SHIPPING': CHECKOUT_CONVERTED_SHIPPING,
+        'CHECKOUT_BASE_SUBTOTAL': CHECKOUT_BASE_SUBTOTAL,
+        'CHECKOUT_CONVERTED_SUBTOTAL': CHECKOUT_CONVERTED_SUBTOTAL,
+        'CHECKOUT_CURRENCY': CHECKOUT_CURRENCY,
+        'CHECKOUT_CURRENCY_RATE': CHECKOUT_CURRENCY_RATE,
+        'CHECKOUT_CURRENCY_SYMBOL': CHECKOUT_CURRENCY_SYMBOL,
+        'source': 'JavaScript Constants (from PHP)'
+    });
     
     // Toast notification function - define early
     const showToast = (type, title, message) => {
@@ -1802,15 +1893,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         console.log('✅ Form validation passed, creating PayPal order...');
                         
-                        // Calculate total amount for PayPal (convert to current currency)
-                        const baseSubtotal = parseFloat(CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
-                        const baseTax = parseFloat('{{ $taxAmount }}');
-                        const baseShipping = parseFloat(CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
+                        // Calculate total amount for PayPal
+                        // Subtotal and shipping are already in current currency
+                        const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+                        const tax = parseFloat('{{ $taxAmount }}');
+                        const shipping = parseFloat(CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
                         const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-                        const baseTotal = baseSubtotal + baseTax + baseShipping + tip;
                         
-                        // Convert to current currency
-                        const total = convertFromUSD(baseTotal, currentCurrency);
+                        // Convert tip from USD to current currency
+                        const convertedTip = convertFromUSD(tip, currentCurrency);
+                        const total = subtotal + tax + shipping + convertedTip;
                         
                         // Build description from product SKUs
                         const skuList = [];
@@ -2318,15 +2410,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Stripe not initialized. Please refresh and try again.');
             }
             
-            // Calculate total amount (convert to current currency)
-            const baseSubtotal = parseFloat(CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
-            const baseTax = parseFloat('{{ $taxAmount }}');
-            const baseShipping = parseFloat(CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
+            // Calculate total amount
+            // Subtotal and shipping are already in current currency
+            const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+            const tax = parseFloat('{{ $taxAmount }}');
+            const shipping = parseFloat(CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
             const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-            const baseTotal = baseSubtotal + baseTax + baseShipping + tip;
             
-            // Convert to current currency
-            const total = convertFromUSD(baseTotal, currentCurrency);
+            // Convert tip from USD to current currency
+            const convertedTip = convertFromUSD(tip, currentCurrency);
+            const total = subtotal + tax + shipping + convertedTip;
             
             // Create Payment Intent on server
             console.log('📝 Creating Payment Intent...');
@@ -2688,11 +2781,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 const data = await response.json();
                 
+                console.log('🚚 Country Change - API Response:', {
+                    'country': country,
+                    'apiResponse': data,
+                    'source': 'checkout.calculate-shipping API'
+                });
+                
                 if (data.success && data.shipping) {
                     // Update currency and rate from server response
                     if (data.currency && data.currency_rate) {
                         currentCurrency = data.currency;
                         currentCurrencyRate = parseFloat(data.currency_rate);
+                        
+                        console.log('🚚 Country Change - Currency Updated:', {
+                            'newCurrency': currentCurrency,
+                            'newCurrencyRate': currentCurrencyRate,
+                            'source': 'API response'
+                        });
                         
                         // Update currency hidden input
                         const currencyInput = document.getElementById('currency');
@@ -2720,21 +2825,39 @@ document.addEventListener('DOMContentLoaded', function() {
                             ? parseFloat(data.converted_shipping)
                             : convertFromUSD(baseShipping, currentCurrency);
                         
-                        shippingCostElement.textContent = formatPrice(convertedShipping, currentCurrency);
+                        // Subtotal is already in current currency, no need to convert
+                        const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+                        
+                        // Check freeship based on base USD amount (100 USD)
+                        const baseSubtotal = currentCurrency !== 'USD' ? subtotal / currentCurrencyRate : subtotal;
+                        const qualifiesForFreeShipping = baseSubtotal >= 100;
+                        const actualShipping = qualifiesForFreeShipping ? 0 : convertedShipping;
+                        
+                        console.log('🚚 Country Change - Shipping Calculation:', {
+                            'baseShipping': baseShipping,
+                            'convertedShipping': convertedShipping,
+                            'convertedShippingSource': data.converted_shipping ? 'API response (data.converted_shipping)' : 'Client-side conversion (convertFromUSD)',
+                            'subtotal': subtotal,
+                            'baseSubtotal': baseSubtotal,
+                            'qualifiesForFreeShipping': qualifiesForFreeShipping,
+                            'actualShipping': actualShipping,
+                            'source': 'Country change event'
+                        });
+                        
+                        // Update shipping display
+                        if (qualifiesForFreeShipping) {
+                            shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+                        } else {
+                            shippingCostElement.textContent = formatPrice(convertedShipping, currentCurrency);
+                        }
                         
                         // Recalculate total
-                        const baseSubtotal = parseFloat(CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
-                        const baseTax = parseFloat('{{ $taxAmount }}');
+                        const tax = parseFloat('{{ $taxAmount }}');
                         const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-                        const baseTotal = baseSubtotal + baseTax + baseShipping + tip;
                         
-                        const convertedSubtotal = convertFromUSD(baseSubtotal, currentCurrency);
+                        // Convert tip from USD to current currency
                         const convertedTip = convertFromUSD(tip, currentCurrency);
-                        const convertedTotal = convertFromUSD(baseTotal, currentCurrency);
-                        
-                        if (subtotalElement) {
-                            subtotalElement.textContent = formatPrice(convertedSubtotal, currentCurrency);
-                        }
+                        const total = subtotal + tax + actualShipping + convertedTip;
                         
                         // Update tip line if tip exists
                         const tipLine = document.getElementById('tip-line');
@@ -2745,8 +2868,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         if (totalElement) {
-                            totalElement.textContent = formatPrice(convertedTotal, currentCurrency);
+                            totalElement.textContent = formatPrice(total, currentCurrency);
                         }
+                        
+                        // Update freeship messages
+                        updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currentCurrency, currentCurrencyRate);
                     }
                 } else {
                     // showToast('error', 'Shipping Error', data.message || 'Could not calculate shipping');
@@ -2806,6 +2932,55 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeTipSelection();
         updateTipButtons();
         updateExchangeRateDisplay();
+        
+        // Initialize freeship check on page load
+        const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+        const baseShipping = parseFloat(CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
+        const baseSubtotal = currentCurrency !== 'USD' ? subtotal / currentCurrencyRate : subtotal;
+        const qualifiesForFreeShipping = baseSubtotal >= 100;
+        const actualShipping = qualifiesForFreeShipping ? 0 : baseShipping;
+        
+        // Log shipping calculation on page load
+        console.log('🚚 CHECKOUT PAGE LOAD - Shipping Calculation (JavaScript):', {
+            '=== VALUES FROM PHP ===': '---',
+            'CHECKOUT_BASE_SHIPPING (USD)': CHECKOUT_BASE_SHIPPING,
+            'CHECKOUT_CONVERTED_SHIPPING (converted)': CHECKOUT_CONVERTED_SHIPPING,
+            'CHECKOUT_BASE_SUBTOTAL': CHECKOUT_BASE_SUBTOTAL,
+            'CHECKOUT_CONVERTED_SUBTOTAL': CHECKOUT_CONVERTED_SUBTOTAL,
+            'CHECKOUT_CURRENCY': CHECKOUT_CURRENCY,
+            'CHECKOUT_CURRENCY_RATE': CHECKOUT_CURRENCY_RATE,
+            '=== CALCULATION ===': '---',
+            'subtotal (used)': subtotal,
+            'baseShipping (used)': baseShipping,
+            'currentCurrency': currentCurrency,
+            'currentCurrencyRate': currentCurrencyRate,
+            'baseSubtotal (USD)': baseSubtotal,
+            'qualifiesForFreeShipping': qualifiesForFreeShipping,
+            'actualShipping (final)': actualShipping,
+            '=== SOURCE TRACE ===': '---',
+            'shippingSource': CHECKOUT_CONVERTED_SHIPPING ? 'CHECKOUT_CONVERTED_SHIPPING (from PHP $convertedShipping)' : (CHECKOUT_BASE_SHIPPING ? 'CHECKOUT_BASE_SHIPPING (from PHP $shippingCost)' : 'PHP fallback {{ $shippingCost }}'),
+            'shippingValueUsed': baseShipping,
+            'note': 'JavaScript uses: CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || PHP fallback',
+            'source': 'JavaScript initialization'
+        });
+        
+        // Update shipping display if needed
+        const shippingDisplay = document.querySelector('.shipping-cost-display');
+        if (shippingDisplay) {
+            const currentShippingText = shippingDisplay.textContent || shippingDisplay.innerHTML;
+            console.log('🚚 CHECKOUT PAGE LOAD - Current Shipping Display:', {
+                'currentDisplay': currentShippingText,
+                'willUpdateTo': qualifiesForFreeShipping ? 'FREE' : formatPrice(actualShipping, currentCurrency),
+                'source': 'DOM element check'
+            });
+            
+            if (qualifiesForFreeShipping) {
+                shippingDisplay.innerHTML = '<span class="text-green-600">FREE</span>';
+            }
+        }
+        
+        // Update freeship messages
+        updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currentCurrency, currentCurrencyRate);
     }, 500);
     
     // Initialize tip selection on page load
@@ -2953,16 +3128,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateTotal() {
-        const baseSubtotal = parseFloat(CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
-        const baseShipping = parseFloat(CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
+        // Subtotal and shipping are already in current currency, no need to convert
+        const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+        const baseShipping = parseFloat(CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
         const tip = selectedTipAmount;
-        const baseTotal = baseSubtotal + baseShipping + tip;
         
-        // Convert to current currency
-        const convertedSubtotal = convertFromUSD(baseSubtotal, currentCurrency);
-        const convertedShipping = convertFromUSD(baseShipping, currentCurrency);
+        // Check freeship based on base USD amount (100 USD)
+        const baseSubtotal = currentCurrency !== 'USD' ? subtotal / currentCurrencyRate : subtotal;
+        const qualifiesForFreeShipping = baseSubtotal >= 100;
+        const actualShipping = qualifiesForFreeShipping ? 0 : baseShipping;
+        
+        // Log shipping source in updateTotal
+        console.log('🚚 updateTotal() - Shipping Calculation:', {
+            'subtotal': subtotal,
+            'baseShipping': baseShipping,
+            'CHECKOUT_CONVERTED_SHIPPING': CHECKOUT_CONVERTED_SHIPPING,
+            'CHECKOUT_BASE_SHIPPING': CHECKOUT_BASE_SHIPPING,
+            'shippingSource': CHECKOUT_CONVERTED_SHIPPING ? 'CHECKOUT_CONVERTED_SHIPPING' : (CHECKOUT_BASE_SHIPPING ? 'CHECKOUT_BASE_SHIPPING' : 'PHP fallback'),
+            'baseSubtotal': baseSubtotal,
+            'qualifiesForFreeShipping': qualifiesForFreeShipping,
+            'actualShipping': actualShipping,
+            'tip': tip,
+            'source': 'updateTotal() function'
+        });
+        
+        // Convert tip from USD to current currency
         const convertedTip = convertFromUSD(tip, currentCurrency);
-        const convertedTotal = convertFromUSD(baseTotal, currentCurrency);
+        const total = subtotal + actualShipping + convertedTip;
         
         // Update tip line visibility
         const tipLine = document.getElementById('tip-line');
@@ -2978,14 +3170,20 @@ document.addEventListener('DOMContentLoaded', function() {
             tipLine.style.display = 'none';
         }
         
-        // Update all displays
-        if (subtotalDisplay) {
-            subtotalDisplay.textContent = formatPrice(convertedSubtotal, currentCurrency);
-        }
+        // Update shipping display with freeship logic
         if (shippingDisplay) {
-            shippingDisplay.textContent = formatPrice(convertedShipping, currentCurrency);
+            if (qualifiesForFreeShipping) {
+                shippingDisplay.innerHTML = '<span class="text-green-600">FREE</span>';
+            } else {
+                shippingDisplay.textContent = formatPrice(baseShipping, currentCurrency);
+            }
         }
-        totalDisplay.textContent = formatPrice(convertedTotal, currentCurrency);
+        
+        // Update total
+        totalDisplay.textContent = formatPrice(total, currentCurrency);
+        
+        // Update freeship messages
+        updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currentCurrency, currentCurrencyRate);
         
         // Store tip amount for form submission (in USD)
         const tipInput = document.getElementById('tip_amount');
@@ -3058,7 +3256,7 @@ function buildCheckoutEditContent(ci) {
                 <img src="${img}" alt="${product.name}" class="w-24 h-24 object-cover rounded-lg">
                 <div>
                     <h3 class="text-lg font-semibold text-gray-900">${product.name}</h3>
-                    <p class="text-gray-600">$${parseFloat(ci.price).toFixed(2)} each</p>
+                    <p class="text-gray-600">${CHECKOUT_CURRENCY_SYMBOL}${parseFloat(ci.price).toFixed(2)} each</p>
                 </div>
             </div>
             ${variants.length ? `
@@ -3088,7 +3286,7 @@ function buildCheckoutEditContent(ci) {
             <div class="border-t pt-4">
                 <div class="flex justify-between items-center">
                     <span class="text-lg font-semibold text-gray-900">Total</span>
-                    <span class="text-2xl font-bold text-[#005366]" id="checkoutModalTotal${ci.id}">$${total}</span>
+                    <span class="text-2xl font-bold text-[#005366]" id="checkoutModalTotal${ci.id}">${CHECKOUT_CURRENCY_SYMBOL}${total}</span>
                 </div>
             </div>
             <div class="flex gap-3 pt-4">
@@ -3154,7 +3352,7 @@ function updateCheckoutModalTotal() {
     // customizations keep original price
     const customMap={}; document.querySelectorAll('.checkout-customization-input').forEach(inp=>{ const label=inp.dataset.label; const value=inp.value||''; const orig=ctx.originalCustomizations&&ctx.originalCustomizations[label]; const price=orig&&orig.price?parseFloat(orig.price)||0:0; if(value.trim()!==''){ customMap[label]={value:value.trim(),price}; }});
     let custTotal=0; Object.values(customMap).forEach(c=>{ custTotal+=parseFloat(c.price)||0; });
-    const total = (unitPrice + custTotal) * qty; const td=document.getElementById('checkoutModalTotal'+id); if (td) td.textContent='$'+total.toFixed(2);
+    const total = (unitPrice + custTotal) * qty; const td=document.getElementById('checkoutModalTotal'+id); if (td) td.textContent=CHECKOUT_CURRENCY_SYMBOL+total.toFixed(2);
 }
 
 function saveCheckoutCartChanges(cartItemId) {
@@ -3219,33 +3417,50 @@ async function updateCheckoutShippingForCountry(countryCode, countryName) {
         const data = await response.json();
         
         if (data.success && data.shipping) {
-            const newShipping = parseFloat(data.shipping.total_shipping);
-            const subtotal = parseFloat('{{ $subtotal }}');
-            const qualifiesForFreeShipping = subtotal >= 100;
-            const actualShipping = qualifiesForFreeShipping ? 0 : newShipping;
-            const newTotal = subtotal + actualShipping;
+            // Use converted shipping from server if available
+            const baseShipping = parseFloat(data.shipping.total_shipping);
+            const convertedShipping = data.converted_shipping 
+                ? parseFloat(data.converted_shipping)
+                : convertFromUSD(baseShipping, currentCurrency);
+            
+            // Subtotal is already in current currency
+            const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+            
+            // Check freeship based on base USD amount (100 USD)
+            const baseSubtotal = currentCurrency !== 'USD' ? subtotal / currentCurrencyRate : subtotal;
+            const qualifiesForFreeShipping = baseSubtotal >= 100;
+            const actualShipping = qualifiesForFreeShipping ? 0 : convertedShipping;
+            
+            // Calculate total including tip if any
+            const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
+            const convertedTip = convertFromUSD(tip, currentCurrency);
+            const newTotal = subtotal + actualShipping + convertedTip;
             
             // Update shipping cost display
             if (shippingCostElement) {
                 if (qualifiesForFreeShipping) {
                     shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
                 } else {
-                    shippingCostElement.innerHTML = `$${newShipping.toFixed(2)}`;
+                    shippingCostElement.innerHTML = formatPrice(convertedShipping, currentCurrency);
                 }
             }
             
             // Update total
             const totalElement = document.querySelector('.total-display');
             if (totalElement) {
-                totalElement.textContent = `$${newTotal.toFixed(2)}`;
+                totalElement.textContent = formatPrice(newTotal, currentCurrency);
             }
             
-            console.log('Checkout shipping updated:', {
-                country: countryCode,
-                originalShipping: newShipping,
-                actualShipping: actualShipping,
-                qualifiesForFreeShipping: qualifiesForFreeShipping
-            });
+            // Update freeship messages
+            updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currentCurrency, currentCurrencyRate);
+                        
+                        console.log('Checkout shipping updated:', {
+                            country: countryCode,
+                            baseShipping: baseShipping,
+                            convertedShipping: convertedShipping,
+                            actualShipping: actualShipping,
+                            qualifiesForFreeShipping: qualifiesForFreeShipping
+                        });
         } else {
             // Fallback: show error message
             if (shippingCostElement) {
@@ -3308,15 +3523,22 @@ document.getElementById('deliveryModal').addEventListener('click', function(e) {
                         
                         // Calculate actual shipping cost for this zone based on cart items
                         $calculator = new \App\Services\ShippingCalculator();
-                        $cartItemsForCalc = collect($products)->map(function ($item) {
+                        // Convert prices back to USD for shipping calculation (shipping calculator expects USD)
+                        // Use cartItems directly (same as cart page) to ensure consistency
+                        $cartItemsForCalc = $cartItems->map(function ($item) use ($currentCurrency, $currentCurrencyRate) {
+                            $priceInUSD = $currentCurrency !== 'USD' ? $item->price / $currentCurrencyRate : $item->price;
                             return [
-                                'product_id' => $item['product']->id,
-                                'quantity' => $item['quantity'],
-                                'price' => $item['product']->base_price,
+                                'product_id' => $item->product_id,
+                                'quantity' => $item->quantity,
+                                'price' => $priceInUSD,
                             ];
                         });
                         $shippingResult = $calculator->calculateShipping($cartItemsForCalc, $firstCountry);
-                        $shippingCost = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
+                        $shippingCostUSD = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
+                        // Convert shipping cost from USD to current currency
+                        $shippingCost = $currentCurrency !== 'USD' 
+                            ? \App\Services\CurrencyService::convertFromUSDWithRate($shippingCostUSD, $currentCurrency, $currentCurrencyRate)
+                            : $shippingCostUSD;
                         $rateName = $shippingResult['success'] && !empty($shippingResult['items']) ? $shippingResult['items'][0]['shipping_rate_name'] : 'Standard shipping';
                     @endphp
                     <div class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors" 
@@ -3330,7 +3552,7 @@ document.getElementById('deliveryModal').addEventListener('click', function(e) {
                                 </div>
                             </div>
                             <div class="text-right">
-                                <div class="text-sm font-medium text-gray-900">${{ number_format($shippingCost, 2) }}</div>
+                                <div class="text-sm font-medium text-gray-900">{{ format_price((float) $shippingCost) }}</div>
                                 <div class="text-xs text-gray-500">{{ $rateName }}</div>
                             </div>
                         </div>
