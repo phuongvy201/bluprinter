@@ -11,7 +11,6 @@ use App\Models\Category;
 use App\Models\Collection;
 use App\Models\GmcConfig;
 use App\Services\GoogleMerchantCenterService;
-use App\Services\ShippingCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
@@ -1180,8 +1179,8 @@ class ProductController extends Controller
         // Get SKU (use as offer_id)
         $offerId = $product->sku ?? 'PRD-' . $product->id;
 
-        // Get brand (from shop or default)
-        $brand = $product->shop->shop_name ?? 'Bluprinter';
+        // Brand is always Bluprinter
+        $brand = 'Bluprinter';
 
         // Additional images - ensure all are absolute URLs
         $additionalImages = [];
@@ -1212,48 +1211,10 @@ class ProductController extends Controller
         $productPriceUSD = (float)$product->price;
         $productPrice = $this->convertProductPrice($productPriceUSD, $currency, $gmcConfig);
 
-        // Calculate shipping cost from database using ShippingCalculator
-        $shippingCalculator = new ShippingCalculator();
-
-        // Prepare cart item format for shipping calculation (single product, quantity 1)
-        $cartItems = collect([
-            [
-                'product_id' => $product->id,
-                'quantity' => 1,
-                'price' => $product->price
-            ]
-        ]);
-
-        // Calculate shipping using the same method as cart
-        $shippingResult = $shippingCalculator->calculateShipping($cartItems, $targetCountry);
-
-        // Get shipping cost (in USD from database)
-        $shippingCostUSD = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
-
-        // Convert to target currency if needed
-        // Uses currency_rate from DomainCurrencyConfig
-        $shippingCost = $this->convertShippingCurrency($shippingCostUSD, $currency, $targetCountry, $gmcConfig);
-
-        // Fallback to default if calculation failed
-        if ($shippingCost <= 0) {
-            // Use default shipping based on currency from domain config
-            if ($currency === 'VND') {
-                $shippingCost = '30000'; // VND
-            } else {
-                $shippingCost = '15.00'; // Default for other currencies
-            }
-        } else {
-            // Format to 2 decimal places
-            $shippingCost = number_format((float)$shippingCost, 2, '.', '');
-        }
-
+        // Shipping: only send country, no price
         $shipping = [
             [
-                'country' => $targetCountry,
-                'price' => [
-                    'value' => $shippingCost,
-                    'currency' => $currency // Must match product currency
-                ]
+                'country' => $targetCountry
             ]
         ];
 
@@ -1308,6 +1269,8 @@ class ProductController extends Controller
             $productData['age_group'] = strtolower($ageGroup);
             $productData['color'] = $color;
             $productData['gender'] = strtolower($gender);
+            $productData['size_system'] = 'us';
+            $productData['size_type'] = 'regular';
         }
 
         return $productData;
@@ -1368,8 +1331,8 @@ class ProductController extends Controller
             // Get SKU
             $sku = $product->sku ?? 'PRD-' . $product->id;
 
-            // Get brand (from shop or default)
-            $brand = $product->shop->shop_name ?? 'Bluprinter';
+            // Brand is always Bluprinter
+            $brand = 'Bluprinter';
 
             $xml .= '    <item>' . "\n";
             $xml .= '      <g:id>' . htmlspecialchars($sku, ENT_XML1, 'UTF-8') . '</g:id>' . "\n";
@@ -1403,6 +1366,17 @@ class ProductController extends Controller
                         $xml .= '      <g:additional_image_link>' . htmlspecialchars($imageUrl, ENT_XML1, 'UTF-8') . '</g:additional_image_link>' . "\n";
                     }
                 }
+            }
+
+            // Add size_system and size_type for Clothing category
+            $isClothing = stripos($category, 'clothing') !== false ||
+                stripos($category, 'apparel') !== false ||
+                stripos($category, 'Clothing') !== false ||
+                stripos($category, 'Apparel') !== false;
+
+            if ($isClothing) {
+                $xml .= '      <g:size_system>us</g:size_system>' . "\n";
+                $xml .= '      <g:size_type>regular</g:size_type>' . "\n";
             }
 
             $xml .= '    </item>' . "\n";
@@ -1685,7 +1659,7 @@ class ProductController extends Controller
     {
         // Basic mapping - you should expand this based on your actual categories
         $mapping = [
-            'Clothing' => '1604',
+            'Clothing' => '212',
             'Apparel' => '1604',
             'Accessories' => '166',
             'Electronics' => '172',

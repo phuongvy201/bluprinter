@@ -1986,7 +1986,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             headers: {
                                 'Content-Type': 'application/json',
                                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
-                                'Accept': 'application/json'
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
                             },
                             body: JSON.stringify({
                                 ...currentOrderData,

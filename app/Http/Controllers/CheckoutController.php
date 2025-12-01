@@ -295,703 +295,325 @@ class CheckoutController extends Controller
             $validationRules['payment_intent_id'] = 'required|string|max:255';
         }
 
+        // Check if this is an AJAX/JSON request
+        $isAjaxRequest = $request->wantsJson() || $request->ajax() || $request->expectsJson();
+
         try {
             $request->validate($validationRules);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('🔍 VALIDATION FAILED', [
                 'errors' => $e->errors(),
-                'input_data' => $request->all()
+                'input_data' => $request->all(),
+                'is_ajax' => $isAjaxRequest
             ]);
+
+            // Always return JSON for AJAX requests
+            if ($isAjaxRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+
             throw $e;
         }
 
         $sessionId = session()->getId();
         $userId = Auth::id();
 
-        // Get cart items from database
-        $cartItems = Cart::with(['product.shop', 'product.template'])
-            ->where(function ($query) use ($sessionId, $userId) {
-                if ($userId) {
-                    $query->where('user_id', $userId);
-                } else {
-                    $query->where('session_id', $sessionId);
+        // Wrap entire processing in try-catch to ensure JSON responses for AJAX requests
+        try {
+            // Get cart items from database
+            $cartItems = Cart::with(['product.shop', 'product.template'])
+                ->where(function ($query) use ($sessionId, $userId) {
+                    if ($userId) {
+                        $query->where('user_id', $userId);
+                    } else {
+                        $query->where('session_id', $sessionId);
+                    }
+                })
+                ->get();
+
+            if ($cartItems->isEmpty()) {
+                if ($isAjaxRequest) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Your cart is empty.'
+                    ], 400);
                 }
-            })
-            ->get();
+                return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
+            }
 
-        if ($cartItems->isEmpty()) {
-            return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
-        }
+            // Get shipping details from session (calculated earlier via AJAX)
+            $shippingDetails = session()->get('shipping_details');
 
-        // Get shipping details from session (calculated earlier via AJAX)
-        $shippingDetails = session()->get('shipping_details');
+            // If no shipping details, calculate now
+            if (!$shippingDetails || !isset($shippingDetails['success']) || !$shippingDetails['success']) {
+                // Prepare items for calculator
+                $items = $cartItems->map(function ($item) {
+                    return [
+                        'product_id' => $item->product_id,
+                        'quantity' => $item->quantity,
+                        'price' => $item->price, // Use the actual price from cart (includes variant pricing)
+                    ];
+                });
 
-        // If no shipping details, calculate now
-        if (!$shippingDetails || !isset($shippingDetails['success']) || !$shippingDetails['success']) {
-            // Prepare items for calculator
-            $items = $cartItems->map(function ($item) {
-                return [
-                    'product_id' => $item->product_id,
-                    'quantity' => $item->quantity,
-                    'price' => $item->price, // Use the actual price from cart (includes variant pricing)
+                $calculator = new ShippingCalculator();
+                $shippingDetails = $calculator->calculateShipping($items, $request->country);
+
+                if (!$shippingDetails['success']) {
+                    return back()->withInput()->withErrors(['shipping' => $shippingDetails['message']]);
+                }
+            }
+
+            // Get currency and rate for conversion
+            $orderCurrency = $request->currency ?? CurrencyService::getCurrencyForDomain();
+            if (!$orderCurrency || $orderCurrency === 'USD') {
+                // Fallback to country-based currency if domain doesn't have config
+                $orderCurrency = $this->getCurrencyFromCountry($request->country);
+            }
+
+            $currencyRate = CurrencyService::getCurrencyRateForDomain();
+            if (!$currencyRate || $currencyRate == 1.0) {
+                $defaultRates = [
+                    'USD' => 1.0,
+                    'GBP' => 0.79,
+                    'EUR' => 0.92,
+                    'CAD' => 1.35,
+                    'AUD' => 1.52,
+                    'JPY' => 150.0,
+                    'CNY' => 7.2,
+                    'HKD' => 7.8,
+                    'SGD' => 1.34,
                 ];
-            });
-
-            $calculator = new ShippingCalculator();
-            $shippingDetails = $calculator->calculateShipping($items, $request->country);
-
-            if (!$shippingDetails['success']) {
-                return back()->withInput()->withErrors(['shipping' => $shippingDetails['message']]);
-            }
-        }
-
-        // Get currency and rate for conversion
-        $orderCurrency = $request->currency ?? CurrencyService::getCurrencyForDomain();
-        if (!$orderCurrency || $orderCurrency === 'USD') {
-            // Fallback to country-based currency if domain doesn't have config
-            $orderCurrency = $this->getCurrencyFromCountry($request->country);
-        }
-
-        $currencyRate = CurrencyService::getCurrencyRateForDomain();
-        if (!$currencyRate || $currencyRate == 1.0) {
-            $defaultRates = [
-                'USD' => 1.0,
-                'GBP' => 0.79,
-                'EUR' => 0.92,
-                'CAD' => 1.35,
-                'AUD' => 1.52,
-                'JPY' => 150.0,
-                'CNY' => 7.2,
-                'HKD' => 7.8,
-                'SGD' => 1.34,
-            ];
-            $currencyRate = $defaultRates[$orderCurrency] ?? 1.0;
-        }
-
-        // Calculate totals
-        $subtotal = 0;
-        $originalShippingCostUSD = $shippingDetails['total_shipping']; // Shipping cost in USD
-        $products = [];
-
-        foreach ($cartItems as $item) {
-            $itemTotal = $item->getTotalPriceWithCustomizations();
-            $subtotal += $itemTotal;
-
-            $products[] = [
-                'product' => $item->product,
-                'cart_item' => $item, // Add cart item to access price and customizations
-                'quantity' => $item->quantity,
-                'total' => $itemTotal
-            ];
-        }
-
-        // Check freeship based on base USD amount (100 USD)
-        // Convert subtotal back to USD to check freeship threshold
-        $baseSubtotalUSD = $orderCurrency !== 'USD' ? ($subtotal / $currencyRate) : $subtotal;
-        $qualifiesForFreeShipping = $baseSubtotalUSD >= 100;
-
-        // Convert shipping cost from USD to order currency
-        $convertedShippingCost = $orderCurrency !== 'USD'
-            ? CurrencyService::convertFromUSDWithRate($originalShippingCostUSD, $orderCurrency, $currencyRate)
-            : $originalShippingCostUSD;
-
-        // Apply freeship logic
-        $shippingCost = $qualifiesForFreeShipping ? 0 : $convertedShippingCost;
-
-        $taxAmount = 0; // No tax
-        $tipAmount = $request->tip_amount ?? 0; // Get tip amount from request (already in USD, will be converted if needed)
-
-        // Convert tip from USD to order currency if needed
-        $convertedTipAmount = $orderCurrency !== 'USD' && $tipAmount > 0
-            ? CurrencyService::convertFromUSDWithRate($tipAmount, $orderCurrency, $currencyRate)
-            : $tipAmount;
-
-        $total = $subtotal + $shippingCost + $convertedTipAmount;
-
-        // Log freeship application and currency conversion for debugging
-        Log::info('🚚 CHECKOUT PROCESS - Shipping & Currency Conversion', [
-            'subtotal' => $subtotal,
-            'subtotal_currency' => $orderCurrency,
-            'baseSubtotalUSD' => $baseSubtotalUSD,
-            'originalShippingCostUSD' => $originalShippingCostUSD,
-            'convertedShippingCost' => $convertedShippingCost,
-            'qualifiesForFreeShipping' => $qualifiesForFreeShipping,
-            'finalShippingCost' => $shippingCost,
-            'tipAmountUSD' => $tipAmount,
-            'convertedTipAmount' => $convertedTipAmount,
-            'totalAmount' => $total,
-            'currency' => $orderCurrency,
-            'currencyRate' => $currencyRate,
-            'note' => 'All amounts in order currency except baseSubtotalUSD and originalShippingCostUSD'
-        ]);
-
-        $eventItems = collect($products)->map(function ($item) {
-            return [
-                'id' => $item['product']->id,
-                'name' => $item['product']->name,
-                'quantity' => $item['quantity'],
-                'price' => $item['cart_item']->getUnitPriceWithCustomizations(),
-            ];
-        })->values()->toArray();
-
-        $this->trackTikTokCheckoutEvent(
-            $request,
-            'AddPaymentInfo',
-            $eventItems,
-            $total,
-            [
-                'description' => sprintf('Payment info submitted via %s', $request->payment_method),
-            ],
-            [
-                'email' => $request->customer_email,
-                'phone' => $request->customer_phone,
-                'external_id' => $userId,
-            ]
-        );
-
-        // Create order with converted amounts
-        $order = Order::create([
-            'order_number' => Order::generateOrderNumber(),
-            'user_id' => Auth::id(),
-            'customer_name' => $request->customer_name,
-            'customer_email' => $request->customer_email,
-            'customer_phone' => $request->customer_phone,
-            'shipping_address' => $request->shipping_address,
-            'city' => $request->city,
-            'state' => $request->state,
-            'postal_code' => $request->postal_code,
-            'country' => $request->country,
-            'subtotal' => $subtotal, // Already in order currency
-            'tax_amount' => $taxAmount,
-            'shipping_cost' => $shippingCost, // Converted to order currency
-            'tip_amount' => $convertedTipAmount, // Converted to order currency
-            'total_amount' => $total, // All in order currency
-            'currency' => $orderCurrency,
-            'status' => 'pending',
-            'payment_status' => 'pending',
-            'payment_method' => $request->payment_method,
-            'notes' => $request->notes,
-        ]);
-
-        $this->trackTikTokCheckoutEvent(
-            $request,
-            'PlaceAnOrder',
-            $eventItems,
-            $total,
-            [
-                'content_id' => $order->order_number,
-                'content_name' => 'Order',
-                'description' => sprintf('Order %s placed via %s', $order->order_number, $request->payment_method),
-            ],
-            [
-                'email' => $order->customer_email,
-                'phone' => $order->customer_phone,
-                'external_id' => $order->user_id ?? $userId,
-            ]
-        );
-
-        // Create order items with shipping details
-        foreach ($products as $item) {
-            // Find shipping details for this product
-            $itemShipping = collect($shippingDetails['items'])->firstWhere('product_id', $item['product']->id);
-
-            // Get item shipping cost in USD
-            $itemShippingCostUSD = $itemShipping['shipping_cost'] ?? 0;
-
-            // Convert item shipping cost from USD to order currency
-            $itemShippingCostConverted = $orderCurrency !== 'USD' && $itemShippingCostUSD > 0
-                ? CurrencyService::convertFromUSDWithRate($itemShippingCostUSD, $orderCurrency, $currencyRate)
-                : $itemShippingCostUSD;
-
-            // Apply freeship logic to individual item shipping cost
-            $itemShippingCost = $qualifiesForFreeShipping ? 0 : $itemShippingCostConverted;
-            $shippingNotes = $itemShipping ? "Rate: {$itemShipping['shipping_rate_name']}" : null;
-
-            // Add freeship note if applicable
-            if ($qualifiesForFreeShipping) {
-                $shippingNotes = $shippingNotes ? $shippingNotes . " (FREESHIP Applied)" : "FREESHIP Applied";
+                $currencyRate = $defaultRates[$orderCurrency] ?? 1.0;
             }
 
-            OrderItem::create([
-                'order_id' => $order->id,
-                'product_id' => $item['product']->id,
-                'product_name' => $item['product']->name,
-                'product_description' => $item['product']->description,
-                'unit_price' => $item['cart_item']->getUnitPriceWithCustomizations(), // Use unit price with customizations
-                'quantity' => $item['quantity'],
-                'total_price' => $item['total'],
-                'product_options' => [
-                    'selected_variant' => $item['cart_item']->selected_variant,
-                    'customizations' => $item['cart_item']->customizations,
+            // Calculate totals
+            $subtotal = 0;
+            $originalShippingCostUSD = $shippingDetails['total_shipping']; // Shipping cost in USD
+            $products = [];
+
+            foreach ($cartItems as $item) {
+                $itemTotal = $item->getTotalPriceWithCustomizations();
+                $subtotal += $itemTotal;
+
+                $products[] = [
+                    'product' => $item->product,
+                    'cart_item' => $item, // Add cart item to access price and customizations
+                    'quantity' => $item->quantity,
+                    'total' => $itemTotal
+                ];
+            }
+
+            // Check freeship based on base USD amount (100 USD)
+            // Convert subtotal back to USD to check freeship threshold
+            $baseSubtotalUSD = $orderCurrency !== 'USD' ? ($subtotal / $currencyRate) : $subtotal;
+            $qualifiesForFreeShipping = $baseSubtotalUSD >= 100;
+
+            // Convert shipping cost from USD to order currency
+            $convertedShippingCost = $orderCurrency !== 'USD'
+                ? CurrencyService::convertFromUSDWithRate($originalShippingCostUSD, $orderCurrency, $currencyRate)
+                : $originalShippingCostUSD;
+
+            // Apply freeship logic
+            $shippingCost = $qualifiesForFreeShipping ? 0 : $convertedShippingCost;
+
+            $taxAmount = 0; // No tax
+            $tipAmount = $request->tip_amount ?? 0; // Get tip amount from request (already in USD, will be converted if needed)
+
+            // Convert tip from USD to order currency if needed
+            $convertedTipAmount = $orderCurrency !== 'USD' && $tipAmount > 0
+                ? CurrencyService::convertFromUSDWithRate($tipAmount, $orderCurrency, $currencyRate)
+                : $tipAmount;
+
+            $total = $subtotal + $shippingCost + $convertedTipAmount;
+
+            // Log freeship application and currency conversion for debugging
+            Log::info('🚚 CHECKOUT PROCESS - Shipping & Currency Conversion', [
+                'subtotal' => $subtotal,
+                'subtotal_currency' => $orderCurrency,
+                'baseSubtotalUSD' => $baseSubtotalUSD,
+                'originalShippingCostUSD' => $originalShippingCostUSD,
+                'convertedShippingCost' => $convertedShippingCost,
+                'qualifiesForFreeShipping' => $qualifiesForFreeShipping,
+                'finalShippingCost' => $shippingCost,
+                'tipAmountUSD' => $tipAmount,
+                'convertedTipAmount' => $convertedTipAmount,
+                'totalAmount' => $total,
+                'currency' => $orderCurrency,
+                'currencyRate' => $currencyRate,
+                'note' => 'All amounts in order currency except baseSubtotalUSD and originalShippingCostUSD'
+            ]);
+
+            $eventItems = collect($products)->map(function ($item) {
+                return [
+                    'id' => $item['product']->id,
+                    'name' => $item['product']->name,
+                    'quantity' => $item['quantity'],
+                    'price' => $item['cart_item']->getUnitPriceWithCustomizations(),
+                ];
+            })->values()->toArray();
+
+            $this->trackTikTokCheckoutEvent(
+                $request,
+                'AddPaymentInfo',
+                $eventItems,
+                $total,
+                [
+                    'description' => sprintf('Payment info submitted via %s', $request->payment_method),
                 ],
-                'shipping_cost' => $itemShippingCost, // Converted to order currency
-                'is_first_item' => $itemShipping['is_first_item'] ?? false,
-                'shipping_notes' => $shippingNotes,
+                [
+                    'email' => $request->customer_email,
+                    'phone' => $request->customer_phone,
+                    'external_id' => $userId,
+                ]
+            );
+
+            // Create order with converted amounts
+            $order = Order::create([
+                'order_number' => Order::generateOrderNumber(),
+                'user_id' => Auth::id(),
+                'customer_name' => $request->customer_name,
+                'customer_email' => $request->customer_email,
+                'customer_phone' => $request->customer_phone,
+                'shipping_address' => $request->shipping_address,
+                'city' => $request->city,
+                'state' => $request->state,
+                'postal_code' => $request->postal_code,
+                'country' => $request->country,
+                'subtotal' => $subtotal, // Already in order currency
+                'tax_amount' => $taxAmount,
+                'shipping_cost' => $shippingCost, // Converted to order currency
+                'tip_amount' => $convertedTipAmount, // Converted to order currency
+                'total_amount' => $total, // All in order currency
+                'currency' => $orderCurrency,
+                'status' => 'pending',
+                'payment_status' => 'pending',
+                'payment_method' => $request->payment_method,
+                'notes' => $request->notes,
             ]);
-        }
 
-        // NOTE: Không xóa cart ở đây vì user chưa thanh toán!
-        // Cart sẽ được xóa trong paypalSuccess() hoặc lianlianSuccess() sau khi payment thành công
+            $this->trackTikTokCheckoutEvent(
+                $request,
+                'PlaceAnOrder',
+                $eventItems,
+                $total,
+                [
+                    'content_id' => $order->order_number,
+                    'content_name' => 'Order',
+                    'description' => sprintf('Order %s placed via %s', $order->order_number, $request->payment_method),
+                ],
+                [
+                    'email' => $order->customer_email,
+                    'phone' => $order->customer_phone,
+                    'external_id' => $order->user_id ?? $userId,
+                ]
+            );
 
-        Log::info('Order created, waiting for payment confirmation', [
-            'order_id' => $order->id,
-            'order_number' => $order->order_number,
-            'payment_method' => $request->payment_method,
-            'user_id' => $userId,
-            'session_id' => $sessionId
-        ]);
+            // Create order items with shipping details
+            foreach ($products as $item) {
+                // Find shipping details for this product
+                $itemShipping = collect($shippingDetails['items'])->firstWhere('product_id', $item['product']->id);
 
-        // Handle payment based on method first, then check AJAX for non-PayPal SDK requests
-        if ($request->payment_method === 'paypal') {
-            Log::info('PayPal Payment Method Detected', [
-                'has_paypal_order_id' => $request->has('paypal_order_id'),
-                'has_paypal_payer_id' => $request->has('paypal_payer_id'),
-                'paypal_order_id' => $request->input('paypal_order_id'),
-                'paypal_payer_id' => $request->input('paypal_payer_id')
-            ]);
+                // Get item shipping cost in USD
+                $itemShippingCostUSD = $itemShipping['shipping_cost'] ?? 0;
 
-            // Check if this is from PayPal SDK (has paypal_order_id)
-            if ($request->has('paypal_order_id') && $request->has('paypal_payer_id')) {
-                // This is from PayPal SDK - payment already completed on client side
-                try {
-                    Log::info('PayPal SDK Payment Processing', [
-                        'order_id' => $order->id,
-                        'paypal_order_id' => $request->paypal_order_id,
-                        'paypal_payer_id' => $request->paypal_payer_id
-                    ]);
+                // Convert item shipping cost from USD to order currency
+                $itemShippingCostConverted = $orderCurrency !== 'USD' && $itemShippingCostUSD > 0
+                    ? CurrencyService::convertFromUSDWithRate($itemShippingCostUSD, $orderCurrency, $currencyRate)
+                    : $itemShippingCostUSD;
 
-                    // For PayPal SDK payments, the payment was already captured on the client side
-                    // We should update the order status immediately since we have valid order_id and payer_id
+                // Apply freeship logic to individual item shipping cost
+                $itemShippingCost = $qualifiesForFreeShipping ? 0 : $itemShippingCostConverted;
+                $shippingNotes = $itemShipping ? "Rate: {$itemShipping['shipping_rate_name']}" : null;
 
-                    Log::info('Updating order for PayPal SDK payment', [
-                        'order_id' => $order->id,
-                        'current_payment_status' => $order->payment_status,
-                        'current_status' => $order->status,
-                        'paypal_order_id' => $request->paypal_order_id
-                    ]);
-
-                    // Update order status - follow LianLian Pay pattern (simple and direct)
-                    $order->update([
-                        'payment_status' => 'paid',
-                        'status' => 'processing',
-                        'payment_id' => $request->paypal_order_id,
-                        'payment_transaction_id' => $request->paypal_payer_id,
-                        'paid_at' => now()
-                    ]);
-
-                    Log::info('✅ PayPal Order Status Updated (following LianLian Pay pattern)', [
-                        'order_id' => $order->id,
-                        'order_number' => $order->order_number,
-                        'payment_status' => 'paid',
-                        'status' => 'processing',
-                        'paypal_order_id' => $request->paypal_order_id,
-                        'paypal_payer_id' => $request->paypal_payer_id
-                    ]);
-
-                    // Clear cart after successful order status update (CRITICAL)
-                    Log::info('🛒 Clearing cart after PayPal payment status update', [
-                        'user_id' => $userId,
-                        'session_id' => $sessionId
-                    ]);
-
-                    $deletedCartCount = Cart::where(function ($query) use ($sessionId, $userId) {
-                        if ($userId) {
-                            $query->where('user_id', $userId);
-                        } else {
-                            $query->where('session_id', $sessionId);
-                        }
-                    })->delete();
-
-                    Log::info('🛒 Cart deletion result', [
-                        'deleted_cart_items' => $deletedCartCount,
-                        'user_id' => $userId,
-                        'session_id' => $sessionId,
-                        'order_id' => $order->id
-                    ]);
-
-                    // Verify cart is actually empty
-                    $remainingCartItems = Cart::where(function ($query) use ($sessionId, $userId) {
-                        if ($userId) {
-                            $query->where('user_id', $userId);
-                        } else {
-                            $query->where('session_id', $sessionId);
-                        }
-                    })->count();
-
-                    Log::info('🛒 Cart verification after deletion', [
-                        'remaining_cart_items' => $remainingCartItems,
-                        'user_id' => $userId,
-                        'session_id' => $sessionId
-                    ]);
-
-                    $this->trackTikTokCheckoutEvent(
-                        $request,
-                        'Purchase',
-                        $eventItems,
-                        $total,
-                        [
-                            'content_id' => $order->order_number,
-                            'content_name' => 'Order',
-                            'description' => sprintf('Order %s purchased via PayPal SDK', $order->order_number),
-                        ],
-                        [
-                            'email' => $order->customer_email,
-                            'phone' => $order->customer_phone,
-                            'external_id' => $order->user_id ?? $userId,
-                        ]
-                    );
-
-                    // Clear shipping session
-                    Session::forget('shipping_details');
-
-                    // Try to verify with PayPal API (optional, for logging - AFTER cart clearing)
-                    try {
-                        $paypalService = new PayPalService();
-                        $payment = $paypalService->verifyOrderSafely($request->paypal_order_id);
-
-                        Log::info('PayPal API Verification Result', [
-                            'order_id' => $order->id,
-                            'payment_status_from_api' => $payment ? $payment->status : 'null',
-                            'verification_safe' => true
-                        ]);
-                    } catch (\Exception $verifyException) {
-                        Log::warning('PayPal API verification failed but continuing', [
-                            'order_id' => $order->id,
-                            'error' => $verifyException->getMessage()
-                        ]);
-                    }
-
-                    if ($request->wantsJson() || $request->ajax()) {
-                        Log::info('💳 PayPal SDK AJAX Response - SENDING TO FRONTEND', [
-                            'order_id' => $order->id,
-                            'order_number' => $order->order_number,
-                            'wants_json' => $request->wantsJson(),
-                            'ajax' => $request->ajax(),
-                            'response_type' => 'json',
-                            'cart_cleared' => true,
-                            'order_status_updated' => true
-                        ]);
-
-                        $response = response()->json([
-                            'success' => true,
-                            'message' => 'Payment completed successfully',
-                            'order_number' => $order->order_number,
-                            'payment_completed' => true
-                        ]);
-
-                        Log::info('💳 PayPal Response Being Sent', [
-                            'response_content' => $response->getContent(),
-                            'order_number' => $order->order_number
-                        ]);
-
-                        return $response;
-                    }
-
-                    Log::info('💳 PayPal SDK Redirect Response', [
-                        'order_id' => $order->id,
-                        'order_number' => $order->order_number,
-                        'response_type' => 'redirect'
-                    ]);
-
-                    return redirect()->route('checkout.success', $order->order_number)
-                        ->with('success', 'Payment completed successfully!');
-                } catch (\Exception $e) {
-                    Log::error('PayPal SDK Payment Error', [
-                        'order_id' => $order->id,
-                        'error' => $e->getMessage(),
-                        'paypal_order_id' => $request->paypal_order_id
-                    ]);
-
-                    if ($request->wantsJson() || $request->ajax()) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Payment processing failed: ' . $e->getMessage()
-                        ], 400);
-                    }
-
-                    return redirect()->back()->with('error', 'Payment processing failed: ' . $e->getMessage());
+                // Add freeship note if applicable
+                if ($qualifiesForFreeShipping) {
+                    $shippingNotes = $shippingNotes ? $shippingNotes . " (FREESHIP Applied)" : "FREESHIP Applied";
                 }
-            } else {
-                // This is the old PayPal flow (redirect-based)
-                try {
-                    $paypalService = new PayPalService();
-                    $payment = $paypalService->createPayment($order, $products);
 
-                    // Store order in session for PayPal callback
-                    Session::put('pending_order', $order->id);
-
-                    // Redirect to PayPal approval URL
-                    return redirect($payment->approval_url);
-                } catch (\Exception $e) {
-                    Log::error('PayPal Initialization Error', [
-                        'order_id' => $order->id,
-                        'error' => $e->getMessage()
-                    ]);
-                    return redirect()->back()->with('error', 'Payment initialization failed: ' . $e->getMessage());
-                }
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'product_id' => $item['product']->id,
+                    'product_name' => $item['product']->name,
+                    'product_description' => $item['product']->description,
+                    'unit_price' => $item['cart_item']->getUnitPriceWithCustomizations(), // Use unit price with customizations
+                    'quantity' => $item['quantity'],
+                    'total_price' => $item['total'],
+                    'product_options' => [
+                        'selected_variant' => $item['cart_item']->selected_variant,
+                        'customizations' => $item['cart_item']->customizations,
+                    ],
+                    'shipping_cost' => $itemShippingCost, // Converted to order currency
+                    'is_first_item' => $itemShipping['is_first_item'] ?? false,
+                    'shipping_notes' => $shippingNotes,
+                ]);
             }
-        } elseif ($request->payment_method === 'stripe') {
-            Log::info('🎯 STRIPE PAYMENT SECTION ENTERED', [
+
+            // NOTE: Không xóa cart ở đây vì user chưa thanh toán!
+            // Cart sẽ được xóa trong paypalSuccess() hoặc lianlianSuccess() sau khi payment thành công
+
+            Log::info('Order created, waiting for payment confirmation', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
-                'has_payment_intent_id' => $request->has('payment_intent_id')
+                'payment_method' => $request->payment_method,
+                'user_id' => $userId,
+                'session_id' => $sessionId
             ]);
 
-            // Check if payment intent ID is provided (from Stripe Elements)
-            if ($request->has('payment_intent_id')) {
-                try {
-                    Log::info('💳 Stripe Payment Processing', [
-                        'order_id' => $order->id,
-                        'payment_intent_id' => $request->payment_intent_id
-                    ]);
+            // Handle payment based on method first, then check AJAX for non-PayPal SDK requests
+            if ($request->payment_method === 'paypal') {
+                Log::info('PayPal Payment Method Detected', [
+                    'has_paypal_order_id' => $request->has('paypal_order_id'),
+                    'has_paypal_payer_id' => $request->has('paypal_payer_id'),
+                    'paypal_order_id' => $request->input('paypal_order_id'),
+                    'paypal_payer_id' => $request->input('paypal_payer_id')
+                ]);
 
-                    // For Stripe payments, the payment was already confirmed on the client side
-                    // We should update the order status immediately since we have valid payment_intent_id
-
-                    Log::info('Updating order for Stripe payment', [
-                        'order_id' => $order->id,
-                        'current_payment_status' => $order->payment_status,
-                        'current_status' => $order->status,
-                        'payment_intent_id' => $request->payment_intent_id
-                    ]);
-
-                    // Update order status - follow PayPal pattern (simple and direct)
-                    $order->update([
-                        'payment_status' => 'paid',
-                        'status' => 'processing',
-                        'payment_id' => $request->payment_intent_id,
-                        'payment_transaction_id' => $request->payment_intent_id,
-                        'paid_at' => now()
-                    ]);
-
-                    Log::info('✅ Stripe Order Status Updated', [
-                        'order_id' => $order->id,
-                        'order_number' => $order->order_number,
-                        'payment_status' => 'paid',
-                        'status' => 'processing',
-                        'payment_intent_id' => $request->payment_intent_id
-                    ]);
-
-                    // Clear cart after successful order status update
-                    Log::info('🛒 Clearing cart after Stripe payment status update', [
-                        'user_id' => $userId,
-                        'session_id' => $sessionId
-                    ]);
-
-                    $deletedCartCount = Cart::where(function ($query) use ($sessionId, $userId) {
-                        if ($userId) {
-                            $query->where('user_id', $userId);
-                        } else {
-                            $query->where('session_id', $sessionId);
-                        }
-                    })->delete();
-
-                    Log::info('🛒 Cart deletion result', [
-                        'deleted_cart_items' => $deletedCartCount,
-                        'user_id' => $userId,
-                        'session_id' => $sessionId,
-                        'order_id' => $order->id
-                    ]);
-
-                    // Clear shipping session
-                    Session::forget('shipping_details');
-
-                    // Send order confirmation email
+                // Check if this is from PayPal SDK (has paypal_order_id)
+                if ($request->has('paypal_order_id') && $request->has('paypal_payer_id')) {
+                    // This is from PayPal SDK - payment already completed on client side
                     try {
-                        Mail::to($order->customer_email)->send(new OrderConfirmation($order));
-                        Log::info('📧 Order confirmation email sent for Stripe payment', [
-                            'order_number' => $order->order_number,
-                            'email' => $order->customer_email
-                        ]);
-                    } catch (\Exception $e) {
-                        Log::error('❌ Failed to send order confirmation email for Stripe payment', [
-                            'order_number' => $order->order_number,
-                            'email' => $order->customer_email,
-                            'error' => $e->getMessage()
-                        ]);
-                    }
-
-                    if ($request->wantsJson() || $request->ajax()) {
-                        Log::info('💳 Stripe AJAX Response - SENDING TO FRONTEND', [
+                        Log::info('PayPal SDK Payment Processing', [
                             'order_id' => $order->id,
-                            'order_number' => $order->order_number,
-                            'wants_json' => $request->wantsJson(),
-                            'ajax' => $request->ajax(),
-                            'response_type' => 'json',
-                            'cart_cleared' => true,
-                            'order_status_updated' => true
+                            'paypal_order_id' => $request->paypal_order_id,
+                            'paypal_payer_id' => $request->paypal_payer_id
                         ]);
 
-                        $response = response()->json([
-                            'success' => true,
-                            'message' => 'Payment completed successfully',
-                            'order_number' => $order->order_number,
-                            'payment_completed' => true
-                        ]);
+                        // For PayPal SDK payments, the payment was already captured on the client side
+                        // We should update the order status immediately since we have valid order_id and payer_id
 
-                        Log::info('💳 Stripe Response Being Sent', [
-                            'response_content' => $response->getContent(),
-                            'order_number' => $order->order_number
-                        ]);
-
-                        return $response;
-                    }
-
-                    Log::info('💳 Stripe Redirect Response', [
-                        'order_id' => $order->id,
-                        'order_number' => $order->order_number,
-                        'response_type' => 'redirect'
-                    ]);
-
-                    return redirect()->route('checkout.success', $order->order_number)
-                        ->with('success', 'Payment completed successfully!');
-                } catch (\Exception $e) {
-                    Log::error('Stripe Payment Error', [
-                        'order_id' => $order->id,
-                        'error' => $e->getMessage(),
-                        'payment_intent_id' => $request->payment_intent_id
-                    ]);
-
-                    if ($request->wantsJson() || $request->ajax()) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Payment processing failed: ' . $e->getMessage()
-                        ], 400);
-                    }
-
-                    return redirect()->back()->with('error', 'Payment processing failed: ' . $e->getMessage());
-                }
-            } else {
-                // No payment intent ID provided - this is normal for initial order creation
-                Log::info('📝 Stripe Order Created (Waiting for Payment)', [
-                    'order_id' => $order->id,
-                    'order_number' => $order->order_number,
-                    'status' => 'Order created, waiting for payment processing'
-                ]);
-
-                // Store order in session for Stripe callback
-                Session::put('pending_order', $order->id);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Order created successfully. Please complete payment.',
-                    'order_id' => $order->id,
-                    'order_number' => $order->order_number,
-                    'total_amount' => $order->total_amount,
-                    'payment_method' => $order->payment_method,
-                    'payment_pending' => true
-                ]);
-            }
-        } elseif ($request->payment_method === 'lianlian_pay') {
-            Log::info('🎯 LIANLIAN PAY SECTION ENTERED', [
-                'order_id' => $order->id,
-                'order_number' => $order->order_number
-            ]);
-
-            Log::info('🔍 CHECKOUT CONTROLLER LIANLIAN PAY FLOW', [
-                'order_id' => $order->id,
-                'has_card_token' => $request->has('card_token'),
-                'request_data' => $request->all()
-            ]);
-
-            // Check if card token is provided (from iframe binding card)
-            if ($request->has('card_token')) {
-                // Store order in session for LianLian Pay callback
-                Session::put('pending_order', $order->id);
-                // Store card token and card type for payment processing
-                session([
-                    'lianlian_card_info' => [
-                        'card_token' => $request->card_token,
-                        'card_type' => $request->card_type ?? 'PAYMENT_TOKEN', // PAYMENT_TOKEN or LIANLIAN_TOKEN
-                        'holder_name' => $order->customer_name,
-                        'billing_address' => [
-                            'line1' => $order->shipping_address,
-                            'line2' => '',
-                            'city' => $order->city,
-                            'state' => $order->state ?? '',
-                            'postal_code' => $order->postal_code,
-                            'country' => $order->country,
-                        ]
-                    ]
-                ]);
-
-                // Create payment using LianLian Pay
-                try {
-                    $lianLianPayService = new \App\Services\LianLianPayServiceV2();
-                    $paymentResponse = $lianLianPayService->createPayment($order);
-
-                    // Check if payment was successful
-                    if (isset($paymentResponse['return_code']) && $paymentResponse['return_code'] !== 'SUCCESS') {
-                        Log::error('LianLian Pay Payment Failed', [
+                        Log::info('Updating order for PayPal SDK payment', [
                             'order_id' => $order->id,
-                            'return_code' => $paymentResponse['return_code'],
-                            'return_message' => $paymentResponse['return_message'] ?? 'Unknown error',
-                            'response' => $paymentResponse
+                            'current_payment_status' => $order->payment_status,
+                            'current_status' => $order->status,
+                            'paypal_order_id' => $request->paypal_order_id
                         ]);
 
-                        return response()->json([
-                            'success' => false,
-                            'error' => 'Payment failed',
-                            'message' => $paymentResponse['return_message'] ?? 'Payment processing failed',
-                            'return_code' => $paymentResponse['return_code']
-                        ], 400);
-                    }
-
-                    // Check if 3DS authentication is required
-                    $requires3DS = false;
-                    $threeDSecureUrl = null;
-
-                    if (
-                        isset($paymentResponse['order']['3ds_status']) &&
-                        $paymentResponse['order']['3ds_status'] === 'CHALLENGE' &&
-                        isset($paymentResponse['order']['payment_url'])
-                    ) {
-                        $requires3DS = true;
-                        $threeDSecureUrl = $paymentResponse['order']['payment_url'];
-                    } elseif (isset($paymentResponse['3ds_url'])) {
-                        $requires3DS = true;
-                        $threeDSecureUrl = $paymentResponse['3ds_url'];
-                    } elseif (isset($paymentResponse['redirect_url'])) {
-                        $requires3DS = true;
-                        $threeDSecureUrl = $paymentResponse['redirect_url'];
-                    }
-
-                    // Update order with payment transaction ID
-                    $transactionId = $paymentResponse['order']['ll_transaction_id']
-                        ?? $paymentResponse['merchant_transaction_id']
-                        ?? null;
-
-                    // Check payment status từ response
-                    $paymentStatus = $paymentResponse['order']['payment_data']['payment_status'] ?? null;
-
-                    Log::info('CheckoutController Payment Status Check', [
-                        'order_id' => $order->id,
-                        'payment_status_code' => $paymentStatus,
-                        'transaction_id' => $transactionId,
-                        'return_code' => $paymentResponse['return_code']
-                    ]);
-
-                    // Nếu payment_status = "PS" (Payment Success), mark order as paid ngay và xóa cart
-                    if ($paymentStatus === 'PS') {
+                        // Update order status - follow LianLian Pay pattern (simple and direct)
                         $order->update([
-                            'payment_method' => 'lianlian_pay',
-                            'payment_transaction_id' => $transactionId,
                             'payment_status' => 'paid',
                             'status' => 'processing',
+                            'payment_id' => $request->paypal_order_id,
+                            'payment_transaction_id' => $request->paypal_payer_id,
                             'paid_at' => now()
                         ]);
 
-                        Log::info('Payment Completed Immediately (PS) in CheckoutController', [
+                        Log::info('✅ PayPal Order Status Updated (following LianLian Pay pattern)', [
                             'order_id' => $order->id,
                             'order_number' => $order->order_number,
-                            'transaction_id' => $transactionId
+                            'payment_status' => 'paid',
+                            'status' => 'processing',
+                            'paypal_order_id' => $request->paypal_order_id,
+                            'paypal_payer_id' => $request->paypal_payer_id
                         ]);
 
-                        // Xóa cart ngay khi payment thành công - theo pattern từ PayPal
-                        Log::info('🛒 Clearing cart after LianLian Pay immediate success', [
+                        // Clear cart after successful order status update (CRITICAL)
+                        Log::info('🛒 Clearing cart after PayPal payment status update', [
                             'user_id' => $userId,
-                            'session_id' => $sessionId,
-                            'order_id' => $order->id
+                            'session_id' => $sessionId
                         ]);
 
                         $deletedCartCount = Cart::where(function ($query) use ($sessionId, $userId) {
@@ -1002,7 +624,198 @@ class CheckoutController extends Controller
                             }
                         })->delete();
 
-                        Log::info('🛒 LianLian Pay cart deletion result', [
+                        Log::info('🛒 Cart deletion result', [
+                            'deleted_cart_items' => $deletedCartCount,
+                            'user_id' => $userId,
+                            'session_id' => $sessionId,
+                            'order_id' => $order->id
+                        ]);
+
+                        // Verify cart is actually empty
+                        $remainingCartItems = Cart::where(function ($query) use ($sessionId, $userId) {
+                            if ($userId) {
+                                $query->where('user_id', $userId);
+                            } else {
+                                $query->where('session_id', $sessionId);
+                            }
+                        })->count();
+
+                        Log::info('🛒 Cart verification after deletion', [
+                            'remaining_cart_items' => $remainingCartItems,
+                            'user_id' => $userId,
+                            'session_id' => $sessionId
+                        ]);
+
+                        $this->trackTikTokCheckoutEvent(
+                            $request,
+                            'Purchase',
+                            $eventItems,
+                            $total,
+                            [
+                                'content_id' => $order->order_number,
+                                'content_name' => 'Order',
+                                'description' => sprintf('Order %s purchased via PayPal SDK', $order->order_number),
+                            ],
+                            [
+                                'email' => $order->customer_email,
+                                'phone' => $order->customer_phone,
+                                'external_id' => $order->user_id ?? $userId,
+                            ]
+                        );
+
+                        // Clear shipping session
+                        Session::forget('shipping_details');
+
+                        // Try to verify with PayPal API (optional, for logging - AFTER cart clearing)
+                        try {
+                            $paypalService = new PayPalService();
+                            $payment = $paypalService->verifyOrderSafely($request->paypal_order_id);
+
+                            Log::info('PayPal API Verification Result', [
+                                'order_id' => $order->id,
+                                'payment_status_from_api' => $payment ? $payment->status : 'null',
+                                'verification_safe' => true
+                            ]);
+                        } catch (\Exception $verifyException) {
+                            Log::warning('PayPal API verification failed but continuing', [
+                                'order_id' => $order->id,
+                                'error' => $verifyException->getMessage()
+                            ]);
+                        }
+
+                        // Always return JSON for AJAX requests (PayPal SDK always sends AJAX)
+                        if ($isAjaxRequest || $request->has('paypal_order_id')) {
+                            Log::info('💳 PayPal SDK AJAX Response - SENDING TO FRONTEND', [
+                                'order_id' => $order->id,
+                                'order_number' => $order->order_number,
+                                'wants_json' => $request->wantsJson(),
+                                'ajax' => $request->ajax(),
+                                'is_ajax_request' => $isAjaxRequest,
+                                'has_paypal_order_id' => $request->has('paypal_order_id'),
+                                'response_type' => 'json',
+                                'cart_cleared' => true,
+                                'order_status_updated' => true
+                            ]);
+
+                            $response = response()->json([
+                                'success' => true,
+                                'message' => 'Payment completed successfully',
+                                'order_number' => $order->order_number,
+                                'payment_completed' => true
+                            ]);
+
+                            Log::info('💳 PayPal Response Being Sent', [
+                                'response_content' => $response->getContent(),
+                                'order_number' => $order->order_number
+                            ]);
+
+                            return $response;
+                        }
+
+                        Log::info('💳 PayPal SDK Redirect Response', [
+                            'order_id' => $order->id,
+                            'order_number' => $order->order_number,
+                            'response_type' => 'redirect'
+                        ]);
+
+                        return redirect()->route('checkout.success', $order->order_number)
+                            ->with('success', 'Payment completed successfully!');
+                    } catch (\Exception $e) {
+                        Log::error('PayPal SDK Payment Error', [
+                            'order_id' => $order->id ?? null,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                            'paypal_order_id' => $request->paypal_order_id,
+                            'is_ajax' => $isAjaxRequest
+                        ]);
+
+                        // Always return JSON for PayPal SDK requests (they are always AJAX)
+                        if ($isAjaxRequest || $request->has('paypal_order_id')) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Payment processing failed: ' . $e->getMessage(),
+                                'error' => config('app.debug') ? $e->getMessage() : 'Payment processing failed'
+                            ], 400);
+                        }
+
+                        return redirect()->back()->with('error', 'Payment processing failed: ' . $e->getMessage());
+                    }
+                } else {
+                    // This is the old PayPal flow (redirect-based)
+                    try {
+                        $paypalService = new PayPalService();
+                        $payment = $paypalService->createPayment($order, $products);
+
+                        // Store order in session for PayPal callback
+                        Session::put('pending_order', $order->id);
+
+                        // Redirect to PayPal approval URL
+                        return redirect($payment->approval_url);
+                    } catch (\Exception $e) {
+                        Log::error('PayPal Initialization Error', [
+                            'order_id' => $order->id,
+                            'error' => $e->getMessage()
+                        ]);
+                        return redirect()->back()->with('error', 'Payment initialization failed: ' . $e->getMessage());
+                    }
+                }
+            } elseif ($request->payment_method === 'stripe') {
+                Log::info('🎯 STRIPE PAYMENT SECTION ENTERED', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'has_payment_intent_id' => $request->has('payment_intent_id')
+                ]);
+
+                // Check if payment intent ID is provided (from Stripe Elements)
+                if ($request->has('payment_intent_id')) {
+                    try {
+                        Log::info('💳 Stripe Payment Processing', [
+                            'order_id' => $order->id,
+                            'payment_intent_id' => $request->payment_intent_id
+                        ]);
+
+                        // For Stripe payments, the payment was already confirmed on the client side
+                        // We should update the order status immediately since we have valid payment_intent_id
+
+                        Log::info('Updating order for Stripe payment', [
+                            'order_id' => $order->id,
+                            'current_payment_status' => $order->payment_status,
+                            'current_status' => $order->status,
+                            'payment_intent_id' => $request->payment_intent_id
+                        ]);
+
+                        // Update order status - follow PayPal pattern (simple and direct)
+                        $order->update([
+                            'payment_status' => 'paid',
+                            'status' => 'processing',
+                            'payment_id' => $request->payment_intent_id,
+                            'payment_transaction_id' => $request->payment_intent_id,
+                            'paid_at' => now()
+                        ]);
+
+                        Log::info('✅ Stripe Order Status Updated', [
+                            'order_id' => $order->id,
+                            'order_number' => $order->order_number,
+                            'payment_status' => 'paid',
+                            'status' => 'processing',
+                            'payment_intent_id' => $request->payment_intent_id
+                        ]);
+
+                        // Clear cart after successful order status update
+                        Log::info('🛒 Clearing cart after Stripe payment status update', [
+                            'user_id' => $userId,
+                            'session_id' => $sessionId
+                        ]);
+
+                        $deletedCartCount = Cart::where(function ($query) use ($sessionId, $userId) {
+                            if ($userId) {
+                                $query->where('user_id', $userId);
+                            } else {
+                                $query->where('session_id', $sessionId);
+                            }
+                        })->delete();
+
+                        Log::info('🛒 Cart deletion result', [
                             'deleted_cart_items' => $deletedCartCount,
                             'user_id' => $userId,
                             'session_id' => $sessionId,
@@ -1015,19 +828,270 @@ class CheckoutController extends Controller
                         // Send order confirmation email
                         try {
                             Mail::to($order->customer_email)->send(new OrderConfirmation($order));
-                            Log::info('📧 Order confirmation email sent for immediate LianLian payment', [
+                            Log::info('📧 Order confirmation email sent for Stripe payment', [
                                 'order_number' => $order->order_number,
                                 'email' => $order->customer_email
                             ]);
                         } catch (\Exception $e) {
-                            Log::error('❌ Failed to send order confirmation email for LianLian payment', [
+                            Log::error('❌ Failed to send order confirmation email for Stripe payment', [
                                 'order_number' => $order->order_number,
                                 'email' => $order->customer_email,
                                 'error' => $e->getMessage()
                             ]);
                         }
 
-                        // Return success with payment_completed flag
+                        // Always return JSON for AJAX requests (Stripe always sends AJAX)
+                        if ($isAjaxRequest || $request->has('payment_intent_id')) {
+                            Log::info('💳 Stripe AJAX Response - SENDING TO FRONTEND', [
+                                'order_id' => $order->id,
+                                'order_number' => $order->order_number,
+                                'wants_json' => $request->wantsJson(),
+                                'ajax' => $request->ajax(),
+                                'is_ajax_request' => $isAjaxRequest,
+                                'has_payment_intent_id' => $request->has('payment_intent_id'),
+                                'response_type' => 'json',
+                                'cart_cleared' => true,
+                                'order_status_updated' => true
+                            ]);
+
+                            $response = response()->json([
+                                'success' => true,
+                                'message' => 'Payment completed successfully',
+                                'order_number' => $order->order_number,
+                                'payment_completed' => true
+                            ]);
+
+                            Log::info('💳 Stripe Response Being Sent', [
+                                'response_content' => $response->getContent(),
+                                'order_number' => $order->order_number
+                            ]);
+
+                            return $response;
+                        }
+
+                        Log::info('💳 Stripe Redirect Response', [
+                            'order_id' => $order->id,
+                            'order_number' => $order->order_number,
+                            'response_type' => 'redirect'
+                        ]);
+
+                        return redirect()->route('checkout.success', $order->order_number)
+                            ->with('success', 'Payment completed successfully!');
+                    } catch (\Exception $e) {
+                        Log::error('Stripe Payment Error', [
+                            'order_id' => $order->id ?? null,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                            'payment_intent_id' => $request->payment_intent_id,
+                            'is_ajax' => $isAjaxRequest
+                        ]);
+
+                        // Always return JSON for Stripe requests (they are always AJAX)
+                        if ($isAjaxRequest || $request->has('payment_intent_id')) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Payment processing failed: ' . $e->getMessage(),
+                                'error' => config('app.debug') ? $e->getMessage() : 'Payment processing failed'
+                            ], 400);
+                        }
+
+                        return redirect()->back()->with('error', 'Payment processing failed: ' . $e->getMessage());
+                    }
+                } else {
+                    // No payment intent ID provided - this is normal for initial order creation
+                    Log::info('📝 Stripe Order Created (Waiting for Payment)', [
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'status' => 'Order created, waiting for payment processing'
+                    ]);
+
+                    // Store order in session for Stripe callback
+                    Session::put('pending_order', $order->id);
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Order created successfully. Please complete payment.',
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'total_amount' => $order->total_amount,
+                        'payment_method' => $order->payment_method,
+                        'payment_pending' => true
+                    ]);
+                }
+            } elseif ($request->payment_method === 'lianlian_pay') {
+                Log::info('🎯 LIANLIAN PAY SECTION ENTERED', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number
+                ]);
+
+                Log::info('🔍 CHECKOUT CONTROLLER LIANLIAN PAY FLOW', [
+                    'order_id' => $order->id,
+                    'has_card_token' => $request->has('card_token'),
+                    'request_data' => $request->all()
+                ]);
+
+                // Check if card token is provided (from iframe binding card)
+                if ($request->has('card_token')) {
+                    // Store order in session for LianLian Pay callback
+                    Session::put('pending_order', $order->id);
+                    // Store card token and card type for payment processing
+                    session([
+                        'lianlian_card_info' => [
+                            'card_token' => $request->card_token,
+                            'card_type' => $request->card_type ?? 'PAYMENT_TOKEN', // PAYMENT_TOKEN or LIANLIAN_TOKEN
+                            'holder_name' => $order->customer_name,
+                            'billing_address' => [
+                                'line1' => $order->shipping_address,
+                                'line2' => '',
+                                'city' => $order->city,
+                                'state' => $order->state ?? '',
+                                'postal_code' => $order->postal_code,
+                                'country' => $order->country,
+                            ]
+                        ]
+                    ]);
+
+                    // Create payment using LianLian Pay
+                    try {
+                        $lianLianPayService = new \App\Services\LianLianPayServiceV2();
+                        $paymentResponse = $lianLianPayService->createPayment($order);
+
+                        // Check if payment was successful
+                        if (isset($paymentResponse['return_code']) && $paymentResponse['return_code'] !== 'SUCCESS') {
+                            Log::error('LianLian Pay Payment Failed', [
+                                'order_id' => $order->id,
+                                'return_code' => $paymentResponse['return_code'],
+                                'return_message' => $paymentResponse['return_message'] ?? 'Unknown error',
+                                'response' => $paymentResponse
+                            ]);
+
+                            return response()->json([
+                                'success' => false,
+                                'error' => 'Payment failed',
+                                'message' => $paymentResponse['return_message'] ?? 'Payment processing failed',
+                                'return_code' => $paymentResponse['return_code']
+                            ], 400);
+                        }
+
+                        // Check if 3DS authentication is required
+                        $requires3DS = false;
+                        $threeDSecureUrl = null;
+
+                        if (
+                            isset($paymentResponse['order']['3ds_status']) &&
+                            $paymentResponse['order']['3ds_status'] === 'CHALLENGE' &&
+                            isset($paymentResponse['order']['payment_url'])
+                        ) {
+                            $requires3DS = true;
+                            $threeDSecureUrl = $paymentResponse['order']['payment_url'];
+                        } elseif (isset($paymentResponse['3ds_url'])) {
+                            $requires3DS = true;
+                            $threeDSecureUrl = $paymentResponse['3ds_url'];
+                        } elseif (isset($paymentResponse['redirect_url'])) {
+                            $requires3DS = true;
+                            $threeDSecureUrl = $paymentResponse['redirect_url'];
+                        }
+
+                        // Update order with payment transaction ID
+                        $transactionId = $paymentResponse['order']['ll_transaction_id']
+                            ?? $paymentResponse['merchant_transaction_id']
+                            ?? null;
+
+                        // Check payment status từ response
+                        $paymentStatus = $paymentResponse['order']['payment_data']['payment_status'] ?? null;
+
+                        Log::info('CheckoutController Payment Status Check', [
+                            'order_id' => $order->id,
+                            'payment_status_code' => $paymentStatus,
+                            'transaction_id' => $transactionId,
+                            'return_code' => $paymentResponse['return_code']
+                        ]);
+
+                        // Nếu payment_status = "PS" (Payment Success), mark order as paid ngay và xóa cart
+                        if ($paymentStatus === 'PS') {
+                            $order->update([
+                                'payment_method' => 'lianlian_pay',
+                                'payment_transaction_id' => $transactionId,
+                                'payment_status' => 'paid',
+                                'status' => 'processing',
+                                'paid_at' => now()
+                            ]);
+
+                            Log::info('Payment Completed Immediately (PS) in CheckoutController', [
+                                'order_id' => $order->id,
+                                'order_number' => $order->order_number,
+                                'transaction_id' => $transactionId
+                            ]);
+
+                            // Xóa cart ngay khi payment thành công - theo pattern từ PayPal
+                            Log::info('🛒 Clearing cart after LianLian Pay immediate success', [
+                                'user_id' => $userId,
+                                'session_id' => $sessionId,
+                                'order_id' => $order->id
+                            ]);
+
+                            $deletedCartCount = Cart::where(function ($query) use ($sessionId, $userId) {
+                                if ($userId) {
+                                    $query->where('user_id', $userId);
+                                } else {
+                                    $query->where('session_id', $sessionId);
+                                }
+                            })->delete();
+
+                            Log::info('🛒 LianLian Pay cart deletion result', [
+                                'deleted_cart_items' => $deletedCartCount,
+                                'user_id' => $userId,
+                                'session_id' => $sessionId,
+                                'order_id' => $order->id
+                            ]);
+
+                            // Clear shipping session
+                            Session::forget('shipping_details');
+
+                            // Send order confirmation email
+                            try {
+                                Mail::to($order->customer_email)->send(new OrderConfirmation($order));
+                                Log::info('📧 Order confirmation email sent for immediate LianLian payment', [
+                                    'order_number' => $order->order_number,
+                                    'email' => $order->customer_email
+                                ]);
+                            } catch (\Exception $e) {
+                                Log::error('❌ Failed to send order confirmation email for LianLian payment', [
+                                    'order_number' => $order->order_number,
+                                    'email' => $order->customer_email,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+
+                            // Return success with payment_completed flag
+                            return response()->json([
+                                'success' => true,
+                                'requires_3ds' => $requires3DS,
+                                'redirect_url' => $threeDSecureUrl,
+                                'transaction_id' => $paymentResponse['merchant_transaction_id'] ?? null,
+                                'order_id' => $order->id,
+                                'order_number' => $order->order_number,
+                                'payment_completed' => true, // Flag để frontend biết payment đã thành công
+                                'payment_status' => 'paid',
+                                'data' => $paymentResponse
+                            ]);
+                        } else {
+                            // Nếu chưa paid, set pending - theo cách cũ
+                            $order->update([
+                                'payment_method' => 'lianlian_pay',
+                                'payment_transaction_id' => $transactionId,
+                                'payment_status' => 'pending'
+                            ]);
+
+                            Log::info('Payment Still Pending', [
+                                'order_id' => $order->id,
+                                'order_number' => $order->order_number,
+                                'payment_status_code' => $paymentStatus,
+                                'transaction_id' => $transactionId
+                            ]);
+                        }
+
+                        // Return JSON response for frontend cho trường hợp payment chưa thành công ngay
                         return response()->json([
                             'success' => true,
                             'requires_3ds' => $requires3DS,
@@ -1035,90 +1099,85 @@ class CheckoutController extends Controller
                             'transaction_id' => $paymentResponse['merchant_transaction_id'] ?? null,
                             'order_id' => $order->id,
                             'order_number' => $order->order_number,
-                            'payment_completed' => true, // Flag để frontend biết payment đã thành công
-                            'payment_status' => 'paid',
+                            'payment_completed' => false, // Payment chưa thành công
+                            'payment_status' => 'pending',
                             'data' => $paymentResponse
                         ]);
-                    } else {
-                        // Nếu chưa paid, set pending - theo cách cũ
-                        $order->update([
-                            'payment_method' => 'lianlian_pay',
-                            'payment_transaction_id' => $transactionId,
-                            'payment_status' => 'pending'
-                        ]);
-
-                        Log::info('Payment Still Pending', [
+                    } catch (\Exception $e) {
+                        Log::error('LianLian Pay Creation Error', [
                             'order_id' => $order->id,
-                            'order_number' => $order->order_number,
-                            'payment_status_code' => $paymentStatus,
-                            'transaction_id' => $transactionId
+                            'error' => $e->getMessage()
                         ]);
-                    }
 
-                    // Return JSON response for frontend cho trường hợp payment chưa thành công ngay
-                    return response()->json([
-                        'success' => true,
-                        'requires_3ds' => $requires3DS,
-                        'redirect_url' => $threeDSecureUrl,
-                        'transaction_id' => $paymentResponse['merchant_transaction_id'] ?? null,
+                        return response()->json([
+                            'success' => false,
+                            'error' => 'Payment creation failed',
+                            'message' => $e->getMessage()
+                        ], 500);
+                    }
+                } else {
+                    // No card token provided - this is normal for initial order creation
+                    // The order will be updated when payment is processed
+                    Log::info('📝 LianLian Pay Order Created (Waiting for Payment)', [
                         'order_id' => $order->id,
                         'order_number' => $order->order_number,
-                        'payment_completed' => false, // Payment chưa thành công
-                        'payment_status' => 'pending',
-                        'data' => $paymentResponse
+                        'status' => 'Order created, waiting for payment processing'
                     ]);
-                } catch (\Exception $e) {
-                    Log::error('LianLian Pay Creation Error', [
-                        'order_id' => $order->id,
-                        'error' => $e->getMessage()
-                    ]);
+
+                    // Store order in session for LianLian Pay callback
+                    Session::put('pending_order', $order->id);
 
                     return response()->json([
-                        'success' => false,
-                        'error' => 'Payment creation failed',
-                        'message' => $e->getMessage()
-                    ], 500);
+                        'success' => true,
+                        'message' => 'Order created successfully. Please complete payment.',
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'total_amount' => $order->total_amount,
+                        'payment_method' => $order->payment_method,
+                        'payment_pending' => true
+                    ]);
                 }
-            } else {
-                // No card token provided - this is normal for initial order creation
-                // The order will be updated when payment is processed
-                Log::info('📝 LianLian Pay Order Created (Waiting for Payment)', [
-                    'order_id' => $order->id,
-                    'order_number' => $order->order_number,
-                    'status' => 'Order created, waiting for payment processing'
-                ]);
+            }
 
-                // Store order in session for LianLian Pay callback
-                Session::put('pending_order', $order->id);
+            // For other payment methods (should not reach here normally)
+            // Cart will be cleared in respective success callbacks
 
+            // Handle AJAX requests for non-PayPal SDK requests (like LianLian Pay redirect)
+            if ($isAjaxRequest) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'Order created successfully. Please complete payment.',
+                    'message' => 'Order created successfully',
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                     'total_amount' => $order->total_amount,
-                    'payment_method' => $order->payment_method,
-                    'payment_pending' => true
+                    'payment_method' => $order->payment_method
                 ]);
             }
-        }
 
-        // For other payment methods (should not reach here normally)
-        // Cart will be cleared in respective success callbacks
-
-        // Handle AJAX requests for non-PayPal SDK requests (like LianLian Pay redirect)
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Order created successfully',
-                'order_id' => $order->id,
-                'order_number' => $order->order_number,
-                'total_amount' => $order->total_amount,
-                'payment_method' => $order->payment_method
+            return redirect()->route('checkout.success', $order->order_number);
+        } catch (\Exception $e) {
+            // Log the exception
+            Log::error('❌ CHECKOUT PROCESS EXCEPTION', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'is_ajax' => $isAjaxRequest,
+                'request_data' => $request->all()
             ]);
-        }
 
-        return redirect()->route('checkout.success', $order->order_number);
+            // Always return JSON for AJAX requests, even on exceptions
+            if ($isAjaxRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'An error occurred while processing your order: ' . $e->getMessage(),
+                    'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+                ], 500);
+            }
+
+            // For non-AJAX requests, redirect with error
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'An error occurred while processing your order. Please try again.');
+        }
     }
 
     public function processLianLianPayment(Request $request)
