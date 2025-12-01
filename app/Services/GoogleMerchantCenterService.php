@@ -19,6 +19,7 @@ class GoogleMerchantCenterService
     private $currency;
     private $contentLanguage;
     private $shoppingContentService;
+    private $credentialsPath;
 
     /**
      * Create instance with GmcConfig from database
@@ -34,6 +35,7 @@ class GoogleMerchantCenterService
         $instance->contentLanguage = $config->content_language;
 
         $credentialsPath = $config->credentials_path;
+        $instance->credentialsPath = $credentialsPath;
         $instance->initializeClient($credentialsPath);
 
         return $instance;
@@ -64,6 +66,7 @@ class GoogleMerchantCenterService
             throw new \Exception('Google Merchant Center credentials not configured. Please set GMC_MERCHANT_ID and GMC_CREDENTIALS_PATH in .env or use GmcConfig');
         }
 
+        $this->credentialsPath = $credentialsPath;
         $this->initializeClient($credentialsPath);
     }
 
@@ -363,16 +366,7 @@ class GoogleMerchantCenterService
 
         try {
             // Get service account email from credentials for logging
-            $serviceAccountEmail = null;
-            try {
-                $credentialsPath = $this->client->getAuthConfig();
-                if (is_string($credentialsPath) && file_exists($credentialsPath)) {
-                    $credentials = json_decode(file_get_contents($credentialsPath), true);
-                    $serviceAccountEmail = $credentials['client_email'] ?? null;
-                }
-            } catch (\Exception $e) {
-                // Ignore if cannot read credentials
-            }
+            $serviceAccountEmail = $this->getServiceAccountEmail();
 
             Log::info('GMC Delete Product - Building productId', [
                 'offer_id' => $offerId,
@@ -404,16 +398,7 @@ class GoogleMerchantCenterService
             $errorMessage = $this->parseGoogleServiceError($e);
 
             // Get service account email from credentials for better error message
-            $serviceAccountEmail = null;
-            try {
-                $credentialsPath = $this->client->getAuthConfig();
-                if (is_string($credentialsPath) && file_exists($credentialsPath)) {
-                    $credentials = json_decode(file_get_contents($credentialsPath), true);
-                    $serviceAccountEmail = $credentials['client_email'] ?? null;
-                }
-            } catch (\Exception $ex) {
-                // Ignore if cannot read credentials
-            }
+            $serviceAccountEmail = $this->getServiceAccountEmail();
 
             Log::error('GMC Delete Error', [
                 'error' => $errorMessage,
@@ -450,6 +435,54 @@ class GoogleMerchantCenterService
                 'offer_id' => $offerId
             ];
         }
+    }
+
+    /**
+     * Get service account email from credentials file
+     * Same approach as used in upload functions
+     */
+    private function getServiceAccountEmail(): ?string
+    {
+        if (!$this->credentialsPath) {
+            return null;
+        }
+
+        try {
+            // Resolve credentials path (same logic as initializeClient)
+            $resolvedPath = null;
+            $storageAppPath = storage_path('app');
+
+            $possiblePaths = [
+                $this->credentialsPath,
+                storage_path('app/' . $this->credentialsPath),
+                $storageAppPath . DIRECTORY_SEPARATOR . basename($this->credentialsPath),
+                $storageAppPath . DIRECTORY_SEPARATOR . str_replace('app/', '', $this->credentialsPath),
+                $storageAppPath . DIRECTORY_SEPARATOR . str_replace('app\\', '', $this->credentialsPath),
+                Storage::exists($this->credentialsPath) ? Storage::path($this->credentialsPath) : null,
+            ];
+
+            $possiblePaths = array_filter(array_unique($possiblePaths));
+
+            foreach ($possiblePaths as $path) {
+                if (file_exists($path) && is_file($path)) {
+                    $resolvedPath = $path;
+                    break;
+                }
+            }
+
+            if ($resolvedPath && file_exists($resolvedPath)) {
+                $credentials = json_decode(file_get_contents($resolvedPath), true);
+                return $credentials['client_email'] ?? null;
+            }
+        } catch (\Exception $e) {
+            // Ignore if cannot read credentials
+            Log::debug('Cannot read service account email from credentials', [
+                'error' => $e->getMessage(),
+                'credentials_path' => $this->credentialsPath
+            ]);
+        }
+
+        return null;
     }
 
     /**
