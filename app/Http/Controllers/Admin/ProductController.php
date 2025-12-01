@@ -1208,8 +1208,19 @@ class ProductController extends Controller
         // Convert product price from USD to target currency
         // Products are stored in USD, but need to be converted for different markets
         // Uses currency_rate from DomainCurrencyConfig
-        $productPriceUSD = (float)$product->price;
+        $productPriceUSD = (float)($product->price ?? 0);
         $productPrice = $this->convertProductPrice($productPriceUSD, $currency, $gmcConfig);
+
+        // Ensure price is valid and not empty
+        if (empty($productPrice) || $productPrice <= 0) {
+            Log::warning('GMC Feed: Product has invalid price', [
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'original_price' => $product->price,
+                'converted_price' => $productPrice
+            ]);
+            return null; // Skip products without valid price
+        }
 
         // Shipping: only send country, no price
         $shipping = [

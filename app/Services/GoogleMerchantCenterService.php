@@ -195,15 +195,20 @@ class GoogleMerchantCenterService
             if (isset($productData['shipping']) && is_array($productData['shipping'])) {
                 $shippingArray = [];
                 foreach ($productData['shipping'] as $shippingItem) {
-                    $shippingPrice = new Price();
-                    $shippingPrice->setValue($shippingItem['price']['value']);
-                    // Ensure shipping currency matches product currency
-                    $shippingPrice->setCurrency($productData['currency'] ?? $this->currency);
-
-                    $shippingArray[] = [
-                        'country' => $shippingItem['country'],
-                        'price' => $shippingPrice
+                    $shippingEntry = [
+                        'country' => $shippingItem['country']
                     ];
+
+                    // Only add price if it exists (optional for some shipping configurations)
+                    if (isset($shippingItem['price']) && is_array($shippingItem['price']) && isset($shippingItem['price']['value'])) {
+                        $shippingPrice = new Price();
+                        $shippingPrice->setValue($shippingItem['price']['value']);
+                        // Ensure shipping currency matches product currency
+                        $shippingPrice->setCurrency($productData['currency'] ?? $this->currency);
+                        $shippingEntry['price'] = $shippingPrice;
+                    }
+
+                    $shippingArray[] = $shippingEntry;
                 }
                 $googleProduct->setShipping($shippingArray);
             }
@@ -220,6 +225,15 @@ class GoogleMerchantCenterService
 
             if (isset($productData['gender'])) {
                 $googleProduct->setGender($productData['gender']);
+            }
+
+            // Set size_system and size_type (for Clothing/Apparel products)
+            if (isset($productData['size_system'])) {
+                $googleProduct->setSizeSystem($productData['size_system']);
+            }
+
+            if (isset($productData['size_type'])) {
+                $googleProduct->setSizeType($productData['size_type']);
             }
 
             // Log the request
@@ -475,6 +489,11 @@ class GoogleMerchantCenterService
      */
     public function prepareProductData($productData): array
     {
+        // Validate required fields
+        if (!isset($productData['price']) || empty($productData['price'])) {
+            throw new \InvalidArgumentException('Product price is required and cannot be empty');
+        }
+
         // Build product data according to new API format
         $product = [
             'offerId' => $productData['offer_id'],
@@ -525,6 +544,15 @@ class GoogleMerchantCenterService
         // Shipping (optional)
         if (isset($productData['shipping'])) {
             $product['shipping'] = $productData['shipping'];
+        }
+
+        // Size system and size type (for Clothing/Apparel products)
+        if (isset($productData['size_system'])) {
+            $product['sizeSystem'] = $productData['size_system'];
+        }
+
+        if (isset($productData['size_type'])) {
+            $product['sizeType'] = $productData['size_type'];
         }
 
         return $product;
