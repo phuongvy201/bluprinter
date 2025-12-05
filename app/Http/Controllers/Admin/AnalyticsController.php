@@ -27,7 +27,7 @@ class AnalyticsController extends Controller
 
         // Kiểm tra nếu không có domain nào được cấu hình
         if (empty($availableDomains)) {
-            return redirect()->route('admin.settings.domain-analytics.index')
+            return redirect()->route('admin.settings.domain-config.index')
                 ->with('error', 'Chưa có domain nào được cấu hình. Vui lòng cấu hình domain trước khi xem analytics.');
         }
 
@@ -52,7 +52,7 @@ class AnalyticsController extends Controller
 
         // Kiểm tra nếu service không được khởi tạo (do không có config)
         if (!$this->analyticsService->isInitialized()) {
-            return redirect()->route('admin.settings.domain-analytics.index')
+            return redirect()->route('admin.settings.domain-config.index')
                 ->with('error', "Domain '{$selectedDomain}' chưa được cấu hình đầy đủ. Vui lòng kiểm tra lại cấu hình.");
         }
 

@@ -11,9 +11,7 @@
                         Để trống một trường sẽ quay về giá trị mặc định đang cấu hình trong hệ thống.
                     </p>
                 </div>
-                <a href="{{ route('admin.settings.domain-analytics.index') }}" class="px-5 py-2.5 rounded-xl border border-blue-600 text-blue-600 font-semibold hover:bg-blue-50 transition">
-                    Quản lý GA theo Domain
-                </a>
+               
             </div>
         </div>
 

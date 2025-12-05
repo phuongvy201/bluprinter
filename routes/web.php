@@ -14,8 +14,7 @@ use App\Http\Controllers\Admin\CollectionController as AdminCollectionController
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Admin\AnalyticsSettingsController;
-use App\Http\Controllers\Admin\DomainAnalyticsConfigController;
-use App\Http\Controllers\Admin\DomainCurrencyConfigController;
+use App\Http\Controllers\Admin\DomainConfigController;
 use App\Http\Controllers\Admin\GmcConfigController;
 use App\Http\Controllers\Admin\ShopController as AdminShopController;
 use App\Http\Controllers\Admin\PageController as AdminPageController;
@@ -549,25 +548,21 @@ Route::middleware('auth')->group(function () {
         Route::get('settings/analytics', [AnalyticsSettingsController::class, 'edit'])->name('settings.analytics.edit');
         Route::put('settings/analytics', [AnalyticsSettingsController::class, 'update'])->name('settings.analytics.update');
 
-        // Domain Analytics Configs
-        Route::resource('settings/domain-analytics', DomainAnalyticsConfigController::class)->names([
-            'index' => 'settings.domain-analytics.index',
-            'create' => 'settings.domain-analytics.create',
-            'store' => 'settings.domain-analytics.store',
-            'edit' => 'settings.domain-analytics.edit',
-            'update' => 'settings.domain-analytics.update',
-            'destroy' => 'settings.domain-analytics.destroy',
-        ]);
-
-        // Domain Currency Configs
-        Route::resource('settings/domain-currency', DomainCurrencyConfigController::class)->names([
-            'index' => 'settings.domain-currency.index',
-            'create' => 'settings.domain-currency.create',
-            'store' => 'settings.domain-currency.store',
-            'edit' => 'settings.domain-currency.edit',
-            'update' => 'settings.domain-currency.update',
-            'destroy' => 'settings.domain-currency.destroy',
-        ]);
+        // Domain Configs (Currency + Analytics)
+        Route::get('settings/domain-config', [DomainConfigController::class, 'index'])->name('settings.domain-config.index');
+        Route::get('settings/domain-config/create', [DomainConfigController::class, 'create'])->name('settings.domain-config.create');
+        
+        // Currency routes
+        Route::post('settings/domain-config/currency', [DomainConfigController::class, 'storeCurrency'])->name('settings.domain-config.store-currency');
+        Route::get('settings/domain-config/currency/{id}/edit', [DomainConfigController::class, 'editCurrency'])->name('settings.domain-config.edit-currency');
+        Route::put('settings/domain-config/currency/{id}', [DomainConfigController::class, 'updateCurrency'])->name('settings.domain-config.update-currency');
+        Route::delete('settings/domain-config/currency/{id}', [DomainConfigController::class, 'destroyCurrency'])->name('settings.domain-config.destroy-currency');
+        
+        // Analytics routes
+        Route::post('settings/domain-config/analytics', [DomainConfigController::class, 'storeAnalytics'])->name('settings.domain-config.store-analytics');
+        Route::get('settings/domain-config/analytics/{id}/edit', [DomainConfigController::class, 'editAnalytics'])->name('settings.domain-config.edit-analytics');
+        Route::put('settings/domain-config/analytics/{id}', [DomainConfigController::class, 'updateAnalytics'])->name('settings.domain-config.update-analytics');
+        Route::delete('settings/domain-config/analytics/{id}', [DomainConfigController::class, 'destroyAnalytics'])->name('settings.domain-config.destroy-analytics');
 
         // GMC Configs
         Route::resource('settings/gmc-config', GmcConfigController::class)->names([

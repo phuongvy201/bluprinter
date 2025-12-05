@@ -147,3 +147,9 @@ function updateCurrencyRate(currency) {
 
 
 
+
+
+
+
+
+
