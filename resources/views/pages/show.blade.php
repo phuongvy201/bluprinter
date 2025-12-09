@@ -40,7 +40,23 @@
             @endif
 
             <div class="prose prose-lg max-w-none">
-                {!! $page->content !!}
+                @php
+                    // Replace shipping cost placeholders with formatted prices
+                    $content = $page->content;
+                    
+                    // US Shipping Costs
+                    $content = str_replace('{SHIPPING_US_CLOTHING_FIRST}', format_price_usd(6.99), $content);
+                    $content = str_replace('{SHIPPING_US_CLOTHING_ADD}', format_price_usd(4.99), $content);
+                    $content = str_replace('{SHIPPING_US_ORNAMENTS_FIRST}', format_price_usd(5.99), $content);
+                    $content = str_replace('{SHIPPING_US_ORNAMENTS_ADD}', format_price_usd(3.99), $content);
+                    
+                    // UK Shipping Costs
+                    $content = str_replace('{SHIPPING_UK_CLOTHING_FIRST}', format_price_usd(6.99), $content);
+                    $content = str_replace('{SHIPPING_UK_CLOTHING_ADD}', format_price_usd(4.99), $content);
+                    $content = str_replace('{SHIPPING_UK_ORNAMENTS_FIRST}', format_price_usd(5.99), $content);
+                    $content = str_replace('{SHIPPING_UK_ORNAMENTS_ADD}', format_price_usd(3.99), $content);
+                @endphp
+                {!! $content !!}
             </div>
         </div>
 
