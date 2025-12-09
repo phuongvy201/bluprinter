@@ -37,7 +37,8 @@ document.addEventListener('DOMContentLoaded', function() {
         window.dispatchEvent(new CustomEvent('cartUpdated'));
     }
 
-    if (typeof gtag === 'function') {
+    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    if (typeof dataLayer !== 'undefined') {
         @php
             $gaItems = $order->items->map(function($item, $index) {
                 return [
@@ -51,12 +52,13 @@ document.addEventListener('DOMContentLoaded', function() {
         @endphp
         const gaItems = @json($gaItems);
 
-        gtag('event', 'purchase', {
-            currency: '{{ $currency ?? "USD" }}',
-            transaction_id: '{{ $order->order_number }}',
-            value: Number('{{ $order->total_amount }}'),
-            tax: Number('{{ $order->tax_amount }}'),
-            shipping: Number('{{ $order->shipping_cost }}'),
+        dataLayer.push({
+            'event': 'purchase',
+            'currency': '{{ $currency ?? "USD" }}',
+            'transaction_id': '{{ $order->order_number }}',
+            'value': Number('{{ $order->total_amount }}'),
+            'tax': Number('{{ $order->tax_amount }}'),
+            'shipping': Number('{{ $order->shipping_cost }}'),
             items: gaItems
         });
 

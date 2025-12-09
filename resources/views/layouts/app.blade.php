@@ -30,7 +30,6 @@
         $metaPixelId = \App\Support\Settings::get('analytics.meta_pixel_id', config('services.meta.pixel_id'));
         $tiktokPixelId = \App\Support\Settings::get('analytics.tiktok_pixel_id', config('services.tiktok.pixel_id'));
         $googleTagManagerId = \App\Support\Settings::get('analytics.google_tag_manager_id', config('services.google.tag_manager_id'));
-        $googleAdsId = \App\Support\Settings::get('analytics.google_ads_id', config('services.google.ads_id'));
         
         // Currency configuration - available in all views
         $siteCurrency = currency();
@@ -57,18 +56,6 @@
         <!-- End Google Tag Manager -->
     @endif
     
-    @if($googleAdsId)
-        <!-- Google tag (gtag.js) -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id={{ $googleAdsId }}"></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-
-            gtag('config', '{{ $googleAdsId }}');
-        </script>
-        <!-- End Google tag -->
-    @endif
     
     @if($metaPixelId)
         <!-- Meta Pixel Code -->

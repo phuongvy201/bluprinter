@@ -44,11 +44,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    if (typeof gtag === 'function') {
-        gtag('event', 'view_item', {
-            currency: CURRENT_CURRENCY,
-            value: {{ $productPriceConverted }},
-            items: [{
+    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    if (typeof dataLayer !== 'undefined') {
+        dataLayer.push({
+            'event': 'view_item',
+            'currency': CURRENT_CURRENCY,
+            'value': {{ $productPriceConverted }},
+            'items': [{
                 item_id: '{{ $product->sku ?? $product->id }}',
                 item_name: '{{ addslashes($product->name) }}',
                 item_category: @json($primaryCategory),
@@ -3469,7 +3471,8 @@ function addToCart() {
         });
     }
 
-    if (typeof gtag === 'function') {
+    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    if (typeof dataLayer !== 'undefined') {
         const gaItem = {
             item_id: '{{ $product->sku ?? $product->id }}',
             item_name: '{{ addslashes($product->name) }}',
@@ -3481,10 +3484,11 @@ function addToCart() {
         if (!gaItem.item_variant) {
             delete gaItem.item_variant;
         }
-        gtag('event', 'add_to_cart', {
-            currency: CURRENT_CURRENCY,
-            value: totalPriceValue,
-            items: [gaItem]
+        dataLayer.push({
+            'event': 'add_to_cart',
+            'currency': CURRENT_CURRENCY,
+            'value': totalPriceValue,
+            'items': [gaItem]
         });
     }
 
@@ -4774,14 +4778,16 @@ function triggerCheckoutTrackingFromLocalCart() {
         });
     }
 
-    if (typeof gtag === 'function') {
-        gtag('event', 'begin_checkout', {
-            currency: CURRENT_CURRENCY,
-            value: Number(cartTotal.toFixed(2)),
-            items: gaItems
+    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    if (typeof dataLayer !== 'undefined') {
+        dataLayer.push({
+            'event': 'begin_checkout',
+            'currency': CURRENT_CURRENCY,
+            'value': Number(cartTotal.toFixed(2)),
+            'items': gaItems
         });
 
-        console.log('✅ Google Tag: begin_checkout tracked from popup/cart', {
+        console.log('✅ GTM: begin_checkout tracked from popup/cart', {
             items: gaItems.length,
             value: cartTotal.toFixed(2)
         });
@@ -5808,7 +5814,8 @@ function buyNow() {
         });
     }
     
-    if (typeof gtag === 'function') {
+    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    if (typeof dataLayer !== 'undefined') {
         const gaItem = {
             item_id: '{{ $product->sku ?? $product->id }}',
             item_name: '{{ addslashes($product->name) }}',
@@ -5820,10 +5827,11 @@ function buyNow() {
         if (!gaItem.item_variant) {
             delete gaItem.item_variant;
         }
-        gtag('event', 'add_to_cart', {
-            currency: CURRENT_CURRENCY,
-            value: totalPriceValue,
-            items: [gaItem]
+        dataLayer.push({
+            'event': 'add_to_cart',
+            'currency': CURRENT_CURRENCY,
+            'value': totalPriceValue,
+            'items': [gaItem]
         });
     }
 
@@ -5895,15 +5903,19 @@ function buyNow() {
                     delete gaItem.item_variant;
                 }
 
-                gtag('event', 'begin_checkout', {
-                    currency: CURRENT_CURRENCY,
-                    value: totalPriceValue,
-                    items: [gaItem]
-                });
+                // Event tracking được xử lý bởi GTM thông qua dataLayer
+                if (typeof dataLayer !== 'undefined') {
+                    dataLayer.push({
+                        'event': 'begin_checkout',
+                        'currency': CURRENT_CURRENCY,
+                        'value': totalPriceValue,
+                        'items': [gaItem]
+                    });
 
-                console.log('✅ Google Tag: begin_checkout tracked from buyNow', {
-                    value: totalPriceValue
-                });
+                    console.log('✅ GTM: begin_checkout tracked from buyNow', {
+                        value: totalPriceValue
+                    });
+                }
             }
 
             if (typeof window !== 'undefined' && window.ttq) {

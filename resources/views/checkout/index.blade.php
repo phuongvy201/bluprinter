@@ -85,14 +85,16 @@ const CHECKOUT_CONVERTED_TOTAL = {{ $convertedTotal ?? $total }};
 const CHECKOUT_CURRENCY_SYMBOL = @json(\App\Services\CurrencyService::getCurrencySymbol($currency ?? 'USD'));
 
 document.addEventListener('DOMContentLoaded', function() {
-    if (typeof gtag === 'function') {
+    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    if (typeof dataLayer !== 'undefined') {
         const checkoutItems = @json($gtagItems);
-        gtag('event', 'begin_checkout', {
-            currency: '{{ $currency ?? "USD" }}',
-            value: {{ $convertedTotal ?? $checkoutTotal }},
-            items: checkoutItems
+        dataLayer.push({
+            'event': 'begin_checkout',
+            'currency': '{{ $currency ?? "USD" }}',
+            'value': {{ $convertedTotal ?? $checkoutTotal }},
+            'items': checkoutItems
         });
-        console.log('✅ Google Tag: begin_checkout tracked', {
+        console.log('✅ GTM: begin_checkout tracked', {
             items: checkoutItems.length,
             value: {{ $checkoutTotal }}
         });

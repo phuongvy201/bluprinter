@@ -1112,7 +1112,8 @@ function trackInitiateCheckout(event) {
         }
     }
 
-    if (typeof gtag === 'function') {
+    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    if (typeof dataLayer !== 'undefined') {
         const cart = JSON.parse(localStorage.getItem('cart') || '[]');
 
         if (cart.length > 0) {
@@ -1140,13 +1141,14 @@ function trackInitiateCheckout(event) {
                 return gaItem;
             });
 
-            gtag('event', 'begin_checkout', {
-                currency: 'USD',
-                value: Number(cartTotal.toFixed(2)),
-                items: gaItems
+            dataLayer.push({
+                'event': 'begin_checkout',
+                'currency': 'USD',
+                'value': Number(cartTotal.toFixed(2)),
+                'items': gaItems
             });
 
-            console.log('✅ Google Tag: begin_checkout tracked from cart', {
+            console.log('✅ GTM: begin_checkout tracked from cart', {
                 items: gaItems.length,
                 value: cartTotal.toFixed(2)
             });

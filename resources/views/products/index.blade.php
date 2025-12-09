@@ -37,10 +37,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    if (typeof gtag === 'function') {
-        gtag('event', 'view_item_list', {
-            item_list_name: 'All Products',
-            items: @json($gtagItems)
+    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    if (typeof dataLayer !== 'undefined') {
+        dataLayer.push({
+            'event': 'view_item_list',
+            'item_list_name': 'All Products',
+            'items': @json($gtagItems)
         });
     }
 });
