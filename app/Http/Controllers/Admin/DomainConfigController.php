@@ -40,6 +40,7 @@ class DomainConfigController extends Controller
             'CNY' => 'CNY - Chinese Yuan (¥)',
             'HKD' => 'HKD - Hong Kong Dollar (HK$)',
             'SGD' => 'SGD - Singapore Dollar (S$)',
+            'MXN' => 'MXN - Mexican Peso (MX$)',
         ];
 
         // Default rates
@@ -54,6 +55,7 @@ class DomainConfigController extends Controller
             'CNY' => 7.2,
             'HKD' => 7.8,
             'SGD' => 1.34,
+            'MXN' => 18.19,
         ];
 
         return view('admin.settings.domain-config.create', compact('currencies', 'defaultRates'));
@@ -150,6 +152,7 @@ class DomainConfigController extends Controller
             'CNY' => 'CNY - Chinese Yuan (¥)',
             'HKD' => 'HKD - Hong Kong Dollar (HK$)',
             'SGD' => 'SGD - Singapore Dollar (S$)',
+            'MXN' => 'MXN - Mexican Peso (MX$)',
         ];
 
         $defaultRates = [
@@ -163,6 +166,7 @@ class DomainConfigController extends Controller
             'CNY' => 7.2,
             'HKD' => 7.8,
             'SGD' => 1.34,
+            'MXN' => 18.19,
         ];
 
         return view('admin.settings.domain-config.edit-currency', compact('config', 'currencies', 'defaultRates'));
@@ -298,4 +302,3 @@ class DomainConfigController extends Controller
             ->with('success', 'Đã xóa cấu hình Google Analytics cho domain: ' . $domain);
     }
 }
-

@@ -78,7 +78,7 @@
                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                 @enderror
                 <p class="mt-2 text-xs text-gray-500">
-                    Tỉ giá chuyển đổi từ USD. Ví dụ: <strong>1.0</strong> cho USD, <strong>0.79</strong> cho GBP (1 USD = 0.79 GBP), <strong>25000</strong> cho VND (1 USD = 25000 VND).
+                    Tỉ giá chuyển đổi từ USD. Ví dụ: <strong>1.0</strong> cho USD, <strong>0.79</strong> cho GBP (1 USD = 0.79 GBP), <strong>25000</strong> cho VND (1 USD = 25000 VND), <strong>18.19</strong> cho MXN (1 USD = 18.19 MXN).
                 </p>
             </div>
 

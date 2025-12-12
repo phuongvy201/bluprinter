@@ -177,6 +177,9 @@ class CurrencyService
             'AUD' => fn($a) => 'A$' . number_format($a, 2),
             'JPY' => fn($a) => '¥' . number_format($a, 0),
             'CNY' => fn($a) => '¥' . number_format($a, 2),
+            'MXN' => fn($a) => 'MX$' . number_format($a, 2),
+            'HKD' => fn($a) => 'HK$' . number_format($a, 2),
+            'SGD' => fn($a) => 'S$' . number_format($a, 2),
         ];
 
         if (isset($formatters[$currency])) {
@@ -212,6 +215,9 @@ class CurrencyService
             'AUD' => 'A$',
             'JPY' => '¥',
             'CNY' => '¥',
+            'MXN' => 'MX$',
+            'HKD' => 'HK$',
+            'SGD' => 'S$',
         ];
 
         return $symbols[$currency] ?? $currency;

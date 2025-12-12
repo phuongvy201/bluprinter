@@ -112,6 +112,7 @@ class DomainCurrencyConfigController extends Controller
             'CNY' => 'CNY - Chinese Yuan (¥)',
             'HKD' => 'HKD - Hong Kong Dollar (HK$)',
             'SGD' => 'SGD - Singapore Dollar (S$)',
+            'MXN' => 'MXN - Mexican Peso (MX$)',
         ];
 
         $defaultRates = [
@@ -125,6 +126,7 @@ class DomainCurrencyConfigController extends Controller
             'CNY' => 7.2,
             'HKD' => 7.8,
             'SGD' => 1.34,
+            'MXN' => 17.5,
         ];
 
         return view('admin.settings.domain-currency.edit', compact('config', 'currencies', 'defaultRates'));
