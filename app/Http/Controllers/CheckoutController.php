@@ -336,10 +336,18 @@ class CheckoutController extends Controller
                 ->get();
 
             if ($cartItems->isEmpty()) {
+                Log::warning('🛒 Cart is empty during checkout', [
+                    'user_id' => $userId,
+                    'session_id' => $sessionId,
+                    'payment_method' => $request->payment_method,
+                    'is_ajax' => $isAjaxRequest
+                ]);
+                
                 if ($isAjaxRequest) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Your cart is empty.'
+                        'message' => 'Your cart is empty. Please add items to your cart before checkout.',
+                        'error' => 'cart_empty'
                     ], 400);
                 }
                 return redirect()->route('cart.index')->with('error', 'Your cart is empty.');

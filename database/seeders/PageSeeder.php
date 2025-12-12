@@ -3954,13 +3954,13 @@ class PageSeeder extends Seeder
                                             <tbody class="divide-y divide-gray-200">
                                                 <tr class="hover:bg-blue-50 transition">
                                                     <td class="px-4 py-3 font-semibold text-gray-800">Clothing (T-shirts, Tank tops, Hoodies, etc.)</td>
-                                                    <td class="px-4 py-3 text-center text-blue-700 font-bold">{SHIPPING_US_CLOTHING_FIRST}</td>
-                                                    <td class="px-4 py-3 text-center text-gray-700">{SHIPPING_US_CLOTHING_ADD}</td>
+                                                    <td class="px-4 py-3 text-center text-blue-700 font-bold">$6.99</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">$4.99</td>
                                                 </tr>
                                                 <tr class="hover:bg-blue-50 transition bg-gray-50">
                                                     <td class="px-4 py-3 font-semibold text-gray-800">Ornaments & Suncatchers</td>
-                                                    <td class="px-4 py-3 text-center text-blue-700 font-bold">{SHIPPING_US_ORNAMENTS_FIRST}</td>
-                                                    <td class="px-4 py-3 text-center text-gray-700">{SHIPPING_US_ORNAMENTS_ADD}</td>
+                                                    <td class="px-4 py-3 text-center text-blue-700 font-bold">$5.99</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">$3.99</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -3984,13 +3984,13 @@ class PageSeeder extends Seeder
                                             <tbody class="divide-y divide-gray-200">
                                                 <tr class="hover:bg-purple-50 transition">
                                                     <td class="px-4 py-3 font-semibold text-gray-800">Clothing (T-shirts, Tank tops, Hoodies, etc.)</td>
-                                                    <td class="px-4 py-3 text-center text-purple-700 font-bold">{SHIPPING_UK_CLOTHING_FIRST}</td>
-                                                    <td class="px-4 py-3 text-center text-gray-700">{SHIPPING_UK_CLOTHING_ADD}</td>
+                                                    <td class="px-4 py-3 text-center text-purple-700 font-bold">$6.99</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">$4.99</td>
                                                 </tr>
                                                 <tr class="hover:bg-purple-50 transition bg-gray-50">
                                                     <td class="px-4 py-3 font-semibold text-gray-800">Ornaments & Suncatchers</td>
-                                                    <td class="px-4 py-3 text-center text-purple-700 font-bold">{SHIPPING_UK_ORNAMENTS_FIRST}</td>
-                                                    <td class="px-4 py-3 text-center text-gray-700">{SHIPPING_UK_ORNAMENTS_ADD}</td>
+                                                    <td class="px-4 py-3 text-center text-purple-700 font-bold">$5.99</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">$3.99</td>
                                                 </tr>
                                             </tbody>
                                         </table>

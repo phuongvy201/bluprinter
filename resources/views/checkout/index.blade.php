@@ -1516,12 +1516,26 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (!response.ok) {
-                if (response.status === 422) {
+                let errorMessage = `Order processing failed: ${response.status} ${response.statusText}`;
+                
+                try {
                     const errorData = await response.json();
-                    throw new Error(`Validation failed: ${errorData.message || Object.values(errorData.errors || {}).flat().join(', ')}`);
-                } else {
-                    throw new Error(`Order processing failed: ${response.status} ${response.statusText}`);
+                    if (errorData.message) {
+                        errorMessage = errorData.message;
+                    } else if (errorData.errors) {
+                        errorMessage = Object.values(errorData.errors).flat().join(', ');
+                    }
+                    
+                    // Handle specific error types
+                    if (errorData.error === 'cart_empty') {
+                        errorMessage = 'Your cart is empty. Please add items to your cart and try again.';
+                    }
+                } catch (e) {
+                    // If response is not JSON, use default message
+                    console.error('Failed to parse error response:', e);
                 }
+                
+                throw new Error(errorMessage);
             }
 
             const responseData = await response.json();
