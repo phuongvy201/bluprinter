@@ -77,9 +77,55 @@ class CartController extends Controller
                 ];
             });
 
-            // Calculate shipping for US (default)
+            // Get current domain to determine country and prioritize default rate
+            $currentDomain = CurrencyService::getCurrentDomain();
+            
+            // Determine country from currency (same logic as products/show.blade.php)
+            // Priority: currency -> domain name -> default to US
+            $currencyToCountry = [
+                'USD' => 'US',
+                'GBP' => 'GB',
+                'CAD' => 'CA',
+                'MXN' => 'MX',
+                'VND' => 'VN',
+                'EUR' => 'DE'
+            ];
+            
+            $shippingCountry = $currencyToCountry[$currency] ?? 'US';
+            
+            // If domain is available, try to get country from domain name
+            if ($currentDomain) {
+                $domainToCountry = [
+                    'mx' => 'MX',
+                    'mexico' => 'MX',
+                    'us' => 'US',
+                    'usa' => 'US',
+                    'united-states' => 'US',
+                    'gb' => 'GB',
+                    'uk' => 'GB',
+                    'united-kingdom' => 'GB',
+                    'ca' => 'CA',
+                    'canada' => 'CA',
+                    'vn' => 'VN',
+                    'vietnam' => 'VN',
+                    'de' => 'DE',
+                    'germany' => 'DE',
+                    'eu' => 'DE',
+                    'europe' => 'DE'
+                ];
+                
+                $domainLower = strtolower($currentDomain);
+                foreach ($domainToCountry as $domainKey => $countryCode) {
+                    if (strpos($domainLower, $domainKey) !== false) {
+                        $shippingCountry = $countryCode;
+                        break;
+                    }
+                }
+            }
+            
+            // Calculate shipping with domain parameter to prioritize default rate
             $calculator = new ShippingCalculator();
-            $shippingResult = $calculator->calculateShipping($items, 'US');
+            $shippingResult = $calculator->calculateShipping($items, $shippingCountry, $currentDomain);
 
             if ($shippingResult['success']) {
                 $shippingUSD = $shippingResult['total_shipping'];
@@ -94,6 +140,9 @@ class CartController extends Controller
 
         $total = $subtotal + $shipping;
 
+        // Get current domain for shipping zone filtering (already retrieved above)
+        // $currentDomain is already set from shipping calculation above
+
         // Get all active shipping zones for the delivery modal
         $shippingZones = ShippingZone::active()
             ->ordered()
@@ -102,6 +151,37 @@ class CartController extends Controller
             }])
             ->get();
 
-        return view('cart.index', compact('cartItems', 'subtotal', 'shipping', 'total', 'shippingDetails', 'shippingZones'));
+        // Filter zones by domain and get default zone
+        $availableZones = $shippingZones;
+        $defaultZone = null;
+
+        if ($currentDomain && $availableZones->isNotEmpty()) {
+            // Sort zones: domain matching zones first
+            $availableZones = $availableZones->sortBy(function ($zone) use ($currentDomain) {
+                return $zone->domain === $currentDomain ? 0 : 1;
+            });
+
+            // Find default zone for current domain
+            $defaultZone = $availableZones->first(function ($zone) use ($currentDomain) {
+                return $zone->domain === $currentDomain;
+            });
+        }
+
+        // If no default zone found, use first available zone
+        if (!$defaultZone && $availableZones->isNotEmpty()) {
+            $defaultZone = $availableZones->first();
+        }
+
+        return view('cart.index', compact(
+            'cartItems', 
+            'subtotal', 
+            'shipping', 
+            'total', 
+            'shippingDetails', 
+            'shippingZones',
+            'availableZones',
+            'currentDomain',
+            'defaultZone'
+        ));
     }
 }

@@ -51,6 +51,29 @@
                         @enderror
                     </div>
 
+                    <!-- Domain -->
+                    <div>
+                        <label for="domain" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Domain (Optional)
+                        </label>
+                        <select name="domain" 
+                                id="domain" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('domain') border-red-500 @enderror">
+                            <option value="">General (All Domains)</option>
+                            @foreach($domains as $domain)
+                            <option value="{{ $domain }}" {{ old('domain', $shippingRate->domain) == $domain ? 'selected' : '' }}>
+                                {{ $domain }}
+                            </option>
+                            @endforeach
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">Để trống = áp dụng chung cho tất cả domains</p>
+                        @error('domain')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     <!-- Category -->
                     <div>
                         <label for="category_id" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -286,6 +309,25 @@
                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                         <label for="is_active" class="ml-2 block text-sm text-gray-700">
                             Active (rate có thể sử dụng)
+                        </label>
+                    </div>
+
+                    <!-- Is Default -->
+                    <div class="flex items-center pt-8">
+                        <input type="checkbox" 
+                               name="is_default" 
+                               id="is_default" 
+                               value="1"
+                               {{ old('is_default', $shippingRate->is_default) ? 'checked' : '' }}
+                               class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded"
+                               {{ !$shippingRate->domain ? 'disabled' : '' }}>
+                        <label for="is_default" class="ml-2 block text-sm text-gray-700">
+                            Set as Default
+                            @if($shippingRate->domain)
+                                <span class="text-xs text-gray-500 block">(Default cho domain: {{ $shippingRate->domain }})</span>
+                            @else
+                                <span class="text-xs text-red-500 block">⚠️ Cần có domain để set default</span>
+                            @endif
                         </label>
                     </div>
                 </div>

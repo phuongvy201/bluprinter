@@ -53,6 +53,7 @@ use App\Http\Controllers\NewsletterController;
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
+Route::post('/products/calculate-shipping', [ProductController::class, 'calculateShippingCost'])->name('products.calculate-shipping');
 Route::get('/shops/{shop}', [App\Http\Controllers\ShopController::class, 'show'])->name('shops.show');
 
 // GMC API - Public (no authentication required, no CSRF)
@@ -134,6 +135,9 @@ Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
 Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
 Route::get('/blog/category/{slug}', [BlogController::class, 'category'])->name('blog.category');
 Route::get('/blog/tag/{slug}', [BlogController::class, 'tag'])->name('blog.tag');
+
+// Shipping & Delivery route (before pages to avoid conflicts)
+Route::get('/shipping-delivery', [App\Http\Controllers\ShippingDeliveryController::class, 'index'])->name('shipping-delivery.index');
 
 // Pages routes (must be last to avoid conflicts)
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('page.show');
@@ -543,6 +547,8 @@ Route::middleware('auth')->group(function () {
         // Shipping Management (Admin only)
         Route::resource('shipping-zones', ShippingZoneController::class);
         Route::resource('shipping-rates', ShippingRateController::class);
+        Route::post('shipping-rates/{shippingRate}/set-default', [ShippingRateController::class, 'setDefault'])->name('shipping-rates.set-default');
+        Route::post('shipping-rates/{shippingRate}/unset-default', [ShippingRateController::class, 'unsetDefault'])->name('shipping-rates.unset-default');
 
         // Analytics settings
         Route::get('settings/analytics', [AnalyticsSettingsController::class, 'edit'])->name('settings.analytics.edit');
@@ -551,13 +557,13 @@ Route::middleware('auth')->group(function () {
         // Domain Configs (Currency + Analytics)
         Route::get('settings/domain-config', [DomainConfigController::class, 'index'])->name('settings.domain-config.index');
         Route::get('settings/domain-config/create', [DomainConfigController::class, 'create'])->name('settings.domain-config.create');
-        
+
         // Currency routes
         Route::post('settings/domain-config/currency', [DomainConfigController::class, 'storeCurrency'])->name('settings.domain-config.store-currency');
         Route::get('settings/domain-config/currency/{id}/edit', [DomainConfigController::class, 'editCurrency'])->name('settings.domain-config.edit-currency');
         Route::put('settings/domain-config/currency/{id}', [DomainConfigController::class, 'updateCurrency'])->name('settings.domain-config.update-currency');
         Route::delete('settings/domain-config/currency/{id}', [DomainConfigController::class, 'destroyCurrency'])->name('settings.domain-config.destroy-currency');
-        
+
         // Analytics routes
         Route::post('settings/domain-config/analytics', [DomainConfigController::class, 'storeAnalytics'])->name('settings.domain-config.store-analytics');
         Route::get('settings/domain-config/analytics/{id}/edit', [DomainConfigController::class, 'editAnalytics'])->name('settings.domain-config.edit-analytics');

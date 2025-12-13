@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ShippingZone;
+use App\Models\DomainCurrencyConfig;
 use Illuminate\Http\Request;
 
 class ShippingZoneController extends Controller
@@ -11,13 +12,23 @@ class ShippingZoneController extends Controller
     /**
      * Display a listing of shipping zones.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $zones = ShippingZone::withCount('shippingRates')
-            ->ordered()
-            ->paginate(20);
+        $query = ShippingZone::withCount('shippingRates');
 
-        return view('admin.shipping-zones.index', compact('zones'));
+        // Filter by domain
+        if ($request->filled('domain')) {
+            if ($request->domain === 'null') {
+                $query->whereNull('domain');
+            } else {
+                $query->where('domain', $request->domain);
+            }
+        }
+
+        $zones = $query->ordered()->paginate(20);
+        $domains = DomainCurrencyConfig::where('is_active', true)->orderBy('domain')->pluck('domain')->toArray();
+
+        return view('admin.shipping-zones.index', compact('zones', 'domains'));
     }
 
     /**
@@ -25,7 +36,9 @@ class ShippingZoneController extends Controller
      */
     public function create()
     {
-        return view('admin.shipping-zones.create');
+        $domains = DomainCurrencyConfig::where('is_active', true)->orderBy('domain')->pluck('domain')->toArray();
+
+        return view('admin.shipping-zones.create', compact('domains'));
     }
 
     /**
@@ -35,11 +48,17 @@ class ShippingZoneController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'domain' => 'nullable|string|max:255',
             'countries' => 'required|string',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
             'sort_order' => 'nullable|integer|min:0',
         ]);
+
+        // Convert empty string to null
+        if (empty($validated['domain'])) {
+            $validated['domain'] = null;
+        }
 
         // Convert countries from CSV string to array
         $countriesArray = array_map(
@@ -76,7 +95,9 @@ class ShippingZoneController extends Controller
      */
     public function edit(ShippingZone $shippingZone)
     {
-        return view('admin.shipping-zones.edit', compact('shippingZone'));
+        $domains = DomainCurrencyConfig::where('is_active', true)->orderBy('domain')->pluck('domain')->toArray();
+
+        return view('admin.shipping-zones.edit', compact('shippingZone', 'domains'));
     }
 
     /**
@@ -86,11 +107,17 @@ class ShippingZoneController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'domain' => 'nullable|string|max:255',
             'countries' => 'required|string',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
             'sort_order' => 'nullable|integer|min:0',
         ]);
+
+        // Convert empty string to null
+        if (empty($validated['domain'])) {
+            $validated['domain'] = null;
+        }
 
         // Convert countries from CSV string to array
         $countriesArray = array_map(

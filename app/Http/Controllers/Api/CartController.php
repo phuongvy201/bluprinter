@@ -166,10 +166,40 @@ class CartController extends Controller
                     ];
                 });
 
-                // Calculate shipping for US (default) or from request
-                $country = $request->get('country', 'US');
+                // Calculate shipping
+                // PRIORITY: Get current domain to prioritize rates for this domain
+                $currentDomain = CurrencyService::getCurrentDomain();
+                
+                // Get country from domain's zone or use default
+                $country = $request->get('country');
+                if (!$country && $currentDomain) {
+                    // Try to find zone for this domain and get country from it
+                    $zoneForDomain = \App\Models\ShippingZone::active()
+                        ->where('domain', $currentDomain)
+                        ->first();
+                    
+                    if ($zoneForDomain && $zoneForDomain->countries && is_array($zoneForDomain->countries) && !empty($zoneForDomain->countries)) {
+                        // Use first country from zone's countries array
+                        $country = strtoupper($zoneForDomain->countries[0]);
+                    } else {
+                        // Fallback: try to get country from domain region
+                        $region = \App\Models\DomainShippingCost::getRegionFromDomain($currentDomain);
+                        // Map region to country code
+                        $regionToCountry = [
+                            'US' => 'US',
+                            'UK' => 'GB',
+                            'CA' => 'CA',
+                            'MX' => 'MX',
+                        ];
+                        $country = $regionToCountry[$region] ?? 'US';
+                    }
+                }
+                
+                // Final fallback to US
+                $country = $country ?? 'US';
+                
                 $calculator = new ShippingCalculator();
-                $shippingResult = $calculator->calculateShipping($items, $country);
+                $shippingResult = $calculator->calculateShipping($items, $country, $currentDomain);
 
                 if ($shippingResult['success']) {
                     $shipping = $shippingResult['total_shipping'];

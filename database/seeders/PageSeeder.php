@@ -3938,6 +3938,7 @@ class PageSeeder extends Seeder
                                 </div>
                                 
                                 <!-- US Shipping Costs -->
+                                {{SHIPPING_SECTION_US_START}}
                                 <div class="mb-8">
                                     <div class="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-6 py-3 rounded-t-lg">
                                         <h3 class="text-2xl font-bold text-center">United States Shipping</h3>
@@ -3954,20 +3955,22 @@ class PageSeeder extends Seeder
                                             <tbody class="divide-y divide-gray-200">
                                                 <tr class="hover:bg-blue-50 transition">
                                                     <td class="px-4 py-3 font-semibold text-gray-800">Clothing (T-shirts, Tank tops, Hoodies, etc.)</td>
-                                                    <td class="px-4 py-3 text-center text-blue-700 font-bold">$6.99</td>
-                                                    <td class="px-4 py-3 text-center text-gray-700">$4.99</td>
+                                                    <td class="px-4 py-3 text-center text-blue-700 font-bold">{{SHIPPING_US_CLOTHING_FIRST}}</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">{{SHIPPING_US_CLOTHING_ADD}}</td>
                                                 </tr>
                                                 <tr class="hover:bg-blue-50 transition bg-gray-50">
                                                     <td class="px-4 py-3 font-semibold text-gray-800">Ornaments & Suncatchers</td>
-                                                    <td class="px-4 py-3 text-center text-blue-700 font-bold">$5.99</td>
-                                                    <td class="px-4 py-3 text-center text-gray-700">$3.99</td>
+                                                    <td class="px-4 py-3 text-center text-blue-700 font-bold">{{SHIPPING_US_ORNAMENTS_FIRST}}</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">{{SHIPPING_US_ORNAMENTS_ADD}}</td>
                                                 </tr>
                                             </tbody>
                                         </table>
                                     </div>
                                 </div>
+                                {{SHIPPING_SECTION_US_END}}
 
                                 <!-- UK Shipping Costs -->
+                                {{SHIPPING_SECTION_UK_START}}
                                 <div class="mb-8">
                                     <div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-t-lg">
                                         <h3 class="text-2xl font-bold text-center">United Kingdom Shipping</h3>
@@ -3984,18 +3987,51 @@ class PageSeeder extends Seeder
                                             <tbody class="divide-y divide-gray-200">
                                                 <tr class="hover:bg-purple-50 transition">
                                                     <td class="px-4 py-3 font-semibold text-gray-800">Clothing (T-shirts, Tank tops, Hoodies, etc.)</td>
-                                                    <td class="px-4 py-3 text-center text-purple-700 font-bold">$6.99</td>
-                                                    <td class="px-4 py-3 text-center text-gray-700">$4.99</td>
+                                                    <td class="px-4 py-3 text-center text-purple-700 font-bold">{{SHIPPING_UK_CLOTHING_FIRST}}</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">{{SHIPPING_UK_CLOTHING_ADD}}</td>
                                                 </tr>
                                                 <tr class="hover:bg-purple-50 transition bg-gray-50">
                                                     <td class="px-4 py-3 font-semibold text-gray-800">Ornaments & Suncatchers</td>
-                                                    <td class="px-4 py-3 text-center text-purple-700 font-bold">$5.99</td>
-                                                    <td class="px-4 py-3 text-center text-gray-700">$3.99</td>
+                                                    <td class="px-4 py-3 text-center text-purple-700 font-bold">{{SHIPPING_UK_ORNAMENTS_FIRST}}</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">{{SHIPPING_UK_ORNAMENTS_ADD}}</td>
                                                 </tr>
                                             </tbody>
                                         </table>
                                     </div>
                                 </div>
+                                {{SHIPPING_SECTION_UK_END}}
+
+                                <!-- Canada Shipping Costs -->
+                                {{SHIPPING_SECTION_CA_START}}
+                                <div class="mb-8">
+                                    <div class="bg-gradient-to-r from-red-600 to-rose-600 text-white px-6 py-3 rounded-t-lg">
+                                        <h3 class="text-2xl font-bold text-center">Canada Shipping</h3>
+                                    </div>
+                                    <div class="bg-white border-2 border-red-300 border-t-0 rounded-b-lg overflow-x-auto">
+                                        <table class="w-full">
+                                            <thead class="bg-red-100">
+                                                <tr>
+                                                    <th class="px-4 py-4 text-left font-bold text-gray-800 border-b-2 border-red-300">Product Type</th>
+                                                    <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 border-red-300">First Item</th>
+                                                    <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 border-red-300">Additional Items</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-200">
+                                                <tr class="hover:bg-red-50 transition">
+                                                    <td class="px-4 py-3 font-semibold text-gray-800">Clothing (T-shirts, Tank tops, Hoodies, etc.)</td>
+                                                    <td class="px-4 py-3 text-center text-red-700 font-bold">{{SHIPPING_CA_CLOTHING_FIRST}}</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">{{SHIPPING_CA_CLOTHING_ADD}}</td>
+                                                </tr>
+                                                <tr class="hover:bg-red-50 transition bg-gray-50">
+                                                    <td class="px-4 py-3 font-semibold text-gray-800">Ornaments & Suncatchers</td>
+                                                    <td class="px-4 py-3 text-center text-red-700 font-bold">{{SHIPPING_CA_ORNAMENTS_FIRST}}</td>
+                                                    <td class="px-4 py-3 text-center text-gray-700">{{SHIPPING_CA_ORNAMENTS_ADD}}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                {{SHIPPING_SECTION_CA_END}}
                             </div>
 
                             <!-- Order Tracking -->

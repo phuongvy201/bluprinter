@@ -44,6 +44,31 @@
     </div>
     @endif
 
+    <!-- Filters -->
+    @if(isset($domains) && count($domains) > 0)
+    <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <form action="{{ route('admin.shipping-zones.index') }}" method="GET" class="flex items-end gap-4">
+            <div class="flex-1">
+                <label for="domain" class="block text-sm font-medium text-gray-700 mb-2">Filter by Domain</label>
+                <select name="domain" id="domain" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Domains</option>
+                    <option value="null" {{ request('domain') === 'null' ? 'selected' : '' }}>No Domain (General)</option>
+                    @foreach($domains as $domain)
+                    <option value="{{ $domain }}" {{ request('domain') == $domain ? 'selected' : '' }}>
+                        {{ $domain }}
+                    </option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <button type="submit" class="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
+                    Apply Filter
+                </button>
+            </div>
+        </form>
+    </div>
+    @endif
+
     <!-- Zones Table -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto">
@@ -51,6 +76,7 @@
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Zone Name</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Domain</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Countries</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Rates</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
@@ -75,6 +101,17 @@
                                     @endif
                                 </div>
                             </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            @if($zone->domain)
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                                {{ $zone->domain }}
+                            </span>
+                            @else
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                General
+                            </span>
+                            @endif
                         </td>
                         <td class="px-6 py-4">
                             <div class="flex flex-wrap gap-1">
@@ -135,7 +172,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center">
+                        <td colspan="7" class="px-6 py-12 text-center">
                             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>

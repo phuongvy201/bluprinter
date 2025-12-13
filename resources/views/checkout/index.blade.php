@@ -18,6 +18,47 @@
     // Get currency and rate using helper functions (same as cart page)
     $currentCurrency = currency();
     $currentCurrencyRate = currency_rate() ?? 1.0;
+    $currentDomain = $currentDomain ?? null;
+    
+    // Determine default country from currency/domain (same logic as cart page)
+    $currencyToCountry = [
+        'USD' => 'US',
+        'GBP' => 'GB',
+        'CAD' => 'CA',
+        'MXN' => 'MX',
+        'VND' => 'VN',
+        'EUR' => 'DE'
+    ];
+    
+    $defaultCountry = $defaultCountry ?? ($currencyToCountry[$currentCurrency] ?? 'US');
+    $defaultCountryName = 'United States';
+    
+    // Get country name from zone if available
+    if ($defaultZone && $defaultZone->countries && count($defaultZone->countries) > 0) {
+        $firstCountryCode = $defaultZone->countries[0];
+        $countryNames = [
+            'US' => 'United States',
+            'GB' => 'United Kingdom',
+            'CA' => 'Canada',
+            'MX' => 'Mexico',
+            'VN' => 'Vietnam',
+            'DE' => 'Germany'
+        ];
+        $defaultCountryName = $countryNames[$firstCountryCode] ?? $defaultZone->name ?? 'United States';
+    } else if ($defaultZone) {
+        $defaultCountryName = $defaultZone->name ?? 'United States';
+    } else {
+        // Use country name from defaultCountry code
+        $countryNames = [
+            'US' => 'United States',
+            'GB' => 'United Kingdom',
+            'CA' => 'Canada',
+            'MX' => 'Mexico',
+            'VN' => 'Vietnam',
+            'DE' => 'Germany'
+        ];
+        $defaultCountryName = $countryNames[$defaultCountry] ?? 'United States';
+    }
 
     $gtagItems = [];
     $tiktokContents = [];
@@ -83,6 +124,10 @@ const CHECKOUT_CONVERTED_SUBTOTAL = {{ $convertedSubtotal ?? $subtotal }};
 const CHECKOUT_CONVERTED_SHIPPING = {{ $convertedShipping ?? $shippingCost }};
 const CHECKOUT_CONVERTED_TOTAL = {{ $convertedTotal ?? $total }};
 const CHECKOUT_CURRENCY_SYMBOL = @json(\App\Services\CurrencyService::getCurrencySymbol($currency ?? 'USD'));
+const CHECKOUT_CURRENT_DOMAIN = @json($currentDomain ?? null);
+const CHECKOUT_DEFAULT_COUNTRY = @json($defaultCountry ?? 'US');
+const FREE_SHIPPING_THRESHOLD_USD = 100;
+const DEFAULT_ZONE = @json($defaultZone ?? null);
 
 document.addEventListener('DOMContentLoaded', function() {
     // Event tracking được xử lý bởi GTM thông qua dataLayer
@@ -672,6 +717,59 @@ function buildCheckoutCustomizationInputs(customizations) {
                                     <option value="">Select Country</option>
                                     <option value="US">🇺🇸 United States</option>
                                     <option value="GB">🇬🇧 United Kingdom</option>
+                                    <option value="CA">🇨🇦 Canada</option>
+                                    <option value="AU">🇦🇺 Australia</option>
+                                    <option value="DE">🇩🇪 Germany</option>
+                                    <option value="FR">🇫🇷 France</option>
+                                    <option value="IT">🇮🇹 Italy</option>
+                                    <option value="ES">🇪🇸 Spain</option>
+                                    <option value="NL">🇳🇱 Netherlands</option>
+                                    <option value="BE">🇧🇪 Belgium</option>
+                                    <option value="CH">🇨🇭 Switzerland</option>
+                                    <option value="AT">🇦🇹 Austria</option>
+                                    <option value="SE">🇸🇪 Sweden</option>
+                                    <option value="NO">🇳🇴 Norway</option>
+                                    <option value="DK">🇩🇰 Denmark</option>
+                                    <option value="FI">🇫🇮 Finland</option>
+                                    <option value="IE">🇮🇪 Ireland</option>
+                                    <option value="PT">🇵🇹 Portugal</option>
+                                    <option value="GR">🇬🇷 Greece</option>
+                                    <option value="PL">🇵🇱 Poland</option>
+                                    <option value="CZ">🇨🇿 Czech Republic</option>
+                                    <option value="HU">🇭🇺 Hungary</option>
+                                    <option value="RO">🇷🇴 Romania</option>
+                                    <option value="BG">🇧🇬 Bulgaria</option>
+                                    <option value="HR">🇭🇷 Croatia</option>
+                                    <option value="SK">🇸🇰 Slovakia</option>
+                                    <option value="SI">🇸🇮 Slovenia</option>
+                                    <option value="EE">🇪🇪 Estonia</option>
+                                    <option value="LV">🇱🇻 Latvia</option>
+                                    <option value="LT">🇱🇹 Lithuania</option>
+                                    <option value="JP">🇯🇵 Japan</option>
+                                    <option value="CN">🇨🇳 China</option>
+                                    <option value="KR">🇰🇷 South Korea</option>
+                                    <option value="SG">🇸🇬 Singapore</option>
+                                    <option value="MY">🇲🇾 Malaysia</option>
+                                    <option value="TH">🇹🇭 Thailand</option>
+                                    <option value="ID">🇮🇩 Indonesia</option>
+                                    <option value="PH">🇵🇭 Philippines</option>
+                                    <option value="VN">🇻🇳 Vietnam</option>
+                                    <option value="IN">🇮🇳 India</option>
+                                    <option value="NZ">🇳🇿 New Zealand</option>
+                                    <option value="BR">🇧🇷 Brazil</option>
+                                    <option value="MX">🇲🇽 Mexico</option>
+                                    <option value="AR">🇦🇷 Argentina</option>
+                                    <option value="CL">🇨🇱 Chile</option>
+                                    <option value="CO">🇨🇴 Colombia</option>
+                                    <option value="PE">🇵🇪 Peru</option>
+                                    <option value="ZA">🇿🇦 South Africa</option>
+                                    <option value="EG">🇪🇬 Egypt</option>
+                                    <option value="AE">🇦🇪 United Arab Emirates</option>
+                                    <option value="SA">🇸🇦 Saudi Arabia</option>
+                                    <option value="IL">🇮🇱 Israel</option>
+                                    <option value="TR">🇹🇷 Turkey</option>
+                                    <option value="RU">🇷🇺 Russia</option>
+                                    <option value="UA">🇺🇦 Ukraine</option>
                                 </select>
                                 @error('country')
                                     <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -1100,7 +1198,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                         <!-- Delivery Information -->
                         <div class="border-t pt-3">
                             <div class="flex justify-between items-center text-gray-600 mb-3">
-                                <span id="delivery-country-text">Deliver to United States</span>
+                                <span id="delivery-country-text">Deliver to {{ $defaultCountryName }}</span>
                                 <button onclick="openDeliveryModal()" class="text-orange-500 hover:text-orange-600 text-sm font-medium">
                                     Change
                                 </button>
@@ -1109,7 +1207,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                             <div class="text-xs text-gray-500">
                                 <div class="flex justify-between">
                                     <span>Zone:</span>
-                                    <span id="delivery-zone-text">United States</span>
+                                    <span id="delivery-zone-text">{{ $defaultZone ? $defaultZone->name : $defaultCountryName }}</span>
                                 </div>
                             </div>
                         </div>
@@ -1150,18 +1248,27 @@ function buildCheckoutCustomizationInputs(customizations) {
                         </div>
                         
                         {{-- Freeship Messages --}}
+                        @php
+                            $freeShippingThreshold = 100; // USD
+                            $checkoutCurrency = $currency ?? 'USD';
+                            $checkoutCurrencyRate = $currencyRate ?? 1.0;
+                            $convertedThreshold = $checkoutCurrency !== 'USD' 
+                                ? \App\Services\CurrencyService::convertFromUSDWithRate($freeShippingThreshold, $checkoutCurrency, $checkoutCurrencyRate)
+                                : $freeShippingThreshold;
+                            $formattedThreshold = \App\Services\CurrencyService::formatPrice($convertedThreshold, $checkoutCurrency);
+                        @endphp
                         @if($qualifiesForFreeShipping)
                             <div class="text-xs text-green-600 bg-green-50 p-2 rounded-lg border border-green-200">
-                                🎉 You qualify for free shipping on orders $100+!
+                                🎉 You qualify for free shipping on orders {{ $formattedThreshold }}+!
                             </div>
                         @else
                             @php
                                 // Calculate remaining amount in current currency for freeship
                                 $remainingBaseAmount = 100 - $baseSubtotal;
-                                $remainingAmount = ($currency ?? 'USD') !== 'USD' ? $remainingBaseAmount * ($currencyRate ?? 1.0) : $remainingBaseAmount;
+                                $remainingAmount = $checkoutCurrency !== 'USD' ? $remainingBaseAmount * $checkoutCurrencyRate : $remainingBaseAmount;
                             @endphp
                             <div class="text-xs text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-200">
-                                Add {{ \App\Services\CurrencyService::formatPrice($remainingAmount, $currency ?? 'USD') }} more for free shipping!
+                                Add {{ \App\Services\CurrencyService::formatPrice($remainingAmount, $checkoutCurrency) }} more for free shipping!
                             </div>
                         @endif
                         
@@ -1261,8 +1368,79 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Global currency variables - must be declared before functions that use them
-let currentCurrency = CHECKOUT_CURRENCY || 'USD';
-let currentCurrencyRate = CHECKOUT_CURRENCY_RATE || 1.0;
+// Use window object to ensure they are truly global and accessible from all script tags
+window.currentCurrency = CHECKOUT_CURRENCY || 'USD';
+window.currentCurrencyRate = CHECKOUT_CURRENCY_RATE || 1.0;
+let currentCurrency = window.currentCurrency;
+let currentCurrencyRate = window.currentCurrencyRate;
+
+// Get default shipping rate for current domain
+// This will use the default rate for the domain (if set) or fallback to regular rate
+async function getDefaultShippingRateForDomain(domain, cartItems, currency, currencyRate, baseSubtotal) {
+    if (!domain || !cartItems || cartItems.length === 0) {
+        return null;
+    }
+    
+    try {
+        // Determine country from domain currency
+        const currencyToCountry = {
+            'USD': 'US',
+            'GBP': 'GB',
+            'CAD': 'CA',
+            'MXN': 'MX',
+            'VND': 'VN',
+            'EUR': 'DE'
+        };
+        const domainCurrency = currency || CHECKOUT_CURRENCY || 'USD';
+        const expectedCountry = currencyToCountry[domainCurrency] || 'US';
+        
+        // Call API to get shipping (backend will prioritize default rate for domain)
+        const response = await fetch('/checkout/calculate-shipping', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+                country: expectedCountry,
+                domain: domain  // Backend will prioritize default rate for this domain
+            })
+        });
+        
+        if (!response.ok) {
+            return null;
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.shipping && data.shipping.total_shipping !== undefined) {
+            const baseShipping = parseFloat(data.shipping.total_shipping) || 0;
+            const convertedShipping = data.converted_shipping !== undefined 
+                ? parseFloat(data.converted_shipping) 
+                : (currency !== 'USD' ? baseShipping * currencyRate : baseShipping);
+            
+            // Check for free shipping
+            const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
+            const finalShippingCost = qualifiesForFreeShipping ? 0 : convertedShipping;
+            
+            return {
+                baseShipping: baseShipping,
+                shippingCost: convertedShipping,
+                finalShippingCost: finalShippingCost,
+                qualifiesForFreeShipping: qualifiesForFreeShipping,
+                country: expectedCountry,
+                zoneName: data.shipping.zone_name || null,
+                isDefault: data.shipping.is_default || false  // Check if this is default rate
+            };
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('Error getting default shipping rate:', error);
+        return null;
+    }
+}
 
 // Currency mapping
 const countryToCurrency = {
@@ -1309,8 +1487,238 @@ function formatPrice(amount, currency) {
 // Convert amount from USD to target currency
 function convertFromUSD(usdAmount, targetCurrency) {
     if (targetCurrency === 'USD') return usdAmount;
-    const rate = currencyRates[targetCurrency] || 1.0;
+    // Use current currency rate from window object (updated from API) or fallback to constants
+    const rate = window.currentCurrencyRate || CHECKOUT_CURRENCY_RATE || currencyRates[targetCurrency] || 1.0;
     return usdAmount * rate;
+}
+
+// Calculate baseSubtotal in USD from cart items (same logic as cart/index.blade.php)
+function calculateBaseSubtotalFromCartItems(cartItems, currency, currencyRate) {
+    let baseSubtotal = 0;
+    
+    if (!cartItems || cartItems.length === 0) {
+        return 0;
+    }
+    
+    cartItems.forEach(item => {
+        const itemPrice = parseFloat(item.price) || 0;
+        // If item has base_price_usd, use it directly (already in USD) - this is most accurate
+        // Otherwise, assume item.price is in current currency and convert back to USD
+        let basePrice = 0;
+        if (item.base_price_usd !== undefined && item.base_price_usd !== null) {
+            basePrice = parseFloat(item.base_price_usd);
+        } else {
+            // Convert from current currency to USD
+            basePrice = currency !== 'USD' && currencyRate > 0 
+                ? itemPrice / currencyRate 
+                : itemPrice;
+        }
+        
+        let customizationTotal = 0;
+        if (item.customizations) {
+            Object.values(item.customizations).forEach(customization => {
+                if (customization && customization.price) {
+                    const customPrice = parseFloat(customization.price) || 0;
+                    // Convert customization price back to USD if needed
+                    let baseCustomPrice = 0;
+                    if (customization.base_price_usd !== undefined && customization.base_price_usd !== null) {
+                        baseCustomPrice = parseFloat(customization.base_price_usd);
+                    } else {
+                        baseCustomPrice = currency !== 'USD' && currencyRate > 0
+                            ? customPrice / currencyRate
+                            : customPrice;
+                    }
+                    customizationTotal += baseCustomPrice;
+                }
+            });
+        }
+        
+        baseSubtotal += (basePrice + customizationTotal) * item.quantity;
+    });
+    
+    return baseSubtotal;
+}
+
+// Determine country from currency/domain (same logic as cart/index.blade.php)
+// Priority: currency -> domain name -> default zone -> fallback to US
+function determineCountryFromCurrencyAndDomain(currency, domain) {
+    // Map currency to country code (this is the primary priority)
+    const currencyToCountry = {
+        'USD': 'US',
+        'GBP': 'GB',
+        'CAD': 'CA',
+        'MXN': 'MX',
+        'VND': 'VN',
+        'EUR': 'DE'
+    };
+    
+    let country = null;
+    
+    // Priority 1: Use currency from domain to determine country
+    // If domain uses MXN, prioritize MX over US even if both zones exist
+    const domainCurrency = currency || CHECKOUT_CURRENCY || 'USD';
+    if (domainCurrency && currencyToCountry[domainCurrency]) {
+        country = currencyToCountry[domainCurrency];
+        console.log('Country determined from domain currency:', domainCurrency, '->', country);
+    }
+    
+    // Priority 2: Get country from domain name (if currency didn't match)
+    if (!country && domain) {
+        // Map domain to country code
+        const domainToCountry = {
+            'mx': 'MX',
+            'mexico': 'MX',
+            'us': 'US',
+            'usa': 'US',
+            'united-states': 'US',
+            'gb': 'GB',
+            'uk': 'GB',
+            'united-kingdom': 'GB',
+            'ca': 'CA',
+            'canada': 'CA',
+            'vn': 'VN',
+            'vietnam': 'VN',
+            'de': 'DE',
+            'germany': 'DE',
+            'eu': 'DE',
+            'europe': 'DE'
+        };
+        
+        // Check if domain matches (case insensitive)
+        const domainLower = domain.toLowerCase();
+        for (const [domainKey, countryCode] of Object.entries(domainToCountry)) {
+            if (domainLower.includes(domainKey)) {
+                country = countryCode;
+                console.log('Country determined from domain name:', domain, '->', country);
+                break;
+            }
+        }
+    }
+    
+    // Priority 3: Get country from default zone (if available)
+    if (!country && typeof DEFAULT_ZONE !== 'undefined' && DEFAULT_ZONE && DEFAULT_ZONE.countries && DEFAULT_ZONE.countries.length > 0) {
+        country = DEFAULT_ZONE.countries[0];
+        console.log('Country determined from default zone:', country);
+    }
+    
+    // Priority 4: Fallback to currency (if still no country)
+    if (!country) {
+        country = currencyToCountry[domainCurrency] || 'US';
+        console.log('Country fallback to currency:', country);
+    }
+    
+    // Handle special country codes
+    const specialCountryMapping = {
+        'mxc': 'MX',  // Mexico City -> Mexico
+        'uk': 'GB',   // UK -> GB
+        'usa': 'US'   // USA -> US
+    };
+    
+    if (country && specialCountryMapping[country.toLowerCase()]) {
+        country = specialCountryMapping[country.toLowerCase()];
+    }
+    
+    // Ensure country is exactly 2 characters (country code)
+    if (country && country.length !== 2) {
+        country = currencyToCountry[domainCurrency] || 'US';
+    }
+    
+    // Map UK to GB for backend and ensure uppercase
+    let backendCountry = country === 'UK' ? 'GB' : country;
+    backendCountry = backendCountry ? backendCountry.toUpperCase().substring(0, 2) : 'US';
+    
+    // Final validation: must be exactly 2 characters
+    if (!backendCountry || backendCountry.length !== 2) {
+        backendCountry = 'US'; // Default fallback
+    }
+    
+    return backendCountry;
+}
+
+// Helper function for regular shipping calculation (same logic as cart/index.blade.php)
+async function calculateRegularShipping(backendCountry, displayCountry, currency, currencyRate, baseSubtotal, currentSubtotal) {
+    try {
+        const requestBody = {};
+        if (backendCountry) {
+            requestBody.country = backendCountry;
+        }
+        if (CHECKOUT_CURRENT_DOMAIN) {
+            requestBody.domain = CHECKOUT_CURRENT_DOMAIN;
+        }
+        
+        const shippingResponse = await fetch('/checkout/calculate-shipping', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        const shippingData = await shippingResponse.json();
+        
+        if (shippingData.success && shippingData.shipping) {
+            // Get baseShipping in USD
+            const baseShipping = parseFloat(shippingData.shipping.total_shipping) || 0;
+            
+            // Convert shipping to current currency
+            const shippingCost = shippingData.converted_shipping !== undefined 
+                ? parseFloat(shippingData.converted_shipping) 
+                : (currency !== 'USD' ? baseShipping * currencyRate : baseShipping);
+            
+            // Check freeship
+            const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
+            const actualShipping = qualifiesForFreeShipping ? 0 : shippingCost;
+            
+            // Update display
+            updateShippingDisplay(actualShipping, shippingCost, qualifiesForFreeShipping);
+            
+            // Update total
+            const totalElement = document.querySelector('.total-display');
+            if (totalElement) {
+                const newTotal = currentSubtotal + actualShipping;
+                totalElement.textContent = formatPrice(newTotal, currency);
+            }
+            
+            // Update delivery country display
+            const deliveryCountryText = document.getElementById('delivery-country-text');
+            const deliveryZoneText = document.getElementById('delivery-zone-text');
+            if (deliveryCountryText) {
+                deliveryCountryText.textContent = `Deliver to ${shippingData.shipping.zone_name || displayCountry}`;
+            }
+            if (deliveryZoneText) {
+                deliveryZoneText.textContent = shippingData.shipping.zone_name || displayCountry;
+            }
+            
+            console.log('Regular shipping calculated:', {
+                displayCountry: displayCountry,
+                backendCountry: backendCountry,
+                baseShipping: baseShipping,
+                shippingCost: shippingCost,
+                actualShipping: actualShipping,
+                qualifiesForFreeShipping: qualifiesForFreeShipping
+            });
+        }
+    } catch (shippingError) {
+        console.error('Error calculating regular shipping:', shippingError);
+    }
+}
+
+// Function to update shipping display (without freeship messages - messages are handled by updateCheckoutFreeshipMessages)
+function updateShippingDisplay(actualShipping, originalShipping, qualifiesForFreeShipping) {
+    const shippingCostElement = document.querySelector('.shipping-cost-display');
+    if (shippingCostElement) {
+        if (qualifiesForFreeShipping) {
+            shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
+        } else {
+            const currentCurrency = window.currentCurrency || CHECKOUT_CURRENCY || 'USD';
+            shippingCostElement.innerHTML = actualShipping === 0 ? 
+                '<span class="text-green-600">FREE</span>' : 
+                formatPrice(actualShipping, currentCurrency);
+        }
+    }
+    // Note: Freeship messages are handled separately by updateCheckoutFreeshipMessages() to avoid duplicates
 }
 
 // Update freeship messages in checkout (global function)
@@ -1319,12 +1727,23 @@ function updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFr
     const shippingSection = document.querySelector('.shipping-cost-display')?.parentElement?.parentElement;
     if (!shippingSection) return;
     
-    // Remove existing freeship messages
-    const existingFreeshipMsg = shippingSection.querySelector('.freeship-message');
-    const existingProgressMsg = shippingSection.querySelector('.freeship-progress');
+    // Remove ALL existing freeship messages (both .freeship-message and .freeship-progress)
+    // Also remove messages from PHP rendering (they don't have these classes but have similar styling)
+    // Use querySelectorAll to remove all instances, not just the first one
+    const existingFreeshipMsgs = shippingSection.querySelectorAll('.freeship-message');
+    const existingProgressMsgs = shippingSection.querySelectorAll('.freeship-progress');
     
-    if (existingFreeshipMsg) existingFreeshipMsg.remove();
-    if (existingProgressMsg) existingProgressMsg.remove();
+    // Also remove PHP-rendered messages (they have text-blue-600 or text-green-600 with specific text)
+    const phpFreeshipMessages = shippingSection.querySelectorAll('.text-xs.text-blue-600, .text-xs.text-green-600');
+    phpFreeshipMessages.forEach(msg => {
+        const text = msg.textContent || '';
+        if (text.includes('free shipping') || text.includes('more for free shipping')) {
+            msg.remove();
+        }
+    });
+    
+    existingFreeshipMsgs.forEach(msg => msg.remove());
+    existingProgressMsgs.forEach(msg => msg.remove());
     
     // Find the shipping cost display element to insert after
     const shippingCostDisplay = shippingSection.querySelector('.shipping-cost-display')?.parentElement;
@@ -1334,16 +1753,16 @@ function updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFr
         // Add success message
         const successMsg = document.createElement('div');
         successMsg.className = 'freeship-message text-xs text-green-600 bg-green-50 p-2 rounded-lg border border-green-200 mt-2';
-        successMsg.innerHTML = '🎉 You qualify for free shipping on orders $100+!';
+        successMsg.innerHTML = `🎉 You qualify for free shipping on orders $${FREE_SHIPPING_THRESHOLD_USD}+!`;
         shippingCostDisplay.insertAdjacentElement('afterend', successMsg);
     } else {
         // Add progress message - calculate remaining amount in current currency
         const baseSubtotal = currency !== 'USD' ? subtotal / currencyRate : subtotal;
-        const remainingBaseAmount = 100 - baseSubtotal;
+        const remainingBaseAmount = FREE_SHIPPING_THRESHOLD_USD - baseSubtotal;
         const remainingAmount = currency !== 'USD' ? remainingBaseAmount * currencyRate : remainingBaseAmount;
         const progressMsg = document.createElement('div');
         progressMsg.className = 'freeship-progress text-xs text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-200 mt-2';
-        progressMsg.textContent = `Add ${formatPrice(remainingAmount, currency)} more for free shipping!`;
+        progressMsg.textContent = `Add ${formatPrice(Math.max(0, remainingAmount), currency)} more for free shipping!`;
         shippingCostDisplay.insertAdjacentElement('afterend', progressMsg);
     }
 }
@@ -2784,6 +3203,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const shippingUrl = new URL('{{ route('checkout.calculate-shipping') }}', window.location.origin);
                 console.log('🚚 Shipping calculation URL:', shippingUrl.toString());
                 
+                // Prepare request body with domain to prioritize default rate
+                const requestBody = { country: country };
+                if (CHECKOUT_CURRENT_DOMAIN) {
+                    requestBody.domain = CHECKOUT_CURRENT_DOMAIN;
+                }
+                
                 const response = await fetch(shippingUrl.toString(), {
                     method: 'POST',
                     headers: {
@@ -2791,7 +3216,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify({ country: country }),
+                    body: JSON.stringify(requestBody),
                     credentials: 'same-origin',
                     mode: 'same-origin'
                 });
@@ -2807,8 +3232,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success && data.shipping) {
                     // Update currency and rate from server response
                     if (data.currency && data.currency_rate) {
-                        currentCurrency = data.currency;
-                        currentCurrencyRate = parseFloat(data.currency_rate);
+                        window.currentCurrency = data.currency;
+                        window.currentCurrencyRate = parseFloat(data.currency_rate);
+                        currentCurrency = window.currentCurrency;
+                        currentCurrencyRate = window.currentCurrencyRate;
                         
                         console.log('🚚 Country Change - Currency Updated:', {
                             'newCurrency': currentCurrency,
@@ -2830,6 +3257,45 @@ document.addEventListener('DOMContentLoaded', function() {
                         updateExchangeRateDisplay();
                     }
                     
+                    // Get current cart data to calculate baseSubtotal (same logic as cart/index.blade.php)
+                    const cartResponseForChange = await fetch('/api/cart/get', {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                        },
+                        credentials: 'same-origin'
+                    });
+                    
+                    let baseSubtotal = 0;
+                    let subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+                    let finalCurrency = currentCurrency;
+                    let finalCurrencyRate = currentCurrencyRate;
+                    
+                    if (cartResponseForChange.ok) {
+                        const cartData = await cartResponseForChange.json();
+                        if (cartData.success && cartData.cart_items && cartData.cart_items.length > 0) {
+                            finalCurrency = cartData.currency || currentCurrency || 'USD';
+                            finalCurrencyRate = parseFloat(cartData.currency_rate || currentCurrencyRate || 1.0);
+                            
+                            // Calculate baseSubtotal from cart items
+                            baseSubtotal = calculateBaseSubtotalFromCartItems(cartData.cart_items, finalCurrency, finalCurrencyRate);
+                            
+                            // Get subtotal from cart data if available
+                            if (cartData.subtotal !== undefined) {
+                                subtotal = parseFloat(cartData.subtotal);
+                            }
+                        }
+                    }
+                    
+                    // If baseSubtotal is still 0, fallback to converting subtotal
+                    if (baseSubtotal === 0) {
+                        baseSubtotal = finalCurrency !== 'USD' && finalCurrencyRate > 0 
+                            ? subtotal / finalCurrencyRate 
+                            : subtotal;
+                    }
+                    
                     // Update shipping cost display
                     const shippingCostElement = document.querySelector('.shipping-cost-display');
                     const subtotalElement = document.querySelector('.subtotal-display');
@@ -2840,14 +3306,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         const baseShipping = parseFloat(data.shipping.total_shipping);
                         const convertedShipping = data.converted_shipping 
                             ? parseFloat(data.converted_shipping)
-                            : convertFromUSD(baseShipping, currentCurrency);
-                        
-                        // Subtotal is already in current currency, no need to convert
-                        const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+                            : convertFromUSD(baseShipping, finalCurrency);
                         
                         // Check freeship based on base USD amount (100 USD)
-                        const baseSubtotal = currentCurrency !== 'USD' ? subtotal / currentCurrencyRate : subtotal;
-                        const qualifiesForFreeShipping = baseSubtotal >= 100;
+                        // IMPORTANT: Compare baseSubtotal (in USD) with FREE_SHIPPING_THRESHOLD_USD (100 USD)
+                        const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
                         const actualShipping = qualifiesForFreeShipping ? 0 : convertedShipping;
                         
                         console.log('🚚 Country Change - Shipping Calculation:', {
@@ -2862,18 +3325,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         // Update shipping display
-                        if (qualifiesForFreeShipping) {
-                            shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
-                        } else {
-                            shippingCostElement.textContent = formatPrice(convertedShipping, currentCurrency);
-                        }
+                        updateShippingDisplay(actualShipping, convertedShipping, qualifiesForFreeShipping);
                         
                         // Recalculate total
                         const tax = parseFloat('{{ $taxAmount }}');
                         const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
                         
                         // Convert tip from USD to current currency
-                        const convertedTip = convertFromUSD(tip, currentCurrency);
+                        const convertedTip = convertFromUSD(tip, finalCurrency);
                         const total = subtotal + tax + actualShipping + convertedTip;
                         
                         // Update tip line if tip exists
@@ -2881,15 +3340,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         const tipAmountDisplay = document.querySelector('.tip-amount-display');
                         if (tip > 0 && tipLine && tipAmountDisplay) {
                             tipLine.style.display = 'flex';
-                            tipAmountDisplay.textContent = formatPrice(convertedTip, currentCurrency);
+                            tipAmountDisplay.textContent = formatPrice(convertedTip, finalCurrency);
                         }
                         
                         if (totalElement) {
-                            totalElement.textContent = formatPrice(total, currentCurrency);
+                            totalElement.textContent = formatPrice(total, finalCurrency);
                         }
-                        
-                        // Update freeship messages
-                        updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currentCurrency, currentCurrencyRate);
                     }
                 } else {
                     // showToast('error', 'Shipping Error', data.message || 'Could not calculate shipping');
@@ -2950,12 +3406,203 @@ document.addEventListener('DOMContentLoaded', function() {
         updateTipButtons();
         updateExchangeRateDisplay();
         
-        // Initialize freeship check on page load
-        const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
-        const baseShipping = parseFloat(CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
-        const baseSubtotal = currentCurrency !== 'USD' ? subtotal / currentCurrencyRate : subtotal;
-        const qualifiesForFreeShipping = baseSubtotal >= 100;
-        const actualShipping = qualifiesForFreeShipping ? 0 : baseShipping;
+        // Initialize freeship check on page load (same logic as cart/index.blade.php)
+        async function initializeFreeshipCheck() {
+            try {
+                // Get current cart data to calculate baseSubtotal
+                const cartResponse = await fetch('/api/cart/get', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                let baseSubtotal = 0;
+                let currentSubtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+                let currency = window.currentCurrency || CHECKOUT_CURRENCY || 'USD';
+                let currencyRate = window.currentCurrencyRate || CHECKOUT_CURRENCY_RATE || 1.0;
+                
+                if (cartResponse.ok) {
+                    const cartData = await cartResponse.json();
+                    if (cartData.success && cartData.cart_items && cartData.cart_items.length > 0) {
+                        currency = cartData.currency || CHECKOUT_CURRENCY || 'USD';
+                        currencyRate = parseFloat(cartData.currency_rate || CHECKOUT_CURRENCY_RATE || 1.0);
+                        
+                        // Calculate baseSubtotal from cart items (same logic as cart/index.blade.php)
+                        baseSubtotal = calculateBaseSubtotalFromCartItems(cartData.cart_items, currency, currencyRate);
+                        
+                        // Get subtotal from cart data if available
+                        if (cartData.subtotal !== undefined) {
+                            currentSubtotal = parseFloat(cartData.subtotal);
+                        }
+                    }
+                }
+                
+                // If baseSubtotal is still 0, fallback to converting subtotal
+                if (baseSubtotal === 0) {
+                    baseSubtotal = currency !== 'USD' && currencyRate > 0 
+                        ? currentSubtotal / currencyRate 
+                        : currentSubtotal;
+                }
+                
+                // Determine country from currency/domain (priority: currency -> domain -> default)
+                let determinedCountry = determineCountryFromCurrencyAndDomain(currency, CHECKOUT_CURRENT_DOMAIN);
+                
+                // Handle UK -> GB mapping for backend
+                let backendCountry = determinedCountry === 'UK' ? 'GB' : determinedCountry;
+                backendCountry = backendCountry ? backendCountry.toUpperCase().substring(0, 2) : 'US';
+                
+                // Final validation: must be exactly 2 characters
+                if (!backendCountry || backendCountry.length !== 2) {
+                    backendCountry = 'US'; // Default fallback
+                }
+                
+                console.log('Initial shipping country determined:', {
+                    displayCountry: determinedCountry,
+                    backendCountry: backendCountry,
+                    currency: currency,
+                    domain: CHECKOUT_CURRENT_DOMAIN
+                });
+                
+                // Check if shipping cost is already displayed (from server-side rendering)
+                const currentShippingElement = document.querySelector('.shipping-cost-display');
+                const currentShippingText = currentShippingElement ? currentShippingElement.textContent : '';
+                const hasShippingDisplayed = currentShippingText && !currentShippingText.includes('Calculating');
+                
+                // Always get default shipping rate for domain if domain exists
+                // This ensures domain Mexico always shows Mexico shipping, not US shipping
+                if (CHECKOUT_CURRENT_DOMAIN) {
+                    // Get default shipping rate for domain (priority: default rate)
+                    try {
+                        // Get cart items for default shipping calculation
+                        const cartResponse = await fetch('/api/cart/get', {
+                            method: 'GET',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                            },
+                            credentials: 'same-origin'
+                        });
+                        
+                        let cartItemsForCalc = [];
+                        if (cartResponse.ok) {
+                            const cartData = await cartResponse.json();
+                            if (cartData.success && cartData.cart_items) {
+                                cartItemsForCalc = cartData.cart_items;
+                            }
+                        }
+                        
+                        // Get default shipping rate for domain
+                        const defaultShipping = await getDefaultShippingRateForDomain(
+                            CHECKOUT_CURRENT_DOMAIN, 
+                            cartItemsForCalc, 
+                            currency, 
+                            currencyRate, 
+                            baseSubtotal
+                        );
+                        
+                        if (defaultShipping && defaultShipping.baseShipping >= 0) {
+                            // Always update display with default shipping for domain
+                            updateShippingDisplay(
+                                defaultShipping.finalShippingCost, 
+                                defaultShipping.shippingCost, 
+                                defaultShipping.qualifiesForFreeShipping
+                            );
+                            
+                            // Update total
+                            const totalElement = document.querySelector('.total-display');
+                            if (totalElement) {
+                                const tax = parseFloat('{{ $taxAmount }}');
+                                const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
+                                const convertedTip = convertFromUSD(tip, currency);
+                                const newTotal = currentSubtotal + defaultShipping.finalShippingCost + convertedTip;
+                                totalElement.textContent = formatPrice(newTotal, currency);
+                            }
+                            
+                            // Update delivery country display
+                            const deliveryCountryText = document.getElementById('delivery-country-text');
+                            const deliveryZoneText = document.getElementById('delivery-zone-text');
+                            if (deliveryCountryText) {
+                                let zoneText = defaultShipping.zoneName || determinedCountry;
+                                if (defaultShipping.isDefault) {
+                                    zoneText += ' (Default)';
+                                }
+                                deliveryCountryText.textContent = `Deliver to ${zoneText}`;
+                            }
+                            if (deliveryZoneText) {
+                                let zoneText = defaultShipping.zoneName || determinedCountry;
+                                if (defaultShipping.isDefault) {
+                                    zoneText += ' (Default)';
+                                }
+                                deliveryZoneText.textContent = zoneText;
+                            }
+                            
+                            console.log('✅ Default shipping applied on checkout page load:', defaultShipping);
+                        } else {
+                            // Fallback to regular calculation if no default rate found
+                            await calculateRegularShipping(backendCountry, determinedCountry, currency, currencyRate, baseSubtotal, currentSubtotal);
+                        }
+                    } catch (shippingError) {
+                        console.error('Error getting default shipping rate:', shippingError);
+                        // Fallback to regular calculation
+                        await calculateRegularShipping(backendCountry, determinedCountry, currency, currencyRate, baseSubtotal, currentSubtotal);
+                    }
+                } else if (backendCountry) {
+                    // No domain, use regular calculation
+                    await calculateRegularShipping(backendCountry, determinedCountry, currency, currencyRate, baseSubtotal, currentSubtotal);
+                }
+                
+                // Check freeship based on base USD amount (100 USD)
+                const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
+                
+                // Only check currentShipping if hasShippingDisplayed is true
+                if (hasShippingDisplayed) {
+                    const currentShipping = currentShippingText.includes('FREE') ? 0 : parseFloat(currentShippingText.replace(new RegExp(CHECKOUT_CURRENCY_SYMBOL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')) || 0;
+                    
+                    if (qualifiesForFreeShipping) {
+                        updateShippingDisplay(0, currentShipping, true);
+                        // Update total if needed
+                        const totalElement = document.querySelector('.total-display');
+                        if (totalElement) {
+                            const newTotal = currentSubtotal;
+                            totalElement.textContent = formatPrice(newTotal, currency);
+                        }
+                    }
+                }
+                
+                console.log('Checkout freeship initialization:', {
+                    subtotal: currentSubtotal,
+                    baseSubtotal: baseSubtotal,
+                    currency: currency,
+                    currencyRate: currencyRate,
+                    displayCountry: determinedCountry,
+                    backendCountry: backendCountry,
+                    qualifiesForFreeShipping: qualifiesForFreeShipping,
+                    currentShipping: currentShipping
+                });
+            } catch (error) {
+                console.error('Error initializing freeship check:', error);
+                // Fallback to simple calculation
+                const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+                const currency = window.currentCurrency || CHECKOUT_CURRENCY || 'USD';
+                const currencyRate = window.currentCurrencyRate || CHECKOUT_CURRENCY_RATE || 1.0;
+                const baseSubtotal = currency !== 'USD' ? subtotal / currencyRate : subtotal;
+                const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
+                if (qualifiesForFreeShipping) {
+                    const currentShippingElement = document.querySelector('.shipping-cost-display');
+                    const currentShippingText = currentShippingElement ? currentShippingElement.textContent : '';
+                    const currentShipping = currentShippingText.includes('FREE') ? 0 : parseFloat(currentShippingText.replace(new RegExp(CHECKOUT_CURRENCY_SYMBOL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')) || 0;
+                    updateShippingDisplay(0, currentShipping, true);
+                }
+            }
+        }
+        
+        // Run initialization
+        initializeFreeshipCheck();
         
         // Log shipping calculation on page load
         console.log('🚚 CHECKOUT PAGE LOAD - Shipping Calculation (JavaScript):', {
@@ -2966,6 +3613,8 @@ document.addEventListener('DOMContentLoaded', function() {
             'CHECKOUT_CONVERTED_SUBTOTAL': CHECKOUT_CONVERTED_SUBTOTAL,
             'CHECKOUT_CURRENCY': CHECKOUT_CURRENCY,
             'CHECKOUT_CURRENCY_RATE': CHECKOUT_CURRENCY_RATE,
+            'CHECKOUT_CURRENT_DOMAIN': CHECKOUT_CURRENT_DOMAIN,
+            'CHECKOUT_DEFAULT_COUNTRY': CHECKOUT_DEFAULT_COUNTRY,
             '=== CALCULATION ===': '---',
             'subtotal (used)': subtotal,
             'baseShipping (used)': baseShipping,
@@ -2977,27 +3626,9 @@ document.addEventListener('DOMContentLoaded', function() {
             '=== SOURCE TRACE ===': '---',
             'shippingSource': CHECKOUT_CONVERTED_SHIPPING ? 'CHECKOUT_CONVERTED_SHIPPING (from PHP $convertedShipping)' : (CHECKOUT_BASE_SHIPPING ? 'CHECKOUT_BASE_SHIPPING (from PHP $shippingCost)' : 'PHP fallback {{ $shippingCost }}'),
             'shippingValueUsed': baseShipping,
-            'note': 'JavaScript uses: CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || PHP fallback',
+            'note': 'JavaScript uses: CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || PHP fallback. If domain exists, will try to get default shipping rate.',
             'source': 'JavaScript initialization'
         });
-        
-        // Update shipping display if needed
-        const shippingDisplay = document.querySelector('.shipping-cost-display');
-        if (shippingDisplay) {
-            const currentShippingText = shippingDisplay.textContent || shippingDisplay.innerHTML;
-            console.log('🚚 CHECKOUT PAGE LOAD - Current Shipping Display:', {
-                'currentDisplay': currentShippingText,
-                'willUpdateTo': qualifiesForFreeShipping ? 'FREE' : formatPrice(actualShipping, currentCurrency),
-                'source': 'DOM element check'
-            });
-            
-            if (qualifiesForFreeShipping) {
-                shippingDisplay.innerHTML = '<span class="text-green-600">FREE</span>';
-            }
-        }
-        
-        // Update freeship messages
-        updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currentCurrency, currentCurrencyRate);
     }, 500);
     
     // Initialize tip selection on page load
@@ -3077,10 +3708,27 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     window.updateCustomTip = function(value) {
-        selectedTipAmount = parseFloat(value) || 0;
+        // User enters tip in current currency, convert back to USD for storage
+        const tipInCurrentCurrency = parseFloat(value) || 0;
+        
+        // Convert from current currency to USD for storage
+        // If currency is USD, no conversion needed
+        // Otherwise, divide by currency rate
+        if (tipInCurrentCurrency > 0) {
+            if (currentCurrency === 'USD') {
+                selectedTipAmount = tipInCurrentCurrency;
+            } else {
+                // Convert from current currency to USD
+                selectedTipAmount = currentCurrencyRate > 0 
+                    ? tipInCurrentCurrency / currentCurrencyRate 
+                    : tipInCurrentCurrency;
+            }
+        } else {
+            selectedTipAmount = 0;
+        }
         
         // Add selected class to custom tip button when user types
-        if (selectedTipAmount > 0) {
+        if (tipInCurrentCurrency > 0) {
             document.querySelectorAll('.tip-option').forEach(btn => {
                 btn.classList.remove('selected');
                 
@@ -3152,7 +3800,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Check freeship based on base USD amount (100 USD)
         const baseSubtotal = currentCurrency !== 'USD' ? subtotal / currentCurrencyRate : subtotal;
-        const qualifiesForFreeShipping = baseSubtotal >= 100;
+        const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
         const actualShipping = qualifiesForFreeShipping ? 0 : baseShipping;
         
         // Log shipping source in updateTotal
@@ -3420,6 +4068,80 @@ async function updateCheckoutShippingForCountry(countryCode, countryName) {
     }
     
     try {
+        // Get current cart data to calculate baseSubtotal (same logic as cart/index.blade.php)
+        const cartResponse = await fetch('/api/cart/get', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            credentials: 'same-origin'
+        });
+        
+        let baseSubtotal = 0;
+        let subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+        let currency = window.currentCurrency || CHECKOUT_CURRENCY || 'USD';
+        let currencyRate = window.currentCurrencyRate || CHECKOUT_CURRENCY_RATE || 1.0;
+        
+        if (cartResponse.ok) {
+            const cartData = await cartResponse.json();
+            if (cartData.success && cartData.cart_items && cartData.cart_items.length > 0) {
+                currency = cartData.currency || CHECKOUT_CURRENCY || 'USD';
+                currencyRate = parseFloat(cartData.currency_rate || CHECKOUT_CURRENCY_RATE || 1.0);
+                
+                // Calculate baseSubtotal from cart items (same logic as cart/index.blade.php)
+                baseSubtotal = calculateBaseSubtotalFromCartItems(cartData.cart_items, currency, currencyRate);
+                
+                // Get subtotal from cart data if available
+                if (cartData.subtotal !== undefined) {
+                    subtotal = parseFloat(cartData.subtotal);
+                }
+            }
+        }
+        
+        // If baseSubtotal is still 0, fallback to converting subtotal
+        if (baseSubtotal === 0) {
+            baseSubtotal = currency !== 'USD' && currencyRate > 0 
+                ? subtotal / currencyRate 
+                : subtotal;
+        }
+        
+        // Determine country to use for shipping calculation
+        // If countryCode is provided (user selected), use it
+        // Otherwise, determine from currency/domain (priority: currency -> domain -> default)
+        let shippingCountry = countryCode;
+        if (!shippingCountry || !shippingCountry.trim()) {
+            // No country selected, determine from currency/domain
+            shippingCountry = determineCountryFromCurrencyAndDomain(currency, CHECKOUT_CURRENT_DOMAIN);
+            console.log('No country selected, determined from currency/domain:', shippingCountry);
+        }
+        
+        // Handle UK -> GB mapping for backend (same as cart/index.blade.php)
+        let backendCountry = shippingCountry === 'UK' ? 'GB' : shippingCountry;
+        backendCountry = backendCountry ? backendCountry.toUpperCase().substring(0, 2) : 'US';
+        
+        // Final validation: must be exactly 2 characters
+        if (!backendCountry || backendCountry.length !== 2) {
+            backendCountry = 'US'; // Default fallback
+        }
+        
+        // Prepare request body - same logic as cart/index.blade.php
+        const requestBody = {};
+        if (backendCountry) {
+            requestBody.country = backendCountry;
+        }
+        // Add domain if available
+        if (CHECKOUT_CURRENT_DOMAIN) {
+            requestBody.domain = CHECKOUT_CURRENT_DOMAIN;
+        }
+        
+        console.log('Checkout shipping request body:', {
+            displayCountry: shippingCountry,
+            backendCountry: backendCountry,
+            domain: CHECKOUT_CURRENT_DOMAIN
+        });
+        
         // Calculate actual shipping cost via API
         const response = await fetch('/checkout/calculate-shipping', {
             method: 'POST',
@@ -3428,56 +4150,71 @@ async function updateCheckoutShippingForCountry(countryCode, countryName) {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({ country: countryCode })
+            body: JSON.stringify(requestBody)
         });
         
         const data = await response.json();
         
         if (data.success && data.shipping) {
-            // Use converted shipping from server if available
-            const baseShipping = parseFloat(data.shipping.total_shipping);
-            const convertedShipping = data.converted_shipping 
-                ? parseFloat(data.converted_shipping)
-                : convertFromUSD(baseShipping, currentCurrency);
+            // Update currency from API response if available
+            if (data.currency && data.currency_rate) {
+                window.currentCurrency = data.currency;
+                window.currentCurrencyRate = parseFloat(data.currency_rate);
+                currency = window.currentCurrency;
+                currencyRate = window.currentCurrencyRate;
+            }
             
-            // Subtotal is already in current currency
-            const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
+            // Get baseShipping in USD (same as cart/index.blade.php)
+            const baseShipping = parseFloat(data.shipping.total_shipping) || 0;
+            
+            // Convert shipping to current currency (same logic as cart/index.blade.php)
+            const shippingCost = data.converted_shipping !== undefined 
+                ? parseFloat(data.converted_shipping) 
+                : (currency !== 'USD' ? baseShipping * currencyRate : baseShipping);
             
             // Check freeship based on base USD amount (100 USD)
-            const baseSubtotal = currentCurrency !== 'USD' ? subtotal / currentCurrencyRate : subtotal;
-            const qualifiesForFreeShipping = baseSubtotal >= 100;
-            const actualShipping = qualifiesForFreeShipping ? 0 : convertedShipping;
+            // IMPORTANT: Compare baseSubtotal (in USD) with FREE_SHIPPING_THRESHOLD_USD (100 USD)
+            const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
+            
+            // Apply free shipping if qualified
+            const actualShipping = qualifiesForFreeShipping ? 0 : shippingCost;
             
             // Calculate total including tip if any
             const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-            const convertedTip = convertFromUSD(tip, currentCurrency);
+            const convertedTip = convertFromUSD(tip, currency);
             const newTotal = subtotal + actualShipping + convertedTip;
             
             // Update shipping cost display
-            if (shippingCostElement) {
-                if (qualifiesForFreeShipping) {
-                    shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
-                } else {
-                    shippingCostElement.innerHTML = formatPrice(convertedShipping, currentCurrency);
-                }
-            }
+            updateShippingDisplay(actualShipping, shippingCost, qualifiesForFreeShipping);
             
             // Update total
             const totalElement = document.querySelector('.total-display');
             if (totalElement) {
-                totalElement.textContent = formatPrice(newTotal, currentCurrency);
+                totalElement.textContent = formatPrice(newTotal, currency);
             }
             
-            // Update freeship messages
-            updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currentCurrency, currentCurrencyRate);
-                        
-                        console.log('Checkout shipping updated:', {
-                            country: countryCode,
-                            baseShipping: baseShipping,
-                            convertedShipping: convertedShipping,
-                            actualShipping: actualShipping,
-                            qualifiesForFreeShipping: qualifiesForFreeShipping
-                        });
+            // Update delivery zone display if available
+            const deliveryCountryText = document.getElementById('delivery-country-text');
+            const deliveryZoneText = document.getElementById('delivery-zone-text');
+            if (deliveryCountryText && data.shipping.zone_name) {
+                deliveryCountryText.textContent = `Deliver to ${data.shipping.zone_name}`;
+            }
+            if (deliveryZoneText && data.shipping.zone_name) {
+                deliveryZoneText.textContent = data.shipping.zone_name;
+            }
+            
+            console.log('Checkout shipping updated:', {
+                displayCountry: shippingCountry,
+                backendCountry: backendCountry,
+                baseShipping: baseShipping,
+                shippingCost: shippingCost,
+                actualShipping: actualShipping,
+                baseSubtotal: baseSubtotal,
+                subtotal: subtotal,
+                currency: currency,
+                currencyRate: currencyRate,
+                qualifiesForFreeShipping: qualifiesForFreeShipping
+            });
         } else {
             // Fallback: show error message
             if (shippingCostElement) {
@@ -3550,13 +4287,53 @@ document.getElementById('deliveryModal').addEventListener('click', function(e) {
                                 'price' => $priceInUSD,
                             ];
                         });
-                        $shippingResult = $calculator->calculateShipping($cartItemsForCalc, $firstCountry);
+                        
+                        // Determine domain for this zone to prioritize default rate
+                        // Map country to currency, then find domain with that currency
+                        $countryToCurrency = [
+                            'US' => 'USD', 'GB' => 'GBP', 'CA' => 'CAD', 
+                            'MX' => 'MXN', 'VN' => 'VND', 'DE' => 'EUR'
+                        ];
+                        $expectedCurrency = $countryToCurrency[$firstCountry] ?? null;
+                        $domainForZone = null;
+                        
+                        if ($expectedCurrency) {
+                            // Find domain that uses this currency (currency is a string field, not a relationship)
+                            $domainConfig = \App\Models\DomainCurrencyConfig::where('currency', $expectedCurrency)
+                                ->where('is_active', true)
+                                ->first();
+                            
+                            if ($domainConfig && $domainConfig->domain) {
+                                $domainForZone = $domainConfig->domain;
+                            }
+                        }
+                        
+                        // If no domain found for this zone, use current domain if zone matches current currency country
+                        if (!$domainForZone) {
+                            $currentDomainForCalc = \App\Services\CurrencyService::getCurrentDomain();
+                            $currencyToCountry = [
+                                'USD' => 'US', 'GBP' => 'GB', 'CAD' => 'CA', 
+                                'MXN' => 'MX', 'VND' => 'VN', 'EUR' => 'DE'
+                            ];
+                            $currentCurrencyCountry = $currencyToCountry[$currentCurrency] ?? 'US';
+                            
+                            if ($firstCountry === $currentCurrencyCountry && $currentDomainForCalc) {
+                                $domainForZone = $currentDomainForCalc;
+                            }
+                        }
+                        
+                        // Calculate shipping with domain to prioritize default rate
+                        $shippingResult = $calculator->calculateShipping($cartItemsForCalc, $firstCountry, $domainForZone);
                         $shippingCostUSD = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
                         // Convert shipping cost from USD to current currency
                         $shippingCost = $currentCurrency !== 'USD' 
                             ? \App\Services\CurrencyService::convertFromUSDWithRate($shippingCostUSD, $currentCurrency, $currentCurrencyRate)
                             : $shippingCostUSD;
                         $rateName = $shippingResult['success'] && !empty($shippingResult['items']) ? $shippingResult['items'][0]['shipping_rate_name'] : 'Standard shipping';
+                        $isDefaultRate = $shippingResult['success'] && !empty($shippingResult['items']) && ($shippingResult['items'][0]['is_default'] ?? false);
+                        if ($isDefaultRate) {
+                            $rateName .= ' (Default)';
+                        }
                     @endphp
                     <div class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors" 
                          onclick="selectCountry('{{ $firstCountry }}', '{{ $zone->name }}', {{ $shippingCost }})">

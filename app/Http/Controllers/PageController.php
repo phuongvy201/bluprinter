@@ -12,6 +12,11 @@ class PageController extends Controller
      */
     public function show(string $slug)
     {
+        // Redirect shipping-delivery to dedicated route
+        if ($slug === 'shipping-delivery') {
+            return redirect()->route('shipping-delivery.index');
+        }
+
         $page = Page::where('slug', $slug)
             ->published()
             ->firstOrFail();

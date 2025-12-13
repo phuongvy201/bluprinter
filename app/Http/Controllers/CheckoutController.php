@@ -77,12 +77,56 @@ class CheckoutController extends Controller
             $currencyRate = $defaultRates[$currency] ?? 1.0;
         }
 
-        // Get default shipping (US) or from session
-        $defaultCountry = 'US';
+        // Get current domain to determine country and prioritize default rate
+        $currentDomain = CurrencyService::getCurrentDomain();
+        
+        // Determine country from currency (same logic as cart page)
+        // Priority: currency -> domain name -> default to US
+        $currencyToCountry = [
+            'USD' => 'US',
+            'GBP' => 'GB',
+            'CAD' => 'CA',
+            'MXN' => 'MX',
+            'VND' => 'VN',
+            'EUR' => 'DE'
+        ];
+        
+        $defaultCountry = $currencyToCountry[$currency] ?? 'US';
+        
+        // If domain is available, try to get country from domain name
+        if ($currentDomain) {
+            $domainToCountry = [
+                'mx' => 'MX',
+                'mexico' => 'MX',
+                'us' => 'US',
+                'usa' => 'US',
+                'united-states' => 'US',
+                'gb' => 'GB',
+                'uk' => 'GB',
+                'united-kingdom' => 'GB',
+                'ca' => 'CA',
+                'canada' => 'CA',
+                'vn' => 'VN',
+                'vietnam' => 'VN',
+                'de' => 'DE',
+                'germany' => 'DE',
+                'eu' => 'DE',
+                'europe' => 'DE'
+            ];
+            
+            $domainLower = strtolower($currentDomain);
+            foreach ($domainToCountry as $domainKey => $countryCode) {
+                if (strpos($domainLower, $domainKey) !== false) {
+                    $defaultCountry = $countryCode;
+                    break;
+                }
+            }
+        }
+        
         $shippingCost = 0;
         $shippingDetails = session()->get('shipping_details');
 
-        // Calculate default shipping for US if not in session
+        // Calculate default shipping for determined country if not in session
         if (!$shippingDetails) {
             // Prepare items for calculator - convert prices back to USD for shipping calculation
             $items = $cartItems->map(function ($item) use ($currency, $currencyRate) {
@@ -97,7 +141,8 @@ class CheckoutController extends Controller
             });
 
             $calculator = new ShippingCalculator();
-            $shippingDetails = $calculator->calculateShipping($items, $defaultCountry);
+            // Pass domain to prioritize default rate
+            $shippingDetails = $calculator->calculateShipping($items, $defaultCountry, $currentDomain);
 
             if ($shippingDetails['success']) {
                 $shippingCostUSD = $shippingDetails['total_shipping'];
@@ -206,6 +251,27 @@ class CheckoutController extends Controller
             }])
             ->get();
 
+        // Filter zones by domain and get default zone
+        $availableZones = $shippingZones;
+        $defaultZone = null;
+
+        if ($currentDomain && $availableZones->isNotEmpty()) {
+            // Sort zones: domain matching zones first
+            $availableZones = $availableZones->sortBy(function ($zone) use ($currentDomain) {
+                return $zone->domain === $currentDomain ? 0 : 1;
+            });
+
+            // Find default zone for current domain
+            $defaultZone = $availableZones->first(function ($zone) use ($currentDomain) {
+                return $zone->domain === $currentDomain;
+            });
+        }
+
+        // If no default zone found, use first available zone
+        if (!$defaultZone && $availableZones->isNotEmpty()) {
+            $defaultZone = $availableZones->first();
+        }
+
         $eventItems = collect($products)->map(function ($item) {
             return [
                 'id' => $item['product']->id,
@@ -238,7 +304,11 @@ class CheckoutController extends Controller
             'convertedShipping',
             'convertedTotal',
             'shippingDetails',
-            'shippingZones'
+            'shippingZones',
+            'availableZones',
+            'currentDomain',
+            'defaultZone',
+            'defaultCountry'
         ));
     }
 
@@ -1876,8 +1946,10 @@ class CheckoutController extends Controller
         }
 
         // Calculate shipping
+        // Get current domain to prioritize rates for this domain
+        $currentDomain = \App\Services\CurrencyService::getCurrentDomain();
         $calculator = new ShippingCalculator();
-        $shippingResult = $calculator->calculateShipping($items, $request->country);
+        $shippingResult = $calculator->calculateShipping($items, $request->country, $currentDomain);
 
         if (!$shippingResult['success']) {
             return response()->json([

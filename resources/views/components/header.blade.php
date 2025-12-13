@@ -19,8 +19,18 @@
                     </span>
                 </div>
                 <div class="flex items-center space-x-4">
+                    @php
+                        $domain = \App\Services\CurrencyService::getCurrentDomain();
+                        $currency = \App\Services\CurrencyService::getCurrencyForDomain($domain);
+                        $currencyRate = \App\Services\CurrencyService::getCurrencyRateForDomain($domain) ?? 1.0;
+                        $freeShippingThreshold = 100; // USD
+                        $convertedThreshold = $currency !== 'USD' 
+                            ? \App\Services\CurrencyService::convertFromUSDWithRate($freeShippingThreshold, $currency, $currencyRate)
+                            : $freeShippingThreshold;
+                        $formattedThreshold = \App\Services\CurrencyService::formatPrice($convertedThreshold, $currency, $domain);
+                    @endphp
                     <span class="text-xs bg-gradient-to-r from-[#005366] to-[#E2150C] text-white px-4 py-1.5 rounded-full font-semibold shadow-sm">
-                        🚚 Free Shipping on Orders Over $100
+                        🚚 Free Shipping on Orders Over {{ $formattedThreshold }}
                     </span>
                     @guest
                         <a href="{{ route('login') }}" class="text-gray-600 hover:text-[#005366] transition font-medium">Login</a>

@@ -6,7 +6,9 @@ use App\Models\Product;
 use App\Models\Category;
 use App\Models\Shop;
 use App\Models\ShippingRate;
+use App\Models\ShippingZone;
 use App\Services\TikTokEventsService;
+use App\Services\CurrencyService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 
@@ -150,13 +152,180 @@ class ProductController extends Controller
         }
         $breadcrumbs[] = ['name' => $product->name, 'url' => ''];
 
+        // Get current domain first
+        $currentDomain = CurrencyService::getCurrentDomain();
+        
         // Get shipping zones that have rates for this product's category
+        // PRIORITY: Pass domain to prioritize zones for current domain
         $categoryId = $product->template->category_id ?? null;
-        $shippingZones = ShippingRate::getZonesForCategory($categoryId);
+        $shippingZones = ShippingRate::getZonesForCategory($categoryId, $currentDomain);
+        
+        // Get default zone for current domain (PRIORITY: zone matching current domain)
+        $defaultZone = null;
+        if ($currentDomain) {
+            // First, try to find zone matching current domain from shippingZones
+            $defaultZone = $shippingZones->first(function ($zone) use ($currentDomain) {
+                return $zone->domain === $currentDomain;
+            });
+            
+            // If not found in shippingZones, try to get any zone for this domain
+            if (!$defaultZone) {
+                $defaultZone = ShippingZone::active()
+                    ->where('domain', $currentDomain)
+                    ->ordered()
+                    ->first();
+            }
+        }
+        
+        // If no zone found for domain, try to get first zone from shippingZones
+        if (!$defaultZone && $shippingZones->isNotEmpty()) {
+            $defaultZone = $shippingZones->first();
+        }
+        
+        // Get all available zones for selector (zones that have rates for this category)
+        // PRIORITY: Sort zones to put current domain's zones first
+        $availableZones = $shippingZones;
+        if ($currentDomain && $availableZones->isNotEmpty()) {
+            $availableZones = $availableZones->sortBy(function ($zone) use ($currentDomain) {
+                // Zones matching current domain come first (return 0), others come after (return 1)
+                return $zone->domain === $currentDomain ? 0 : 1;
+            })->values();
+        }
+        
+        // If no zones found for category, get all active zones
+        if ($availableZones->isEmpty()) {
+            $allZones = ShippingZone::active()->ordered()->get();
+            
+            // PRIORITY: Sort zones to put current domain's zones first
+            if ($currentDomain) {
+                $allZones = $allZones->sortBy(function ($zone) use ($currentDomain) {
+                    return $zone->domain === $currentDomain ? 0 : 1;
+                })->values();
+            }
+            
+            $availableZones = $allZones;
+            
+            // Set default zone to first available if not set
+            if (!$defaultZone && $availableZones->isNotEmpty()) {
+                $defaultZone = $availableZones->first();
+            }
+        }
 
         $this->trackTikTokViewContent($request, $product);
 
-        return view('products.show', compact('product', 'relatedProducts', 'breadcrumbs', 'shopAvailable', 'shippingZones'));
+        return view('products.show', compact(
+            'product', 
+            'relatedProducts', 
+            'breadcrumbs', 
+            'shopAvailable', 
+            'shippingZones',
+            'defaultZone',
+            'availableZones',
+            'currentDomain',
+            'categoryId'
+        ));
+    }
+
+    /**
+     * Calculate shipping cost for a product
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function calculateShippingCost(Request $request)
+    {
+        $request->validate([
+            'zone_id' => 'required|integer|exists:shipping_zones,id',
+            'category_id' => 'nullable|integer|exists:categories,id',
+            'quantity' => 'nullable|integer|min:1',
+            'product_price' => 'nullable|numeric|min:0',
+        ]);
+
+        $zoneId = $request->input('zone_id');
+        $categoryId = $request->input('category_id');
+        $quantity = $request->input('quantity', 1);
+        $productPrice = $request->input('product_price', 0);
+
+        // Get current domain
+        $currentDomain = CurrencyService::getCurrentDomain();
+
+        // PRIORITY: Find shipping rate matching current domain first
+        $shippingRate = null;
+        
+        if ($currentDomain) {
+            // First priority: Rate matching zone, domain, and category
+            $shippingRate = ShippingRate::active()
+                ->forZone($zoneId)
+                ->forDomain($currentDomain)
+                ->forCategory($categoryId)
+                ->ordered()
+                ->get()
+                ->first(function ($rate) use ($quantity, $productPrice) {
+                    return $rate->isApplicable($quantity, $productPrice);
+                });
+        }
+        
+        if (!$shippingRate) {
+            // Second priority: Rate matching zone and category (without domain filter)
+            $shippingRate = ShippingRate::active()
+                ->forZone($zoneId)
+                ->forCategory($categoryId)
+                ->ordered()
+                ->get()
+                ->first(function ($rate) use ($quantity, $productPrice, $currentDomain) {
+                    // If we have current domain, prioritize rates matching that domain
+                    if ($currentDomain && $rate->domain === $currentDomain) {
+                        return $rate->isApplicable($quantity, $productPrice);
+                    }
+                    return false;
+                });
+        }
+        
+        if (!$shippingRate) {
+            // Third priority: Any rate for this zone and category
+            $shippingRate = ShippingRate::active()
+                ->forZone($zoneId)
+                ->forCategory($categoryId)
+                ->ordered()
+                ->get()
+                ->first(function ($rate) use ($quantity, $productPrice) {
+                    return $rate->isApplicable($quantity, $productPrice);
+                });
+        }
+
+        if (!$shippingRate) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No shipping rate found for this zone and category',
+                'shipping_cost' => 0,
+            ]);
+        }
+
+        // Calculate shipping cost
+        $shippingCostUSD = $shippingRate->calculateCost($quantity);
+
+        // Get current currency and rate
+        $currentCurrency = currency();
+        $currentCurrencyRate = currency_rate() ?? 1.0;
+
+        // Convert to current currency
+        $shippingCost = $currentCurrency !== 'USD'
+            ? \App\Services\CurrencyService::convertFromUSDWithRate($shippingCostUSD, $currentCurrency, $currentCurrencyRate)
+            : $shippingCostUSD;
+
+        // Get zone info
+        $zone = ShippingZone::find($zoneId);
+
+        return response()->json([
+            'success' => true,
+            'shipping_cost' => round($shippingCost, 2),
+            'shipping_cost_usd' => round($shippingCostUSD, 2),
+            'currency' => $currentCurrency,
+            'zone_name' => $zone->name ?? 'Unknown',
+            'rate_name' => $shippingRate->name,
+            'first_item_cost' => $shippingRate->first_item_cost,
+            'additional_item_cost' => $shippingRate->additional_item_cost,
+        ]);
     }
 
     private function trackTikTokViewContent(Request $request, Product $product): void
