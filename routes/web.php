@@ -74,6 +74,7 @@ Route::get('/category/{slug}', [CategoryController::class, 'show'])->name('categ
 Route::get('/checkout', [App\Http\Controllers\CheckoutController::class, 'index'])->name('checkout.index');
 Route::post('/checkout/process', [App\Http\Controllers\CheckoutController::class, 'process'])->name('checkout.process');
 Route::post('/checkout/calculate-shipping', [App\Http\Controllers\CheckoutController::class, 'calculateShipping'])->name('checkout.calculate-shipping');
+Route::post('/checkout/get-shipping-rates', [App\Http\Controllers\CheckoutController::class, 'getShippingRates'])->name('checkout.get-shipping-rates');
 Route::get('/checkout/success/{orderNumber}', [App\Http\Controllers\CheckoutController::class, 'success'])->name('checkout.success');
 Route::get('/checkout/receipt/{orderNumber}', [App\Http\Controllers\CheckoutController::class, 'downloadReceipt'])->name('checkout.receipt');
 

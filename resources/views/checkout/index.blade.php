@@ -15,49 +15,188 @@
 @php
     use Illuminate\Support\Collection;
     
-    // Get currency and rate using helper functions (same as cart page)
+    // Get currency and rate using helper functions
     $currentCurrency = currency();
     $currentCurrencyRate = currency_rate() ?? 1.0;
-    $currentDomain = $currentDomain ?? null;
+    $currentDomain = $currentDomain ?? \App\Services\CurrencyService::getCurrentDomain();
     
-    // Determine default country from currency/domain (same logic as cart page)
-    $currencyToCountry = [
-        'USD' => 'US',
-        'GBP' => 'GB',
-        'CAD' => 'CA',
-        'MXN' => 'MX',
-        'VND' => 'VN',
-        'EUR' => 'DE'
+    // Get all shipping rates for current domain with zones
+    $shippingRates = \App\Models\ShippingRate::where('domain', $currentDomain)
+        ->where('is_active', true)
+        ->with('shippingZone')
+        ->orderBy('is_default', 'desc')
+        ->orderBy('sort_order')
+        ->get();
+    
+    // Get default shipping rate
+    $defaultShippingRate = $shippingRates->where('is_default', true)->first();
+    if (!$defaultShippingRate && $shippingRates->count() > 0) {
+        $defaultShippingRate = $shippingRates->first();
+    }
+    
+    // Get all shipping zones
+    $shippingZones = \App\Models\ShippingZone::where('is_active', true)
+        ->orderBy('sort_order')
+        ->get();
+    
+    // Create country to zone mapping
+    $countryToZoneMap = [];
+    foreach ($shippingZones as $zone) {
+        $countries = $zone->countries ?? [];
+        foreach ($countries as $countryCode) {
+            $countryToZoneMap[strtoupper($countryCode)] = $zone->id;
+        }
+    }
+    
+    // Prepare shipping rates data for JavaScript
+    $shippingRatesData = [];
+    $shippingRatesByZone = [];
+    
+    foreach ($shippingRates as $rate) {
+        $rateData = [
+            'id' => $rate->id,
+            'zone_id' => $rate->shipping_zone_id,
+            'zone_name' => $rate->shippingZone ? $rate->shippingZone->name : null,
+            'category_id' => $rate->category_id,
+            'name' => $rate->name,
+            'first_item_cost' => (float) $rate->first_item_cost,
+            'additional_item_cost' => (float) $rate->additional_item_cost,
+            'is_default' => (bool) $rate->is_default,
+            'min_items' => $rate->min_items,
+            'max_items' => $rate->max_items,
+            'min_order_value' => $rate->min_order_value ? (float) $rate->min_order_value : null,
+            'max_order_value' => $rate->max_order_value ? (float) $rate->max_order_value : null,
+        ];
+        
+        $shippingRatesData[] = $rateData;
+        
+        $zoneId = $rate->shipping_zone_id ?? 'none';
+        if (!isset($shippingRatesByZone[$zoneId])) {
+            $shippingRatesByZone[$zoneId] = [
+                'zone_id' => $rate->shipping_zone_id,
+                'zone_name' => $rate->shippingZone ? $rate->shippingZone->name : 'General',
+                'rates' => []
+            ];
+        }
+        $shippingRatesByZone[$zoneId]['rates'][] = $rateData;
+    }
+    
+    // Prepare zones data
+    $zonesData = $shippingZones->map(function($zone) {
+        return [
+            'id' => $zone->id,
+            'name' => $zone->name,
+            'description' => $zone->description,
+            'countries' => $zone->countries ?? [],
+        ];
+    })->toArray();
+    
+    // Prepare default shipping rate data
+    $defaultShippingRateData = null;
+    if ($defaultShippingRate) {
+        $defaultShippingRateData = [
+            'id' => $defaultShippingRate->id,
+            'category_id' => $defaultShippingRate->category_id,
+            'name' => $defaultShippingRate->name,
+            'first_item_cost' => (float) $defaultShippingRate->first_item_cost,
+            'additional_item_cost' => (float) $defaultShippingRate->additional_item_cost,
+            'is_default' => true,
+            'min_items' => $defaultShippingRate->min_items,
+            'max_items' => $defaultShippingRate->max_items,
+            'min_order_value' => $defaultShippingRate->min_order_value ? (float) $defaultShippingRate->min_order_value : null,
+            'max_order_value' => $defaultShippingRate->max_order_value ? (float) $defaultShippingRate->max_order_value : null,
+            'zone_id' => $defaultShippingRate->shipping_zone_id,
+            'zone_name' => $defaultShippingRate->shippingZone ? $defaultShippingRate->shippingZone->name : null,
+        ];
+    }
+    
+    // Get all countries from zones that have shipping rates
+    $availableCountries = [];
+    $zonesWithRates = $shippingRates->pluck('shipping_zone_id')->unique();
+    foreach ($shippingZones as $zone) {
+        if ($zonesWithRates->contains($zone->id)) {
+            $countries = $zone->countries ?? [];
+            foreach ($countries as $countryCode) {
+                if (!in_array(strtoupper($countryCode), $availableCountries)) {
+                    $availableCountries[] = strtoupper($countryCode);
+                }
+            }
+        }
+    }
+    sort($availableCountries); // Sort alphabetically
+    
+    // Country names mapping
+    $countryNames = [
+        'US' => '🇺🇸 United States',
+        'GB' => '🇬🇧 United Kingdom',
+        'CA' => '🇨🇦 Canada',
+        'AU' => '🇦🇺 Australia',
+        'DE' => '🇩🇪 Germany',
+        'FR' => '🇫🇷 France',
+        'IT' => '🇮🇹 Italy',
+        'ES' => '🇪🇸 Spain',
+        'NL' => '🇳🇱 Netherlands',
+        'BE' => '🇧🇪 Belgium',
+        'CH' => '🇨🇭 Switzerland',
+        'AT' => '🇦🇹 Austria',
+        'SE' => '🇸🇪 Sweden',
+        'NO' => '🇳🇴 Norway',
+        'DK' => '🇩🇰 Denmark',
+        'FI' => '🇫🇮 Finland',
+        'IE' => '🇮🇪 Ireland',
+        'PT' => '🇵🇹 Portugal',
+        'GR' => '🇬🇷 Greece',
+        'PL' => '🇵🇱 Poland',
+        'CZ' => '🇨🇿 Czech Republic',
+        'HU' => '🇭🇺 Hungary',
+        'RO' => '🇷🇴 Romania',
+        'BG' => '🇧🇬 Bulgaria',
+        'HR' => '🇭🇷 Croatia',
+        'SK' => '🇸🇰 Slovakia',
+        'SI' => '🇸🇮 Slovenia',
+        'EE' => '🇪🇪 Estonia',
+        'LV' => '🇱🇻 Latvia',
+        'LT' => '🇱🇹 Lithuania',
+        'JP' => '🇯🇵 Japan',
+        'CN' => '🇨🇳 China',
+        'KR' => '🇰🇷 South Korea',
+        'SG' => '🇸🇬 Singapore',
+        'MY' => '🇲🇾 Malaysia',
+        'TH' => '🇹🇭 Thailand',
+        'ID' => '🇮🇩 Indonesia',
+        'PH' => '🇵🇭 Philippines',
+        'VN' => '🇻🇳 Vietnam',
+        'IN' => '🇮🇳 India',
+        'NZ' => '🇳🇿 New Zealand',
+        'BR' => '🇧🇷 Brazil',
+        'MX' => '🇲🇽 Mexico',
+        'AR' => '🇦🇷 Argentina',
+        'CL' => '🇨🇱 Chile',
+        'CO' => '🇨🇴 Colombia',
+        'PE' => '🇵🇪 Peru',
+        'ZA' => '🇿🇦 South Africa',
+        'EG' => '🇪🇬 Egypt',
+        'AE' => '🇦🇪 United Arab Emirates',
+        'SA' => '🇸🇦 Saudi Arabia',
+        'IL' => '🇮🇱 Israel',
+        'TR' => '🇹🇷 Turkey',
+        'RU' => '🇷🇺 Russia',
+        'UA' => '🇺🇦 Ukraine',
     ];
     
-    $defaultCountry = $defaultCountry ?? ($currencyToCountry[$currentCurrency] ?? 'US');
-    $defaultCountryName = 'United States';
-    
-    // Get country name from zone if available
-    if ($defaultZone && $defaultZone->countries && count($defaultZone->countries) > 0) {
-        $firstCountryCode = $defaultZone->countries[0];
-        $countryNames = [
-            'US' => 'United States',
-            'GB' => 'United Kingdom',
-            'CA' => 'Canada',
-            'MX' => 'Mexico',
-            'VN' => 'Vietnam',
-            'DE' => 'Germany'
-        ];
-        $defaultCountryName = $countryNames[$firstCountryCode] ?? $defaultZone->name ?? 'United States';
-    } else if ($defaultZone) {
-        $defaultCountryName = $defaultZone->name ?? 'United States';
-    } else {
-        // Use country name from defaultCountry code
-        $countryNames = [
-            'US' => 'United States',
-            'GB' => 'United Kingdom',
-            'CA' => 'Canada',
-            'MX' => 'Mexico',
-            'VN' => 'Vietnam',
-            'DE' => 'Germany'
-        ];
-        $defaultCountryName = $countryNames[$defaultCountry] ?? 'United States';
+    // Calculate base subtotal in USD for shipping calculation
+    $baseSubtotal = 0;
+    foreach ($products as $item) {
+        $product = $item['product'];
+        $quantity = max(1, (int) ($item['quantity'] ?? 1));
+        $lineTotal = (float) ($item['total'] ?? ($product->price ?? $product->base_price ?? 0) * $quantity);
+        
+        // Convert to USD if needed
+        $baseLineTotal = $currentCurrency !== 'USD' && $currentCurrencyRate > 0 
+            ? $lineTotal / $currentCurrencyRate 
+            : $lineTotal;
+        
+        $baseSubtotal += $baseLineTotal;
     }
 
     $gtagItems = [];
@@ -117,17 +256,18 @@ const TIKTOK_CHECKOUT_CONTENTS = {!! json_encode($tiktokContents, JSON_UNESCAPED
 const TIKTOK_CHECKOUT_VALUE = {{ $checkoutTotal }};
 const CHECKOUT_CURRENCY = '{{ $currency ?? "USD" }}';
 const CHECKOUT_CURRENCY_RATE = {{ $currencyRate ?? 1.0 }};
-const CHECKOUT_BASE_SUBTOTAL = {{ $subtotal }};
-const CHECKOUT_BASE_SHIPPING = {{ $shippingCost }};
 const CHECKOUT_BASE_TOTAL = {{ $total }};
 const CHECKOUT_CONVERTED_SUBTOTAL = {{ $convertedSubtotal ?? $subtotal }};
-const CHECKOUT_CONVERTED_SHIPPING = {{ $convertedShipping ?? $shippingCost }};
 const CHECKOUT_CONVERTED_TOTAL = {{ $convertedTotal ?? $total }};
 const CHECKOUT_CURRENCY_SYMBOL = @json(\App\Services\CurrencyService::getCurrencySymbol($currency ?? 'USD'));
 const CHECKOUT_CURRENT_DOMAIN = @json($currentDomain ?? null);
-const CHECKOUT_DEFAULT_COUNTRY = @json($defaultCountry ?? 'US');
-const FREE_SHIPPING_THRESHOLD_USD = 100;
-const DEFAULT_ZONE = @json($defaultZone ?? null);
+const SHIPPING_RATES = @json($shippingRatesData);
+const SHIPPING_RATES_BY_ZONE = @json($shippingRatesByZone);
+const SHIPPING_ZONES = @json($zonesData);
+const COUNTRY_TO_ZONE_MAP = @json($countryToZoneMap);
+const DEFAULT_SHIPPING_RATE = @json($defaultShippingRateData);
+const DEFAULT_SHIPPING_ZONE_ID = @json($defaultShippingRate ? $defaultShippingRate->shipping_zone_id : null);
+const CHECKOUT_BASE_SUBTOTAL = {{ $baseSubtotal }};
 
 document.addEventListener('DOMContentLoaded', function() {
     // Event tracking được xử lý bởi GTM thông qua dataLayer
@@ -520,6 +660,8 @@ function buildCheckoutCustomizationInputs(customizations) {
                         @csrf
                         <input type="hidden" id="tip_amount" name="tip_amount" value="0">
                         <input type="hidden" id="currency" name="currency" value="{{ $currency ?? 'USD' }}">
+                        <input type="hidden" id="shipping_cost" name="shipping_cost" value="0">
+                        <input type="hidden" id="shipping_zone_id" name="shipping_zone_id" value="">
                         
                         <!-- Contact Information -->
                         <div class="space-y-5">
@@ -715,61 +857,70 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 </label>
                                 <select id="country" name="country" class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5 cursor-pointer" required>
                                     <option value="">Select Country</option>
-                                    <option value="US">🇺🇸 United States</option>
-                                    <option value="GB">🇬🇧 United Kingdom</option>
-                                    <option value="CA">🇨🇦 Canada</option>
-                                    <option value="AU">🇦🇺 Australia</option>
-                                    <option value="DE">🇩🇪 Germany</option>
-                                    <option value="FR">🇫🇷 France</option>
-                                    <option value="IT">🇮🇹 Italy</option>
-                                    <option value="ES">🇪🇸 Spain</option>
-                                    <option value="NL">🇳🇱 Netherlands</option>
-                                    <option value="BE">🇧🇪 Belgium</option>
-                                    <option value="CH">🇨🇭 Switzerland</option>
-                                    <option value="AT">🇦🇹 Austria</option>
-                                    <option value="SE">🇸🇪 Sweden</option>
-                                    <option value="NO">🇳🇴 Norway</option>
-                                    <option value="DK">🇩🇰 Denmark</option>
-                                    <option value="FI">🇫🇮 Finland</option>
-                                    <option value="IE">🇮🇪 Ireland</option>
-                                    <option value="PT">🇵🇹 Portugal</option>
-                                    <option value="GR">🇬🇷 Greece</option>
-                                    <option value="PL">🇵🇱 Poland</option>
-                                    <option value="CZ">🇨🇿 Czech Republic</option>
-                                    <option value="HU">🇭🇺 Hungary</option>
-                                    <option value="RO">🇷🇴 Romania</option>
-                                    <option value="BG">🇧🇬 Bulgaria</option>
-                                    <option value="HR">🇭🇷 Croatia</option>
-                                    <option value="SK">🇸🇰 Slovakia</option>
-                                    <option value="SI">🇸🇮 Slovenia</option>
-                                    <option value="EE">🇪🇪 Estonia</option>
-                                    <option value="LV">🇱🇻 Latvia</option>
-                                    <option value="LT">🇱🇹 Lithuania</option>
-                                    <option value="JP">🇯🇵 Japan</option>
-                                    <option value="CN">🇨🇳 China</option>
-                                    <option value="KR">🇰🇷 South Korea</option>
-                                    <option value="SG">🇸🇬 Singapore</option>
-                                    <option value="MY">🇲🇾 Malaysia</option>
-                                    <option value="TH">🇹🇭 Thailand</option>
-                                    <option value="ID">🇮🇩 Indonesia</option>
-                                    <option value="PH">🇵🇭 Philippines</option>
-                                    <option value="VN">🇻🇳 Vietnam</option>
-                                    <option value="IN">🇮🇳 India</option>
-                                    <option value="NZ">🇳🇿 New Zealand</option>
-                                    <option value="BR">🇧🇷 Brazil</option>
-                                    <option value="MX">🇲🇽 Mexico</option>
-                                    <option value="AR">🇦🇷 Argentina</option>
-                                    <option value="CL">🇨🇱 Chile</option>
-                                    <option value="CO">🇨🇴 Colombia</option>
-                                    <option value="PE">🇵🇪 Peru</option>
-                                    <option value="ZA">🇿🇦 South Africa</option>
-                                    <option value="EG">🇪🇬 Egypt</option>
-                                    <option value="AE">🇦🇪 United Arab Emirates</option>
-                                    <option value="SA">🇸🇦 Saudi Arabia</option>
-                                    <option value="IL">🇮🇱 Israel</option>
-                                    <option value="TR">🇹🇷 Turkey</option>
-                                    <option value="RU">🇷🇺 Russia</option>
-                                    <option value="UA">🇺🇦 Ukraine</option>
+                                    @if(count($availableCountries) > 0)
+                                        @foreach($availableCountries as $countryCode)
+                                            <option value="{{ $countryCode }}" {{ isset($countryNames[$countryCode]) ? '' : 'disabled' }}>
+                                                {{ $countryNames[$countryCode] ?? $countryCode }}
+                                            </option>
+                                        @endforeach
+                                    @else
+                                        {{-- Fallback: show all countries if no shipping rates configured --}}
+                                        <option value="US">🇺🇸 United States</option>
+                                        <option value="GB">🇬🇧 United Kingdom</option>
+                                        <option value="CA">🇨🇦 Canada</option>
+                                        <option value="AU">🇦🇺 Australia</option>
+                                        <option value="DE">🇩🇪 Germany</option>
+                                        <option value="FR">🇫🇷 France</option>
+                                        <option value="IT">🇮🇹 Italy</option>
+                                        <option value="ES">🇪🇸 Spain</option>
+                                        <option value="NL">🇳🇱 Netherlands</option>
+                                        <option value="BE">🇧🇪 Belgium</option>
+                                        <option value="CH">🇨🇭 Switzerland</option>
+                                        <option value="AT">🇦🇹 Austria</option>
+                                        <option value="SE">🇸🇪 Sweden</option>
+                                        <option value="NO">🇳🇴 Norway</option>
+                                        <option value="DK">🇩🇰 Denmark</option>
+                                        <option value="FI">🇫🇮 Finland</option>
+                                        <option value="IE">🇮🇪 Ireland</option>
+                                        <option value="PT">🇵🇹 Portugal</option>
+                                        <option value="GR">🇬🇷 Greece</option>
+                                        <option value="PL">🇵🇱 Poland</option>
+                                        <option value="CZ">🇨🇿 Czech Republic</option>
+                                        <option value="HU">🇭🇺 Hungary</option>
+                                        <option value="RO">🇷🇴 Romania</option>
+                                        <option value="BG">🇧🇬 Bulgaria</option>
+                                        <option value="HR">🇭🇷 Croatia</option>
+                                        <option value="SK">🇸🇰 Slovakia</option>
+                                        <option value="SI">🇸🇮 Slovenia</option>
+                                        <option value="EE">🇪🇪 Estonia</option>
+                                        <option value="LV">🇱🇻 Latvia</option>
+                                        <option value="LT">🇱🇹 Lithuania</option>
+                                        <option value="JP">🇯🇵 Japan</option>
+                                        <option value="CN">🇨🇳 China</option>
+                                        <option value="KR">🇰🇷 South Korea</option>
+                                        <option value="SG">🇸🇬 Singapore</option>
+                                        <option value="MY">🇲🇾 Malaysia</option>
+                                        <option value="TH">🇹🇭 Thailand</option>
+                                        <option value="ID">🇮🇩 Indonesia</option>
+                                        <option value="PH">🇵🇭 Philippines</option>
+                                        <option value="VN">🇻🇳 Vietnam</option>
+                                        <option value="IN">🇮🇳 India</option>
+                                        <option value="NZ">🇳🇿 New Zealand</option>
+                                        <option value="BR">🇧🇷 Brazil</option>
+                                        <option value="MX">🇲🇽 Mexico</option>
+                                        <option value="AR">🇦🇷 Argentina</option>
+                                        <option value="CL">🇨🇱 Chile</option>
+                                        <option value="CO">🇨🇴 Colombia</option>
+                                        <option value="PE">🇵🇪 Peru</option>
+                                        <option value="ZA">🇿🇦 South Africa</option>
+                                        <option value="EG">🇪🇬 Egypt</option>
+                                        <option value="AE">🇦🇪 United Arab Emirates</option>
+                                        <option value="SA">🇸🇦 Saudi Arabia</option>
+                                        <option value="IL">🇮🇱 Israel</option>
+                                        <option value="TR">🇹🇷 Turkey</option>
+                                        <option value="RU">🇷🇺 Russia</option>
+                                        <option value="UA">🇺🇦 Ukraine</option>
+                                    @endif
                                 </select>
                                 @error('country')
                                     <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -1173,9 +1324,16 @@ function buildCheckoutCustomizationInputs(customizations) {
                     <div class="border-t border-gray-200 pt-4 space-y-3">
                         <div class="flex justify-between text-gray-600">
                             <span>Subtotal</span>
-                            <span class="subtotal-display">
+                            <span class="subtotal-display" id="checkout-subtotal">
                                 {{ \App\Services\CurrencyService::formatPrice($subtotal, $currency ?? 'USD') }}
                             </span>
+                        </div>
+                        
+                        <!-- Shipping Zone is auto-detected from country selection -->
+                        
+                        <div class="flex justify-between text-gray-600" id="checkout-shipping-cost-row">
+                            <span id="checkout-shipping-label">Shipping</span>
+                            <span class="font-semibold" id="checkout-shipping-cost">{{ \App\Services\CurrencyService::formatPrice(0, $currency ?? 'USD') }}</span>
                         </div>
                         
                         <!-- Exchange Rate Display (only show if currency is not USD) -->
@@ -1195,82 +1353,6 @@ function buildCheckoutCustomizationInputs(customizations) {
                             </div>
                         </div>
                         
-                        <!-- Delivery Information -->
-                        <div class="border-t pt-3">
-                            <div class="flex justify-between items-center text-gray-600 mb-3">
-                                <span id="delivery-country-text">Deliver to {{ $defaultCountryName }}</span>
-                                <button onclick="openDeliveryModal()" class="text-orange-500 hover:text-orange-600 text-sm font-medium">
-                                    Change
-                                </button>
-                            </div>
-                            
-                            <div class="text-xs text-gray-500">
-                                <div class="flex justify-between">
-                                    <span>Zone:</span>
-                                    <span id="delivery-zone-text">{{ $defaultZone ? $defaultZone->name : $defaultCountryName }}</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        @php
-                            // Check freeship based on base USD amount (100 USD)
-                            $baseSubtotal = ($currency ?? 'USD') !== 'USD' ? ($convertedSubtotal ?? $subtotal) / ($currencyRate ?? 1.0) : ($convertedSubtotal ?? $subtotal);
-                            $qualifiesForFreeShipping = $baseSubtotal >= 100;
-                            $actualShipping = $qualifiesForFreeShipping ? 0 : ($convertedShipping ?? $shippingCost);
-                            $actualTotal = ($convertedSubtotal ?? $subtotal) + $actualShipping;
-                            
-                            // Log shipping source on page load
-                            \Log::info('🚚 CHECKOUT PAGE LOAD - Shipping Source (PHP)', [
-                                'shippingCost' => $shippingCost ?? 'not set',
-                                'convertedShipping' => $convertedShipping ?? 'not set',
-                                'currency' => $currency ?? 'USD',
-                                'currencyRate' => $currencyRate ?? 1.0,
-                                'subtotal' => $subtotal ?? 'not set',
-                                'convertedSubtotal' => $convertedSubtotal ?? 'not set',
-                                'baseSubtotal' => $baseSubtotal,
-                                'qualifiesForFreeShipping' => $qualifiesForFreeShipping,
-                                'actualShipping' => $actualShipping,
-                                'shippingSource' => $convertedShipping ? 'convertedShipping' : ($shippingCost ? 'shippingCost' : 'not set'),
-                                'note' => 'PHP passes these values to JavaScript constants',
-                                'source' => 'PHP Server-side render'
-                            ]);
-                        @endphp
-                        
-                        <div class="flex justify-between text-gray-600">
-                            <span>Shipping</span>
-                            <span class="shipping-cost-display">
-                                @if($actualShipping == 0)
-                                    <span class="text-green-600">FREE</span>
-                                @else
-                                    {{ \App\Services\CurrencyService::formatPrice($actualShipping, $currency ?? 'USD') }}
-                                @endif
-                            </span>
-                        </div>
-                        
-                        {{-- Freeship Messages --}}
-                        @php
-                            $freeShippingThreshold = 100; // USD
-                            $checkoutCurrency = $currency ?? 'USD';
-                            $checkoutCurrencyRate = $currencyRate ?? 1.0;
-                            $convertedThreshold = $checkoutCurrency !== 'USD' 
-                                ? \App\Services\CurrencyService::convertFromUSDWithRate($freeShippingThreshold, $checkoutCurrency, $checkoutCurrencyRate)
-                                : $freeShippingThreshold;
-                            $formattedThreshold = \App\Services\CurrencyService::formatPrice($convertedThreshold, $checkoutCurrency);
-                        @endphp
-                        @if($qualifiesForFreeShipping)
-                            <div class="text-xs text-green-600 bg-green-50 p-2 rounded-lg border border-green-200">
-                                🎉 You qualify for free shipping on orders {{ $formattedThreshold }}+!
-                            </div>
-                        @else
-                            @php
-                                // Calculate remaining amount in current currency for freeship
-                                $remainingBaseAmount = 100 - $baseSubtotal;
-                                $remainingAmount = $checkoutCurrency !== 'USD' ? $remainingBaseAmount * $checkoutCurrencyRate : $remainingBaseAmount;
-                            @endphp
-                            <div class="text-xs text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-200">
-                                Add {{ \App\Services\CurrencyService::formatPrice($remainingAmount, $checkoutCurrency) }} more for free shipping!
-                            </div>
-                        @endif
                         
                         <div class="flex justify-between text-gray-600" id="tip-line" style="display: none;">
                             <span>Tips</span>
@@ -1279,8 +1361,8 @@ function buildCheckoutCustomizationInputs(customizations) {
                         
                         <div class="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-3 mt-3">
                             <span>Total</span>
-                            <span class="text-blue-600 total-display">
-                                {{ \App\Services\CurrencyService::formatPrice($actualTotal, $currency ?? 'USD') }}
+                            <span class="text-blue-600 total-display" id="checkout-total">
+                                {{ \App\Services\CurrencyService::formatPrice($convertedSubtotal ?? $subtotal, $currency ?? 'USD') }}
                             </span>
                         </div>
                     </div>
@@ -1374,73 +1456,6 @@ window.currentCurrencyRate = CHECKOUT_CURRENCY_RATE || 1.0;
 let currentCurrency = window.currentCurrency;
 let currentCurrencyRate = window.currentCurrencyRate;
 
-// Get default shipping rate for current domain
-// This will use the default rate for the domain (if set) or fallback to regular rate
-async function getDefaultShippingRateForDomain(domain, cartItems, currency, currencyRate, baseSubtotal) {
-    if (!domain || !cartItems || cartItems.length === 0) {
-        return null;
-    }
-    
-    try {
-        // Determine country from domain currency
-        const currencyToCountry = {
-            'USD': 'US',
-            'GBP': 'GB',
-            'CAD': 'CA',
-            'MXN': 'MX',
-            'VND': 'VN',
-            'EUR': 'DE'
-        };
-        const domainCurrency = currency || CHECKOUT_CURRENCY || 'USD';
-        const expectedCountry = currencyToCountry[domainCurrency] || 'US';
-        
-        // Call API to get shipping (backend will prioritize default rate for domain)
-        const response = await fetch('/checkout/calculate-shipping', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({ 
-                country: expectedCountry,
-                domain: domain  // Backend will prioritize default rate for this domain
-            })
-        });
-        
-        if (!response.ok) {
-            return null;
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.shipping && data.shipping.total_shipping !== undefined) {
-            const baseShipping = parseFloat(data.shipping.total_shipping) || 0;
-            const convertedShipping = data.converted_shipping !== undefined 
-                ? parseFloat(data.converted_shipping) 
-                : (currency !== 'USD' ? baseShipping * currencyRate : baseShipping);
-            
-            // Check for free shipping
-            const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
-            const finalShippingCost = qualifiesForFreeShipping ? 0 : convertedShipping;
-            
-            return {
-                baseShipping: baseShipping,
-                shippingCost: convertedShipping,
-                finalShippingCost: finalShippingCost,
-                qualifiesForFreeShipping: qualifiesForFreeShipping,
-                country: expectedCountry,
-                zoneName: data.shipping.zone_name || null,
-                isDefault: data.shipping.is_default || false  // Check if this is default rate
-            };
-        }
-        
-        return null;
-    } catch (error) {
-        console.error('Error getting default shipping rate:', error);
-        return null;
-    }
-}
 
 // Currency mapping
 const countryToCurrency = {
@@ -1492,280 +1507,6 @@ function convertFromUSD(usdAmount, targetCurrency) {
     return usdAmount * rate;
 }
 
-// Calculate baseSubtotal in USD from cart items (same logic as cart/index.blade.php)
-function calculateBaseSubtotalFromCartItems(cartItems, currency, currencyRate) {
-    let baseSubtotal = 0;
-    
-    if (!cartItems || cartItems.length === 0) {
-        return 0;
-    }
-    
-    cartItems.forEach(item => {
-        const itemPrice = parseFloat(item.price) || 0;
-        // If item has base_price_usd, use it directly (already in USD) - this is most accurate
-        // Otherwise, assume item.price is in current currency and convert back to USD
-        let basePrice = 0;
-        if (item.base_price_usd !== undefined && item.base_price_usd !== null) {
-            basePrice = parseFloat(item.base_price_usd);
-        } else {
-            // Convert from current currency to USD
-            basePrice = currency !== 'USD' && currencyRate > 0 
-                ? itemPrice / currencyRate 
-                : itemPrice;
-        }
-        
-        let customizationTotal = 0;
-        if (item.customizations) {
-            Object.values(item.customizations).forEach(customization => {
-                if (customization && customization.price) {
-                    const customPrice = parseFloat(customization.price) || 0;
-                    // Convert customization price back to USD if needed
-                    let baseCustomPrice = 0;
-                    if (customization.base_price_usd !== undefined && customization.base_price_usd !== null) {
-                        baseCustomPrice = parseFloat(customization.base_price_usd);
-                    } else {
-                        baseCustomPrice = currency !== 'USD' && currencyRate > 0
-                            ? customPrice / currencyRate
-                            : customPrice;
-                    }
-                    customizationTotal += baseCustomPrice;
-                }
-            });
-        }
-        
-        baseSubtotal += (basePrice + customizationTotal) * item.quantity;
-    });
-    
-    return baseSubtotal;
-}
-
-// Determine country from currency/domain (same logic as cart/index.blade.php)
-// Priority: currency -> domain name -> default zone -> fallback to US
-function determineCountryFromCurrencyAndDomain(currency, domain) {
-    // Map currency to country code (this is the primary priority)
-    const currencyToCountry = {
-        'USD': 'US',
-        'GBP': 'GB',
-        'CAD': 'CA',
-        'MXN': 'MX',
-        'VND': 'VN',
-        'EUR': 'DE'
-    };
-    
-    let country = null;
-    
-    // Priority 1: Use currency from domain to determine country
-    // If domain uses MXN, prioritize MX over US even if both zones exist
-    const domainCurrency = currency || CHECKOUT_CURRENCY || 'USD';
-    if (domainCurrency && currencyToCountry[domainCurrency]) {
-        country = currencyToCountry[domainCurrency];
-        console.log('Country determined from domain currency:', domainCurrency, '->', country);
-    }
-    
-    // Priority 2: Get country from domain name (if currency didn't match)
-    if (!country && domain) {
-        // Map domain to country code
-        const domainToCountry = {
-            'mx': 'MX',
-            'mexico': 'MX',
-            'us': 'US',
-            'usa': 'US',
-            'united-states': 'US',
-            'gb': 'GB',
-            'uk': 'GB',
-            'united-kingdom': 'GB',
-            'ca': 'CA',
-            'canada': 'CA',
-            'vn': 'VN',
-            'vietnam': 'VN',
-            'de': 'DE',
-            'germany': 'DE',
-            'eu': 'DE',
-            'europe': 'DE'
-        };
-        
-        // Check if domain matches (case insensitive)
-        const domainLower = domain.toLowerCase();
-        for (const [domainKey, countryCode] of Object.entries(domainToCountry)) {
-            if (domainLower.includes(domainKey)) {
-                country = countryCode;
-                console.log('Country determined from domain name:', domain, '->', country);
-                break;
-            }
-        }
-    }
-    
-    // Priority 3: Get country from default zone (if available)
-    if (!country && typeof DEFAULT_ZONE !== 'undefined' && DEFAULT_ZONE && DEFAULT_ZONE.countries && DEFAULT_ZONE.countries.length > 0) {
-        country = DEFAULT_ZONE.countries[0];
-        console.log('Country determined from default zone:', country);
-    }
-    
-    // Priority 4: Fallback to currency (if still no country)
-    if (!country) {
-        country = currencyToCountry[domainCurrency] || 'US';
-        console.log('Country fallback to currency:', country);
-    }
-    
-    // Handle special country codes
-    const specialCountryMapping = {
-        'mxc': 'MX',  // Mexico City -> Mexico
-        'uk': 'GB',   // UK -> GB
-        'usa': 'US'   // USA -> US
-    };
-    
-    if (country && specialCountryMapping[country.toLowerCase()]) {
-        country = specialCountryMapping[country.toLowerCase()];
-    }
-    
-    // Ensure country is exactly 2 characters (country code)
-    if (country && country.length !== 2) {
-        country = currencyToCountry[domainCurrency] || 'US';
-    }
-    
-    // Map UK to GB for backend and ensure uppercase
-    let backendCountry = country === 'UK' ? 'GB' : country;
-    backendCountry = backendCountry ? backendCountry.toUpperCase().substring(0, 2) : 'US';
-    
-    // Final validation: must be exactly 2 characters
-    if (!backendCountry || backendCountry.length !== 2) {
-        backendCountry = 'US'; // Default fallback
-    }
-    
-    return backendCountry;
-}
-
-// Helper function for regular shipping calculation (same logic as cart/index.blade.php)
-async function calculateRegularShipping(backendCountry, displayCountry, currency, currencyRate, baseSubtotal, currentSubtotal) {
-    try {
-        const requestBody = {};
-        if (backendCountry) {
-            requestBody.country = backendCountry;
-        }
-        if (CHECKOUT_CURRENT_DOMAIN) {
-            requestBody.domain = CHECKOUT_CURRENT_DOMAIN;
-        }
-        
-        const shippingResponse = await fetch('/checkout/calculate-shipping', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        const shippingData = await shippingResponse.json();
-        
-        if (shippingData.success && shippingData.shipping) {
-            // Get baseShipping in USD
-            const baseShipping = parseFloat(shippingData.shipping.total_shipping) || 0;
-            
-            // Convert shipping to current currency
-            const shippingCost = shippingData.converted_shipping !== undefined 
-                ? parseFloat(shippingData.converted_shipping) 
-                : (currency !== 'USD' ? baseShipping * currencyRate : baseShipping);
-            
-            // Check freeship
-            const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
-            const actualShipping = qualifiesForFreeShipping ? 0 : shippingCost;
-            
-            // Update display
-            updateShippingDisplay(actualShipping, shippingCost, qualifiesForFreeShipping);
-            
-            // Update total
-            const totalElement = document.querySelector('.total-display');
-            if (totalElement) {
-                const newTotal = currentSubtotal + actualShipping;
-                totalElement.textContent = formatPrice(newTotal, currency);
-            }
-            
-            // Update delivery country display
-            const deliveryCountryText = document.getElementById('delivery-country-text');
-            const deliveryZoneText = document.getElementById('delivery-zone-text');
-            if (deliveryCountryText) {
-                deliveryCountryText.textContent = `Deliver to ${shippingData.shipping.zone_name || displayCountry}`;
-            }
-            if (deliveryZoneText) {
-                deliveryZoneText.textContent = shippingData.shipping.zone_name || displayCountry;
-            }
-            
-            console.log('Regular shipping calculated:', {
-                displayCountry: displayCountry,
-                backendCountry: backendCountry,
-                baseShipping: baseShipping,
-                shippingCost: shippingCost,
-                actualShipping: actualShipping,
-                qualifiesForFreeShipping: qualifiesForFreeShipping
-            });
-        }
-    } catch (shippingError) {
-        console.error('Error calculating regular shipping:', shippingError);
-    }
-}
-
-// Function to update shipping display (without freeship messages - messages are handled by updateCheckoutFreeshipMessages)
-function updateShippingDisplay(actualShipping, originalShipping, qualifiesForFreeShipping) {
-    const shippingCostElement = document.querySelector('.shipping-cost-display');
-    if (shippingCostElement) {
-        if (qualifiesForFreeShipping) {
-            shippingCostElement.innerHTML = '<span class="text-green-600">FREE</span>';
-        } else {
-            const currentCurrency = window.currentCurrency || CHECKOUT_CURRENCY || 'USD';
-            shippingCostElement.innerHTML = actualShipping === 0 ? 
-                '<span class="text-green-600">FREE</span>' : 
-                formatPrice(actualShipping, currentCurrency);
-        }
-    }
-    // Note: Freeship messages are handled separately by updateCheckoutFreeshipMessages() to avoid duplicates
-}
-
-// Update freeship messages in checkout (global function)
-function updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currency = 'USD', currencyRate = 1.0) {
-    // Find the shipping section (after shipping cost display)
-    const shippingSection = document.querySelector('.shipping-cost-display')?.parentElement?.parentElement;
-    if (!shippingSection) return;
-    
-    // Remove ALL existing freeship messages (both .freeship-message and .freeship-progress)
-    // Also remove messages from PHP rendering (they don't have these classes but have similar styling)
-    // Use querySelectorAll to remove all instances, not just the first one
-    const existingFreeshipMsgs = shippingSection.querySelectorAll('.freeship-message');
-    const existingProgressMsgs = shippingSection.querySelectorAll('.freeship-progress');
-    
-    // Also remove PHP-rendered messages (they have text-blue-600 or text-green-600 with specific text)
-    const phpFreeshipMessages = shippingSection.querySelectorAll('.text-xs.text-blue-600, .text-xs.text-green-600');
-    phpFreeshipMessages.forEach(msg => {
-        const text = msg.textContent || '';
-        if (text.includes('free shipping') || text.includes('more for free shipping')) {
-            msg.remove();
-        }
-    });
-    
-    existingFreeshipMsgs.forEach(msg => msg.remove());
-    existingProgressMsgs.forEach(msg => msg.remove());
-    
-    // Find the shipping cost display element to insert after
-    const shippingCostDisplay = shippingSection.querySelector('.shipping-cost-display')?.parentElement;
-    if (!shippingCostDisplay) return;
-    
-    if (qualifiesForFreeShipping) {
-        // Add success message
-        const successMsg = document.createElement('div');
-        successMsg.className = 'freeship-message text-xs text-green-600 bg-green-50 p-2 rounded-lg border border-green-200 mt-2';
-        successMsg.innerHTML = `🎉 You qualify for free shipping on orders $${FREE_SHIPPING_THRESHOLD_USD}+!`;
-        shippingCostDisplay.insertAdjacentElement('afterend', successMsg);
-    } else {
-        // Add progress message - calculate remaining amount in current currency
-        const baseSubtotal = currency !== 'USD' ? subtotal / currencyRate : subtotal;
-        const remainingBaseAmount = FREE_SHIPPING_THRESHOLD_USD - baseSubtotal;
-        const remainingAmount = currency !== 'USD' ? remainingBaseAmount * currencyRate : remainingBaseAmount;
-        const progressMsg = document.createElement('div');
-        progressMsg.className = 'freeship-progress text-xs text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-200 mt-2';
-        progressMsg.textContent = `Add ${formatPrice(Math.max(0, remainingAmount), currency)} more for free shipping!`;
-        shippingCostDisplay.insertAdjacentElement('afterend', progressMsg);
-    }
-}
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📅 DOM Content Loaded at:', new Date().toISOString());
@@ -1774,18 +1515,6 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('🔒 Current protocol:', window.location.protocol);
     console.log('🔒 Current origin:', window.location.origin);
     console.log('🔒 Full URL:', window.location.href);
-    
-    // Log shipping constants from server
-    console.log('🚚 CHECKOUT PAGE LOAD - Shipping Constants from Server:', {
-        'CHECKOUT_BASE_SHIPPING': CHECKOUT_BASE_SHIPPING,
-        'CHECKOUT_CONVERTED_SHIPPING': CHECKOUT_CONVERTED_SHIPPING,
-        'CHECKOUT_BASE_SUBTOTAL': CHECKOUT_BASE_SUBTOTAL,
-        'CHECKOUT_CONVERTED_SUBTOTAL': CHECKOUT_CONVERTED_SUBTOTAL,
-        'CHECKOUT_CURRENCY': CHECKOUT_CURRENCY,
-        'CHECKOUT_CURRENCY_RATE': CHECKOUT_CURRENCY_RATE,
-        'CHECKOUT_CURRENCY_SYMBOL': CHECKOUT_CURRENCY_SYMBOL,
-        'source': 'JavaScript Constants (from PHP)'
-    });
     
     // Toast notification function - define early
     const showToast = (type, title, message) => {
@@ -2263,9 +1992,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Calculate total amount
             const subtotal = parseFloat('{{ $subtotal }}');
             const tax = parseFloat('{{ $taxAmount }}');
-            const shipping = parseFloat('{{ $shippingCost }}');
             const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-            const total = subtotal + tax + shipping + tip;
+            const total = subtotal + tax + tip;
             
             // Get order data from form
             const checkoutForm = document.getElementById('checkout-form');
@@ -2329,15 +2057,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log('✅ Form validation passed, creating PayPal order...');
                         
                         // Calculate total amount for PayPal
-                        // Subtotal and shipping are already in current currency
+                        // Subtotal is already in current currency
                         const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
                         const tax = parseFloat('{{ $taxAmount }}');
-                        const shipping = parseFloat(CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
                         const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
+                        
+                        // Get shipping cost from display element
+                        const shippingCostEl = document.getElementById('checkout-shipping-cost');
+                        const shippingCost = shippingCostEl ? parseFloat(shippingCostEl.textContent.replace(/[^0-9.-]/g, '')) || 0 : 0;
                         
                         // Convert tip from USD to current currency
                         const convertedTip = convertFromUSD(tip, currentCurrency);
-                        const total = subtotal + tax + shipping + convertedTip;
+                        const total = subtotal + tax + convertedTip + shippingCost;
                         
                         // Build description from product SKUs
                         const skuList = [];
@@ -2403,6 +2134,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
                             notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
                             tip_amount: parseFloat(document.getElementById('tip_amount')?.value || 0),
+                            shipping_cost: parseFloat(document.getElementById('shipping_cost')?.value || 0),
+                            shipping_zone_id: document.getElementById('shipping_zone_id')?.value || '',
                         };
                         
                         console.log('📋 Sending order data:', currentOrderData);
@@ -2847,15 +2580,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Calculate total amount
-            // Subtotal and shipping are already in current currency
+            // Subtotal is already in current currency
             const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
             const tax = parseFloat('{{ $taxAmount }}');
-            const shipping = parseFloat(CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
             const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
+            
+            // Get shipping cost from display element
+            const shippingCostEl = document.getElementById('checkout-shipping-cost');
+            const shippingCost = shippingCostEl ? parseFloat(shippingCostEl.textContent.replace(/[^0-9.-]/g, '')) || 0 : 0;
             
             // Convert tip from USD to current currency
             const convertedTip = convertFromUSD(tip, currentCurrency);
-            const total = subtotal + tax + shipping + convertedTip;
+            const total = subtotal + tax + convertedTip + shippingCost;
             
             // Create Payment Intent on server
             console.log('📝 Creating Payment Intent...');
@@ -2943,6 +2679,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
                 notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
                 tip_amount: parseFloat(document.getElementById('tip_amount')?.value || 0),
+                shipping_cost: parseFloat(document.getElementById('shipping_cost')?.value || 0),
+                shipping_zone_id: document.getElementById('shipping_zone_id')?.value || '',
                 payment_method: 'stripe'
             };
             
@@ -2992,9 +2730,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Validate minimum order amount for Stripe
         if (selectedPaymentMethod === 'stripe') {
             const subtotal = parseFloat('{{ $subtotal }}');
-            const shipping = parseFloat('{{ $shippingCost }}');
             const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-            const total = subtotal + shipping + tip;
+            const total = subtotal + tip;
             
             if (total < 0.5) {
                 showToast('error', 'Minimum Order Amount', 
@@ -3076,6 +2813,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 payment_method: 'lianlian_pay',
                 notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
                 tip_amount: parseFloat(document.getElementById('tip_amount')?.value || 0),
+                shipping_cost: parseFloat(document.getElementById('shipping_cost')?.value || 0),
+                shipping_zone_id: document.getElementById('shipping_zone_id')?.value || '',
             };
             
             // Validate order data
@@ -3185,204 +2924,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
     
-    // Calculate shipping when country changes
-    const countrySelect = document.getElementById('country');
-    if (countrySelect) {
-        countrySelect.addEventListener('change', async function() {
-            const country = this.value;
-            
-            if (!country) {
-                return;
-            }
-            
-            // Don't update currency here - wait for server response
-            // Currency should come from domain config, not country
-            
-            try {
-                // Ensure HTTPS for shipping calculation
-                const shippingUrl = new URL('{{ route('checkout.calculate-shipping') }}', window.location.origin);
-                console.log('🚚 Shipping calculation URL:', shippingUrl.toString());
-                
-                // Prepare request body with domain to prioritize default rate
-                const requestBody = { country: country };
-                if (CHECKOUT_CURRENT_DOMAIN) {
-                    requestBody.domain = CHECKOUT_CURRENT_DOMAIN;
-                }
-                
-                const response = await fetch(shippingUrl.toString(), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify(requestBody),
-                    credentials: 'same-origin',
-                    mode: 'same-origin'
-                });
-                
-                const data = await response.json();
-                
-                console.log('🚚 Country Change - API Response:', {
-                    'country': country,
-                    'apiResponse': data,
-                    'source': 'checkout.calculate-shipping API'
-                });
-                
-                if (data.success && data.shipping) {
-                    // Update currency and rate from server response
-                    if (data.currency && data.currency_rate) {
-                        window.currentCurrency = data.currency;
-                        window.currentCurrencyRate = parseFloat(data.currency_rate);
-                        currentCurrency = window.currentCurrency;
-                        currentCurrencyRate = window.currentCurrencyRate;
-                        
-                        console.log('🚚 Country Change - Currency Updated:', {
-                            'newCurrency': currentCurrency,
-                            'newCurrencyRate': currentCurrencyRate,
-                            'source': 'API response'
-                        });
-                        
-                        // Update currency hidden input
-                        const currencyInput = document.getElementById('currency');
-                        if (currencyInput) {
-                            currencyInput.value = currentCurrency;
-                        }
-                        
-                        // Update currency rates object
-                        currencyRates[currentCurrency] = currentCurrencyRate;
-                        
-                        // Update tip buttons and exchange rate display
-                        updateTipButtons();
-                        updateExchangeRateDisplay();
-                    }
-                    
-                    // Get current cart data to calculate baseSubtotal (same logic as cart/index.blade.php)
-                    const cartResponseForChange = await fetch('/api/cart/get', {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                        },
-                        credentials: 'same-origin'
-                    });
-                    
-                    let baseSubtotal = 0;
-                    let subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
-                    let finalCurrency = currentCurrency;
-                    let finalCurrencyRate = currentCurrencyRate;
-                    
-                    if (cartResponseForChange.ok) {
-                        const cartData = await cartResponseForChange.json();
-                        if (cartData.success && cartData.cart_items && cartData.cart_items.length > 0) {
-                            finalCurrency = cartData.currency || currentCurrency || 'USD';
-                            finalCurrencyRate = parseFloat(cartData.currency_rate || currentCurrencyRate || 1.0);
-                            
-                            // Calculate baseSubtotal from cart items
-                            baseSubtotal = calculateBaseSubtotalFromCartItems(cartData.cart_items, finalCurrency, finalCurrencyRate);
-                            
-                            // Get subtotal from cart data if available
-                            if (cartData.subtotal !== undefined) {
-                                subtotal = parseFloat(cartData.subtotal);
-                            }
-                        }
-                    }
-                    
-                    // If baseSubtotal is still 0, fallback to converting subtotal
-                    if (baseSubtotal === 0) {
-                        baseSubtotal = finalCurrency !== 'USD' && finalCurrencyRate > 0 
-                            ? subtotal / finalCurrencyRate 
-                            : subtotal;
-                    }
-                    
-                    // Update shipping cost display
-                    const shippingCostElement = document.querySelector('.shipping-cost-display');
-                    const subtotalElement = document.querySelector('.subtotal-display');
-                    const totalElement = document.querySelector('.total-display');
-                    
-                    if (shippingCostElement) {
-                        // Use converted shipping from server if available, otherwise convert client-side
-                        const baseShipping = parseFloat(data.shipping.total_shipping);
-                        const convertedShipping = data.converted_shipping 
-                            ? parseFloat(data.converted_shipping)
-                            : convertFromUSD(baseShipping, finalCurrency);
-                        
-                        // Check freeship based on base USD amount (100 USD)
-                        // IMPORTANT: Compare baseSubtotal (in USD) with FREE_SHIPPING_THRESHOLD_USD (100 USD)
-                        const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
-                        const actualShipping = qualifiesForFreeShipping ? 0 : convertedShipping;
-                        
-                        console.log('🚚 Country Change - Shipping Calculation:', {
-                            'baseShipping': baseShipping,
-                            'convertedShipping': convertedShipping,
-                            'convertedShippingSource': data.converted_shipping ? 'API response (data.converted_shipping)' : 'Client-side conversion (convertFromUSD)',
-                            'subtotal': subtotal,
-                            'baseSubtotal': baseSubtotal,
-                            'qualifiesForFreeShipping': qualifiesForFreeShipping,
-                            'actualShipping': actualShipping,
-                            'source': 'Country change event'
-                        });
-                        
-                        // Update shipping display
-                        updateShippingDisplay(actualShipping, convertedShipping, qualifiesForFreeShipping);
-                        
-                        // Recalculate total
-                        const tax = parseFloat('{{ $taxAmount }}');
-                        const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-                        
-                        // Convert tip from USD to current currency
-                        const convertedTip = convertFromUSD(tip, finalCurrency);
-                        const total = subtotal + tax + actualShipping + convertedTip;
-                        
-                        // Update tip line if tip exists
-                        const tipLine = document.getElementById('tip-line');
-                        const tipAmountDisplay = document.querySelector('.tip-amount-display');
-                        if (tip > 0 && tipLine && tipAmountDisplay) {
-                            tipLine.style.display = 'flex';
-                            tipAmountDisplay.textContent = formatPrice(convertedTip, finalCurrency);
-                        }
-                        
-                        if (totalElement) {
-                            totalElement.textContent = formatPrice(total, finalCurrency);
-                        }
-                    }
-                } else {
-                    // showToast('error', 'Shipping Error', data.message || 'Could not calculate shipping');
-                }
-            } catch (error) {
-                console.error('Shipping calculation error:', error);
-                // showToast('error', 'Error', 'Could not calculate shipping cost');
-            }
-        });
-    }
-    
-    // Auto-detect country
-    fetch('https://ipapi.co/json/')
-        .then(response => response.json())
-        .then(data => {
-            if (data.country_code) {
-                const countrySelect = document.getElementById('country');
-                if (!countrySelect) {
-                    console.log('Country select element not found');
-                    return;
-                }
-                
-                // Only allow US and GB, fallback to US if detected country is not available
-                let selectedCountry = data.country_code;
-                if (data.country_code !== 'US' && data.country_code !== 'GB') {
-                    selectedCountry = 'US'; // Default to US if country not available
-                }
-                
-                const option = countrySelect.querySelector(`option[value="${selectedCountry}"]`);
-                if (option) {
-                    option.selected = true;
-                    // Trigger shipping calculation for detected country
-                    countrySelect.dispatchEvent(new Event('change'));
-                }
-            }
-        })
-        .catch(error => console.log('Could not detect country'));
     
     // Add event listeners for form field changes to update PayPal button state
     const formFieldsToWatch = [
@@ -3406,229 +2947,6 @@ document.addEventListener('DOMContentLoaded', function() {
         updateTipButtons();
         updateExchangeRateDisplay();
         
-        // Initialize freeship check on page load (same logic as cart/index.blade.php)
-        async function initializeFreeshipCheck() {
-            try {
-                // Get current cart data to calculate baseSubtotal
-                const cartResponse = await fetch('/api/cart/get', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                    },
-                    credentials: 'same-origin'
-                });
-                
-                let baseSubtotal = 0;
-                let currentSubtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
-                let currency = window.currentCurrency || CHECKOUT_CURRENCY || 'USD';
-                let currencyRate = window.currentCurrencyRate || CHECKOUT_CURRENCY_RATE || 1.0;
-                
-                if (cartResponse.ok) {
-                    const cartData = await cartResponse.json();
-                    if (cartData.success && cartData.cart_items && cartData.cart_items.length > 0) {
-                        currency = cartData.currency || CHECKOUT_CURRENCY || 'USD';
-                        currencyRate = parseFloat(cartData.currency_rate || CHECKOUT_CURRENCY_RATE || 1.0);
-                        
-                        // Calculate baseSubtotal from cart items (same logic as cart/index.blade.php)
-                        baseSubtotal = calculateBaseSubtotalFromCartItems(cartData.cart_items, currency, currencyRate);
-                        
-                        // Get subtotal from cart data if available
-                        if (cartData.subtotal !== undefined) {
-                            currentSubtotal = parseFloat(cartData.subtotal);
-                        }
-                    }
-                }
-                
-                // If baseSubtotal is still 0, fallback to converting subtotal
-                if (baseSubtotal === 0) {
-                    baseSubtotal = currency !== 'USD' && currencyRate > 0 
-                        ? currentSubtotal / currencyRate 
-                        : currentSubtotal;
-                }
-                
-                // Determine country from currency/domain (priority: currency -> domain -> default)
-                let determinedCountry = determineCountryFromCurrencyAndDomain(currency, CHECKOUT_CURRENT_DOMAIN);
-                
-                // Handle UK -> GB mapping for backend
-                let backendCountry = determinedCountry === 'UK' ? 'GB' : determinedCountry;
-                backendCountry = backendCountry ? backendCountry.toUpperCase().substring(0, 2) : 'US';
-                
-                // Final validation: must be exactly 2 characters
-                if (!backendCountry || backendCountry.length !== 2) {
-                    backendCountry = 'US'; // Default fallback
-                }
-                
-                console.log('Initial shipping country determined:', {
-                    displayCountry: determinedCountry,
-                    backendCountry: backendCountry,
-                    currency: currency,
-                    domain: CHECKOUT_CURRENT_DOMAIN
-                });
-                
-                // Check if shipping cost is already displayed (from server-side rendering)
-                const currentShippingElement = document.querySelector('.shipping-cost-display');
-                const currentShippingText = currentShippingElement ? currentShippingElement.textContent : '';
-                const hasShippingDisplayed = currentShippingText && !currentShippingText.includes('Calculating');
-                
-                // Always get default shipping rate for domain if domain exists
-                // This ensures domain Mexico always shows Mexico shipping, not US shipping
-                if (CHECKOUT_CURRENT_DOMAIN) {
-                    // Get default shipping rate for domain (priority: default rate)
-                    try {
-                        // Get cart items for default shipping calculation
-                        const cartResponse = await fetch('/api/cart/get', {
-                            method: 'GET',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Accept': 'application/json',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                            },
-                            credentials: 'same-origin'
-                        });
-                        
-                        let cartItemsForCalc = [];
-                        if (cartResponse.ok) {
-                            const cartData = await cartResponse.json();
-                            if (cartData.success && cartData.cart_items) {
-                                cartItemsForCalc = cartData.cart_items;
-                            }
-                        }
-                        
-                        // Get default shipping rate for domain
-                        const defaultShipping = await getDefaultShippingRateForDomain(
-                            CHECKOUT_CURRENT_DOMAIN, 
-                            cartItemsForCalc, 
-                            currency, 
-                            currencyRate, 
-                            baseSubtotal
-                        );
-                        
-                        if (defaultShipping && defaultShipping.baseShipping >= 0) {
-                            // Always update display with default shipping for domain
-                            updateShippingDisplay(
-                                defaultShipping.finalShippingCost, 
-                                defaultShipping.shippingCost, 
-                                defaultShipping.qualifiesForFreeShipping
-                            );
-                            
-                            // Update total
-                            const totalElement = document.querySelector('.total-display');
-                            if (totalElement) {
-                                const tax = parseFloat('{{ $taxAmount }}');
-                                const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-                                const convertedTip = convertFromUSD(tip, currency);
-                                const newTotal = currentSubtotal + defaultShipping.finalShippingCost + convertedTip;
-                                totalElement.textContent = formatPrice(newTotal, currency);
-                            }
-                            
-                            // Update delivery country display
-                            const deliveryCountryText = document.getElementById('delivery-country-text');
-                            const deliveryZoneText = document.getElementById('delivery-zone-text');
-                            if (deliveryCountryText) {
-                                let zoneText = defaultShipping.zoneName || determinedCountry;
-                                if (defaultShipping.isDefault) {
-                                    zoneText += ' (Default)';
-                                }
-                                deliveryCountryText.textContent = `Deliver to ${zoneText}`;
-                            }
-                            if (deliveryZoneText) {
-                                let zoneText = defaultShipping.zoneName || determinedCountry;
-                                if (defaultShipping.isDefault) {
-                                    zoneText += ' (Default)';
-                                }
-                                deliveryZoneText.textContent = zoneText;
-                            }
-                            
-                            console.log('✅ Default shipping applied on checkout page load:', defaultShipping);
-                        } else {
-                            // Fallback to regular calculation if no default rate found
-                            await calculateRegularShipping(backendCountry, determinedCountry, currency, currencyRate, baseSubtotal, currentSubtotal);
-                        }
-                    } catch (shippingError) {
-                        console.error('Error getting default shipping rate:', shippingError);
-                        // Fallback to regular calculation
-                        await calculateRegularShipping(backendCountry, determinedCountry, currency, currencyRate, baseSubtotal, currentSubtotal);
-                    }
-                } else if (backendCountry) {
-                    // No domain, use regular calculation
-                    await calculateRegularShipping(backendCountry, determinedCountry, currency, currencyRate, baseSubtotal, currentSubtotal);
-                }
-                
-                // Check freeship based on base USD amount (100 USD)
-                const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
-                
-                // Only check currentShipping if hasShippingDisplayed is true
-                if (hasShippingDisplayed) {
-                    const currentShipping = currentShippingText.includes('FREE') ? 0 : parseFloat(currentShippingText.replace(new RegExp(CHECKOUT_CURRENCY_SYMBOL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')) || 0;
-                    
-                    if (qualifiesForFreeShipping) {
-                        updateShippingDisplay(0, currentShipping, true);
-                        // Update total if needed
-                        const totalElement = document.querySelector('.total-display');
-                        if (totalElement) {
-                            const newTotal = currentSubtotal;
-                            totalElement.textContent = formatPrice(newTotal, currency);
-                        }
-                    }
-                }
-                
-                console.log('Checkout freeship initialization:', {
-                    subtotal: currentSubtotal,
-                    baseSubtotal: baseSubtotal,
-                    currency: currency,
-                    currencyRate: currencyRate,
-                    displayCountry: determinedCountry,
-                    backendCountry: backendCountry,
-                    qualifiesForFreeShipping: qualifiesForFreeShipping,
-                    currentShipping: currentShipping
-                });
-            } catch (error) {
-                console.error('Error initializing freeship check:', error);
-                // Fallback to simple calculation
-                const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
-                const currency = window.currentCurrency || CHECKOUT_CURRENCY || 'USD';
-                const currencyRate = window.currentCurrencyRate || CHECKOUT_CURRENCY_RATE || 1.0;
-                const baseSubtotal = currency !== 'USD' ? subtotal / currencyRate : subtotal;
-                const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
-                if (qualifiesForFreeShipping) {
-                    const currentShippingElement = document.querySelector('.shipping-cost-display');
-                    const currentShippingText = currentShippingElement ? currentShippingElement.textContent : '';
-                    const currentShipping = currentShippingText.includes('FREE') ? 0 : parseFloat(currentShippingText.replace(new RegExp(CHECKOUT_CURRENCY_SYMBOL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')) || 0;
-                    updateShippingDisplay(0, currentShipping, true);
-                }
-            }
-        }
-        
-        // Run initialization
-        initializeFreeshipCheck();
-        
-        // Log shipping calculation on page load
-        console.log('🚚 CHECKOUT PAGE LOAD - Shipping Calculation (JavaScript):', {
-            '=== VALUES FROM PHP ===': '---',
-            'CHECKOUT_BASE_SHIPPING (USD)': CHECKOUT_BASE_SHIPPING,
-            'CHECKOUT_CONVERTED_SHIPPING (converted)': CHECKOUT_CONVERTED_SHIPPING,
-            'CHECKOUT_BASE_SUBTOTAL': CHECKOUT_BASE_SUBTOTAL,
-            'CHECKOUT_CONVERTED_SUBTOTAL': CHECKOUT_CONVERTED_SUBTOTAL,
-            'CHECKOUT_CURRENCY': CHECKOUT_CURRENCY,
-            'CHECKOUT_CURRENCY_RATE': CHECKOUT_CURRENCY_RATE,
-            'CHECKOUT_CURRENT_DOMAIN': CHECKOUT_CURRENT_DOMAIN,
-            'CHECKOUT_DEFAULT_COUNTRY': CHECKOUT_DEFAULT_COUNTRY,
-            '=== CALCULATION ===': '---',
-            'subtotal (used)': subtotal,
-            'baseShipping (used)': baseShipping,
-            'currentCurrency': currentCurrency,
-            'currentCurrencyRate': currentCurrencyRate,
-            'baseSubtotal (USD)': baseSubtotal,
-            'qualifiesForFreeShipping': qualifiesForFreeShipping,
-            'actualShipping (final)': actualShipping,
-            '=== SOURCE TRACE ===': '---',
-            'shippingSource': CHECKOUT_CONVERTED_SHIPPING ? 'CHECKOUT_CONVERTED_SHIPPING (from PHP $convertedShipping)' : (CHECKOUT_BASE_SHIPPING ? 'CHECKOUT_BASE_SHIPPING (from PHP $shippingCost)' : 'PHP fallback {{ $shippingCost }}'),
-            'shippingValueUsed': baseShipping,
-            'note': 'JavaScript uses: CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || PHP fallback. If domain exists, will try to get default shipping rate.',
-            'source': 'JavaScript initialization'
-        });
     }, 500);
     
     // Initialize tip selection on page load
@@ -3793,40 +3111,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateTotal() {
-        // Subtotal and shipping are already in current currency, no need to convert
+        // Subtotal is already in current currency, no need to convert
         const subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
-        const baseShipping = parseFloat(CHECKOUT_CONVERTED_SHIPPING || CHECKOUT_BASE_SHIPPING || '{{ $shippingCost }}');
         const tip = selectedTipAmount;
-        
-        // Check freeship based on base USD amount (100 USD)
-        const baseSubtotal = currentCurrency !== 'USD' ? subtotal / currentCurrencyRate : subtotal;
-        const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
-        const actualShipping = qualifiesForFreeShipping ? 0 : baseShipping;
-        
-        // Log shipping source in updateTotal
-        console.log('🚚 updateTotal() - Shipping Calculation:', {
-            'subtotal': subtotal,
-            'baseShipping': baseShipping,
-            'CHECKOUT_CONVERTED_SHIPPING': CHECKOUT_CONVERTED_SHIPPING,
-            'CHECKOUT_BASE_SHIPPING': CHECKOUT_BASE_SHIPPING,
-            'shippingSource': CHECKOUT_CONVERTED_SHIPPING ? 'CHECKOUT_CONVERTED_SHIPPING' : (CHECKOUT_BASE_SHIPPING ? 'CHECKOUT_BASE_SHIPPING' : 'PHP fallback'),
-            'baseSubtotal': baseSubtotal,
-            'qualifiesForFreeShipping': qualifiesForFreeShipping,
-            'actualShipping': actualShipping,
-            'tip': tip,
-            'source': 'updateTotal() function'
-        });
         
         // Convert tip from USD to current currency
         const convertedTip = convertFromUSD(tip, currentCurrency);
-        const total = subtotal + actualShipping + convertedTip;
+        
+        // Get shipping cost
+        const shippingCostEl = document.getElementById('checkout-shipping-cost');
+        const shippingCost = shippingCostEl ? parseFloat(shippingCostEl.textContent.replace(/[^0-9.-]/g, '')) || 0 : 0;
+        
+        const total = subtotal + convertedTip + shippingCost;
         
         // Update tip line visibility
         const tipLine = document.getElementById('tip-line');
         const tipAmountDisplay = document.querySelector('.tip-amount-display');
-        const totalDisplay = document.querySelector('.total-display');
-        const subtotalDisplay = document.querySelector('.subtotal-display');
-        const shippingDisplay = document.querySelector('.shipping-cost-display');
+        const totalDisplay = document.getElementById('checkout-total') || document.querySelector('.total-display');
         
         if (tip > 0) {
             tipLine.style.display = 'flex';
@@ -3835,20 +3136,10 @@ document.addEventListener('DOMContentLoaded', function() {
             tipLine.style.display = 'none';
         }
         
-        // Update shipping display with freeship logic
-        if (shippingDisplay) {
-            if (qualifiesForFreeShipping) {
-                shippingDisplay.innerHTML = '<span class="text-green-600">FREE</span>';
-            } else {
-                shippingDisplay.textContent = formatPrice(baseShipping, currentCurrency);
-            }
-        }
-        
         // Update total
-        totalDisplay.textContent = formatPrice(total, currentCurrency);
-        
-        // Update freeship messages
-        updateCheckoutFreeshipMessages(subtotal, actualShipping, qualifiesForFreeShipping, currentCurrency, currentCurrencyRate);
+        if (totalDisplay) {
+            totalDisplay.textContent = formatPrice(total, currentCurrency);
+        }
         
         // Store tip amount for form submission (in USD)
         const tipInput = document.getElementById('tip_amount');
@@ -3856,17 +3147,400 @@ document.addEventListener('DOMContentLoaded', function() {
             tipInput.value = tip;
         }
     }
+    
+    // Checkout shipping calculation functions - define in DOMContentLoaded
+    // Get products with categories - will be initialized after checkoutItemsData is available
+    let checkoutProducts = @json($products);
+    
+    /**
+     * Get base subtotal for shipping calculation
+     */
+    function getCheckoutBaseSubtotal() {
+        // Use CHECKOUT_BASE_SUBTOTAL if available
+        if (typeof CHECKOUT_BASE_SUBTOTAL !== 'undefined' && CHECKOUT_BASE_SUBTOTAL > 0) {
+            return CHECKOUT_BASE_SUBTOTAL;
+        }
+        
+        // Fallback: calculate from products
+        let baseSubtotal = 0;
+        checkoutProducts.forEach(item => {
+            const lineTotal = parseFloat(item.total || (item.cart_item && item.cart_item.price ? item.cart_item.price * (item.quantity || 1) : 0) || 0);
+            let baseLineTotal = CHECKOUT_CURRENCY !== 'USD' && CHECKOUT_CURRENCY_RATE > 0 
+                ? lineTotal / CHECKOUT_CURRENCY_RATE 
+                : lineTotal;
+            baseSubtotal += baseLineTotal;
+        });
+        
+        return baseSubtotal;
+    }
+    
+    /**
+     * Get cart items data for shipping calculation
+     */
+    function getCheckoutCartItems() {
+        return checkoutProducts.map(item => {
+            const product = item.product || {};
+            const cartItem = item.cart_item || {};
+            
+            // Get categories from product - handle different data structures
+            let categories = [];
+            if (product.categories) {
+                if (Array.isArray(product.categories)) {
+                    categories = product.categories;
+                } else if (typeof product.categories === 'object') {
+                    // If it's an object, try to get values
+                    categories = Object.values(product.categories);
+                }
+            }
+            
+            return {
+                id: cartItem.id || item.id,
+                quantity: cartItem.quantity || item.quantity || 1,
+                price: parseFloat(cartItem.price || item.total || 0),
+                product: {
+                    id: product.id,
+                    categories: categories,
+                },
+                customizations: cartItem.customizations || {}
+            };
+        });
+    }
+    
+    /**
+     * Calculate shipping cost for checkout items
+     */
+    function calculateCheckoutShippingCost(zoneId = null) {
+        const cartItems = getCheckoutCartItems();
+        const baseSubtotal = getCheckoutBaseSubtotal();
+        
+        if (!cartItems || cartItems.length === 0) {
+            return {
+                cost: 0,
+                costConverted: 0,
+                rate: null,
+                name: null,
+                zoneId: null,
+                zoneName: null
+            };
+        }
+        
+        // Filter rates by zone if zoneId is provided
+        // When zoneId is null (no country selected), use all rates to allow default rate fallback
+        let availableRates = SHIPPING_RATES;
+        if (zoneId !== null) {
+            availableRates = SHIPPING_RATES.filter(r => r.zone_id === zoneId);
+            // If a specific zone is selected but no rates exist for it, shipping is not available
+            if (availableRates.length === 0) {
+                return {
+                    cost: 0,
+                    costConverted: 0,
+                    rate: null,
+                    name: null,
+                    zoneId: zoneId,
+                    zoneName: SHIPPING_ZONES.find(z => z.id === zoneId)?.name || null,
+                    available: false
+                };
+            }
+        }
+        
+        // Group items by category
+        const itemsByCategory = {};
+        let totalItems = 0;
+        
+        cartItems.forEach(item => {
+            const product = item.product || {};
+            const categories = product.categories || [];
+            
+            // Get first category ID (primary category)
+            let categoryId = null;
+            if (categories && categories.length > 0) {
+                const firstCategory = categories[0];
+                categoryId = firstCategory.id || (typeof firstCategory === 'object' ? firstCategory.category_id : null);
+            }
+            
+            const key = categoryId || 'general';
+            
+            if (!itemsByCategory[key]) {
+                itemsByCategory[key] = {
+                    categoryId: categoryId,
+                    items: [],
+                    quantity: 0
+                };
+            }
+            
+            itemsByCategory[key].items.push(item);
+            itemsByCategory[key].quantity += item.quantity;
+            totalItems += item.quantity;
+        });
+        
+        // Calculate shipping cost for each category group
+        let totalShippingCost = 0;
+        let shippingRateUsed = null;
+        let shippingName = null;
+        let zoneName = null;
+        let allGroupsHaveRate = true;
+        
+        Object.values(itemsByCategory).forEach(group => {
+            const categoryId = group.categoryId;
+            const quantity = group.quantity;
+            
+            // Find shipping rate for this category
+            let rate = null;
+            
+            // When zoneId is null (no country selected), prioritize default shipping rate
+            if (zoneId === null && DEFAULT_SHIPPING_RATE) {
+                const defaultRate = DEFAULT_SHIPPING_RATE;
+                const meetsConditions = 
+                    (!defaultRate.min_items || quantity >= defaultRate.min_items) &&
+                    (!defaultRate.max_items || quantity <= defaultRate.max_items) &&
+                    (!defaultRate.min_order_value || baseSubtotal >= defaultRate.min_order_value) &&
+                    (!defaultRate.max_order_value || baseSubtotal <= defaultRate.max_order_value);
+                
+                if (meetsConditions) {
+                    rate = defaultRate;
+                }
+            }
+            
+            // If no default rate used, try to find rate specific to this category
+            if (!rate && categoryId) {
+                rate = availableRates.find(r => 
+                    r.category_id === categoryId && 
+                    (!r.min_items || quantity >= r.min_items) &&
+                    (!r.max_items || quantity <= r.max_items) &&
+                    (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
+                    (!r.max_order_value || baseSubtotal <= r.max_order_value)
+                );
+            }
+            
+            // If no category-specific rate, try general rate (category_id is null)
+            if (!rate) {
+                rate = availableRates.find(r => 
+                    r.category_id === null &&
+                    (!r.min_items || quantity >= r.min_items) &&
+                    (!r.max_items || quantity <= r.max_items) &&
+                    (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
+                    (!r.max_order_value || baseSubtotal <= r.max_order_value)
+                );
+            }
+            
+            // If still no rate found and zoneId is set, try default shipping rate as fallback
+            if (!rate && DEFAULT_SHIPPING_RATE && zoneId !== null) {
+                const defaultRate = DEFAULT_SHIPPING_RATE;
+                // Only use default rate if it matches the zone
+                const meetsConditions = 
+                    defaultRate.zone_id === zoneId &&
+                    (!defaultRate.min_items || quantity >= defaultRate.min_items) &&
+                    (!defaultRate.max_items || quantity <= defaultRate.max_items) &&
+                    (!defaultRate.min_order_value || baseSubtotal >= defaultRate.min_order_value) &&
+                    (!defaultRate.max_order_value || baseSubtotal <= defaultRate.max_order_value);
+                
+                if (meetsConditions) {
+                    rate = defaultRate;
+                }
+            }
+            
+            if (rate) {
+                const groupCost = rate.first_item_cost + (quantity - 1) * rate.additional_item_cost;
+                totalShippingCost += groupCost;
+                
+                if (!shippingRateUsed || (categoryId && rate.category_id === categoryId)) {
+                    shippingRateUsed = rate;
+                    shippingName = rate.name;
+                    zoneName = rate.zone_name;
+                }
+            } else {
+                allGroupsHaveRate = false;
+            }
+        });
+        
+        // If no rates found for any group, shipping is not available
+        if (!allGroupsHaveRate || totalShippingCost === 0 && !shippingRateUsed) {
+            return {
+                cost: 0,
+                costConverted: 0,
+                rate: null,
+                name: null,
+                zoneId: zoneId,
+                zoneName: zoneName,
+                available: false
+            };
+        }
+        
+        // Convert to current currency if needed
+        const costConverted = CHECKOUT_CURRENCY !== 'USD' && CHECKOUT_CURRENCY_RATE > 0
+            ? totalShippingCost * CHECKOUT_CURRENCY_RATE
+            : totalShippingCost;
+        
+        return {
+            cost: totalShippingCost,
+            costConverted: costConverted,
+            rate: shippingRateUsed,
+            name: shippingName || 'Standard Shipping',
+            zoneId: zoneId,
+            zoneName: zoneName,
+            available: true
+        };
+    }
+    
+    /**
+     * Update shipping cost display
+     */
+    function updateCheckoutShippingDisplay(zoneId = null) {
+        const shippingInfo = calculateCheckoutShippingCost(zoneId);
+        const shippingCost = shippingInfo.costConverted;
+        
+        const shippingCostEl = document.getElementById('checkout-shipping-cost');
+        const shippingLabelEl = document.getElementById('checkout-shipping-label');
+        const shippingCostInput = document.getElementById('shipping_cost');
+        const shippingZoneIdInput = document.getElementById('shipping_zone_id');
+        
+        // Check if shipping is available
+        if (shippingInfo.available === false) {
+            if (shippingCostEl) {
+                shippingCostEl.textContent = 'N/A';
+                shippingCostEl.classList.add('text-red-600');
+            }
+            
+            if (shippingLabelEl) {
+                shippingLabelEl.textContent = 'Shipping not available for this area';
+                shippingLabelEl.classList.add('text-red-600');
+            }
+            
+            // Set shipping cost to 0
+            if (shippingCostInput) {
+                shippingCostInput.value = '0';
+            }
+        } else {
+            if (shippingCostEl) {
+                shippingCostEl.textContent = formatPrice(shippingCost, CHECKOUT_CURRENCY);
+                shippingCostEl.classList.remove('text-red-600');
+            }
+            
+            if (shippingLabelEl) {
+                shippingLabelEl.textContent = `Shipping${shippingInfo.zoneName ? ` (${shippingInfo.zoneName})` : shippingInfo.name ? ` (${shippingInfo.name})` : ''}`;
+                shippingLabelEl.classList.remove('text-red-600');
+            }
+            
+            // Store shipping cost and zone ID in hidden inputs
+            if (shippingCostInput) {
+                shippingCostInput.value = shippingInfo.cost; // Store in USD
+            }
+        }
+        
+        if (shippingZoneIdInput) {
+            shippingZoneIdInput.value = zoneId || '';
+        }
+        
+        // Save selected zone to localStorage
+        if (zoneId) {
+            localStorage.setItem('selectedShippingZoneId', zoneId);
+        }
+        
+        // Update total
+        updateTotal();
+    }
+    
+    /**
+     * Get zone ID from country code
+     */
+    function getZoneIdFromCountry(countryCode) {
+        if (!countryCode) return null;
+        return COUNTRY_TO_ZONE_MAP[countryCode.toUpperCase()] || null;
+    }
+    
+    /**
+     * Update shipping zone from country selection
+     */
+    function updateShippingFromCountry() {
+        const countrySelect = document.getElementById('country');
+        
+        if (!countrySelect) return;
+        
+        const countryCode = countrySelect.value;
+        let zoneId = null;
+        
+        // Get zone from country if country is selected
+        if (countryCode) {
+            zoneId = getZoneIdFromCountry(countryCode);
+        }
+        
+        // If no zone found from country, use default shipping rate zone
+        if (!zoneId && DEFAULT_SHIPPING_RATE && DEFAULT_SHIPPING_RATE.zone_id) {
+            zoneId = DEFAULT_SHIPPING_RATE.zone_id;
+        }
+        
+        // If still no zone, use default shipping zone ID
+        if (!zoneId) {
+            zoneId = DEFAULT_SHIPPING_ZONE_ID;
+        }
+        
+        // Calculate shipping with zone
+        updateCheckoutShippingDisplay(zoneId);
+    }
+    
+    // Initialize shipping cost on page load
+    function initializeCheckoutShipping() {
+        let selectedZoneId = null;
+        
+        // Check if country is selected and get zone from country
+        const countrySelect = document.getElementById('country');
+        if (countrySelect && countrySelect.value) {
+            selectedZoneId = getZoneIdFromCountry(countrySelect.value);
+        }
+        
+        // If no zone found from country, use default shipping rate zone
+        if (!selectedZoneId && DEFAULT_SHIPPING_RATE && DEFAULT_SHIPPING_RATE.zone_id) {
+            selectedZoneId = DEFAULT_SHIPPING_RATE.zone_id;
+        }
+        
+        // If still no zone, use default shipping zone ID
+        if (!selectedZoneId) {
+            selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
+        }
+        
+        // Calculate and display shipping cost
+        updateCheckoutShippingDisplay(selectedZoneId);
+    }
+    
+    // Add event listener for country change
+    const countrySelect = document.getElementById('country');
+    if (countrySelect) {
+        countrySelect.addEventListener('change', function() {
+            updateShippingFromCountry();
+        });
+    }
+    
+    // Update checkoutProducts with checkoutItemsData if available (has categories)
+    // This will be called after checkoutItemsData is defined (after DOMContentLoaded)
+    function updateCheckoutProducts() {
+        if (typeof checkoutItemsData !== 'undefined' && Array.isArray(checkoutItemsData) && checkoutItemsData.length > 0) {
+            checkoutProducts = checkoutItemsData;
+        }
+    }
+    
+    // Initialize shipping on page load
+    setTimeout(() => {
+        updateCheckoutProducts(); // Update products with categories if available
+        initializeCheckoutShipping();
+    }, 500);
 });
 </script>
 
 @php
     $checkoutItems = [];
     foreach ($products as $item) {
+        // Get categories from product
+        $categories = $item['product']->categories ?? collect();
+        if (!($categories instanceof Collection)) {
+            $categories = collect($categories);
+        }
+        
         $checkoutItems[] = [
             'id' => $item['cart_item']->id,
             'quantity' => $item['cart_item']->quantity,
             'price' => (float) $item['cart_item']->price,
             'product' => [
+                'id' => $item['product']->id,
                 'name' => $item['product']->name,
                 'sku' => $item['product']->sku ?? null,
                 'variants' => $item['product']->variants,
@@ -3874,6 +3548,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 'base_price' => (float) ($item['product']->base_price ?? 0),
                 'price' => (float) ($item['product']->price ?? 0),
                 'template' => $item['product']->template ? ['base_price' => (float) $item['product']->template->base_price] : null,
+                'categories' => $categories->map(function($cat) {
+                    return [
+                        'id' => $cat->id ?? null,
+                        'name' => $cat->name ?? null,
+                        'category_id' => $cat->id ?? null,
+                    ];
+                })->toArray(),
             ],
             'selected_variant' => $item['cart_item']->selected_variant,
             'customizations' => $item['cart_item']->customizations,
@@ -4035,208 +3716,6 @@ function saveCheckoutCartChanges(cartItemId) {
     }).then(r=>r.json()).then(data=>{ if(data.success){ window.location.reload(); } else { alert('Failed to update cart item'); }}).catch(err=>{ console.error(err); alert('An error occurred'); });
 }
 
-// Delivery Modal Functions
-function openDeliveryModal() {
-    const modal = document.getElementById('deliveryModal');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function closeDeliveryModal() {
-    const modal = document.getElementById('deliveryModal');
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-}
-
-function selectCountry(countryCode, countryName, shippingCost) {
-    // Update display
-    document.getElementById('delivery-country-text').textContent = `Deliver to ${countryName}`;
-    document.getElementById('delivery-zone-text').textContent = countryName;
-    
-    // Close modal
-    closeDeliveryModal();
-    
-    // Update shipping cost based on country (use API calculation)
-    updateCheckoutShippingForCountry(countryCode, countryName);
-}
-
-async function updateCheckoutShippingForCountry(countryCode, countryName) {
-    // Show loading state
-    const shippingCostElement = document.querySelector('.shipping-cost-display');
-    if (shippingCostElement) {
-        shippingCostElement.innerHTML = '<span class="text-gray-500">Calculating...</span>';
-    }
-    
-    try {
-        // Get current cart data to calculate baseSubtotal (same logic as cart/index.blade.php)
-        const cartResponse = await fetch('/api/cart/get', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-            },
-            credentials: 'same-origin'
-        });
-        
-        let baseSubtotal = 0;
-        let subtotal = parseFloat(CHECKOUT_CONVERTED_SUBTOTAL || CHECKOUT_BASE_SUBTOTAL || '{{ $subtotal }}');
-        let currency = window.currentCurrency || CHECKOUT_CURRENCY || 'USD';
-        let currencyRate = window.currentCurrencyRate || CHECKOUT_CURRENCY_RATE || 1.0;
-        
-        if (cartResponse.ok) {
-            const cartData = await cartResponse.json();
-            if (cartData.success && cartData.cart_items && cartData.cart_items.length > 0) {
-                currency = cartData.currency || CHECKOUT_CURRENCY || 'USD';
-                currencyRate = parseFloat(cartData.currency_rate || CHECKOUT_CURRENCY_RATE || 1.0);
-                
-                // Calculate baseSubtotal from cart items (same logic as cart/index.blade.php)
-                baseSubtotal = calculateBaseSubtotalFromCartItems(cartData.cart_items, currency, currencyRate);
-                
-                // Get subtotal from cart data if available
-                if (cartData.subtotal !== undefined) {
-                    subtotal = parseFloat(cartData.subtotal);
-                }
-            }
-        }
-        
-        // If baseSubtotal is still 0, fallback to converting subtotal
-        if (baseSubtotal === 0) {
-            baseSubtotal = currency !== 'USD' && currencyRate > 0 
-                ? subtotal / currencyRate 
-                : subtotal;
-        }
-        
-        // Determine country to use for shipping calculation
-        // If countryCode is provided (user selected), use it
-        // Otherwise, determine from currency/domain (priority: currency -> domain -> default)
-        let shippingCountry = countryCode;
-        if (!shippingCountry || !shippingCountry.trim()) {
-            // No country selected, determine from currency/domain
-            shippingCountry = determineCountryFromCurrencyAndDomain(currency, CHECKOUT_CURRENT_DOMAIN);
-            console.log('No country selected, determined from currency/domain:', shippingCountry);
-        }
-        
-        // Handle UK -> GB mapping for backend (same as cart/index.blade.php)
-        let backendCountry = shippingCountry === 'UK' ? 'GB' : shippingCountry;
-        backendCountry = backendCountry ? backendCountry.toUpperCase().substring(0, 2) : 'US';
-        
-        // Final validation: must be exactly 2 characters
-        if (!backendCountry || backendCountry.length !== 2) {
-            backendCountry = 'US'; // Default fallback
-        }
-        
-        // Prepare request body - same logic as cart/index.blade.php
-        const requestBody = {};
-        if (backendCountry) {
-            requestBody.country = backendCountry;
-        }
-        // Add domain if available
-        if (CHECKOUT_CURRENT_DOMAIN) {
-            requestBody.domain = CHECKOUT_CURRENT_DOMAIN;
-        }
-        
-        console.log('Checkout shipping request body:', {
-            displayCountry: shippingCountry,
-            backendCountry: backendCountry,
-            domain: CHECKOUT_CURRENT_DOMAIN
-        });
-        
-        // Calculate actual shipping cost via API
-        const response = await fetch('/checkout/calculate-shipping', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.shipping) {
-            // Update currency from API response if available
-            if (data.currency && data.currency_rate) {
-                window.currentCurrency = data.currency;
-                window.currentCurrencyRate = parseFloat(data.currency_rate);
-                currency = window.currentCurrency;
-                currencyRate = window.currentCurrencyRate;
-            }
-            
-            // Get baseShipping in USD (same as cart/index.blade.php)
-            const baseShipping = parseFloat(data.shipping.total_shipping) || 0;
-            
-            // Convert shipping to current currency (same logic as cart/index.blade.php)
-            const shippingCost = data.converted_shipping !== undefined 
-                ? parseFloat(data.converted_shipping) 
-                : (currency !== 'USD' ? baseShipping * currencyRate : baseShipping);
-            
-            // Check freeship based on base USD amount (100 USD)
-            // IMPORTANT: Compare baseSubtotal (in USD) with FREE_SHIPPING_THRESHOLD_USD (100 USD)
-            const qualifiesForFreeShipping = baseSubtotal >= FREE_SHIPPING_THRESHOLD_USD;
-            
-            // Apply free shipping if qualified
-            const actualShipping = qualifiesForFreeShipping ? 0 : shippingCost;
-            
-            // Calculate total including tip if any
-            const tip = parseFloat(document.getElementById('tip_amount')?.value || 0);
-            const convertedTip = convertFromUSD(tip, currency);
-            const newTotal = subtotal + actualShipping + convertedTip;
-            
-            // Update shipping cost display
-            updateShippingDisplay(actualShipping, shippingCost, qualifiesForFreeShipping);
-            
-            // Update total
-            const totalElement = document.querySelector('.total-display');
-            if (totalElement) {
-                totalElement.textContent = formatPrice(newTotal, currency);
-            }
-            
-            // Update delivery zone display if available
-            const deliveryCountryText = document.getElementById('delivery-country-text');
-            const deliveryZoneText = document.getElementById('delivery-zone-text');
-            if (deliveryCountryText && data.shipping.zone_name) {
-                deliveryCountryText.textContent = `Deliver to ${data.shipping.zone_name}`;
-            }
-            if (deliveryZoneText && data.shipping.zone_name) {
-                deliveryZoneText.textContent = data.shipping.zone_name;
-            }
-            
-            console.log('Checkout shipping updated:', {
-                displayCountry: shippingCountry,
-                backendCountry: backendCountry,
-                baseShipping: baseShipping,
-                shippingCost: shippingCost,
-                actualShipping: actualShipping,
-                baseSubtotal: baseSubtotal,
-                subtotal: subtotal,
-                currency: currency,
-                currencyRate: currencyRate,
-                qualifiesForFreeShipping: qualifiesForFreeShipping
-            });
-        } else {
-            // Fallback: show error message
-            if (shippingCostElement) {
-                shippingCostElement.innerHTML = '<span class="text-red-500">Error calculating</span>';
-            }
-            
-            console.error('Checkout shipping calculation failed:', data.message);
-        }
-    } catch (error) {
-        console.error('Checkout shipping calculation error:', error);
-        
-        // Show error message
-        if (shippingCostElement) {
-            shippingCostElement.innerHTML = '<span class="text-red-500">Error calculating</span>';
-        }
-    }
-}
-
-// Close modal on backdrop click
-document.getElementById('deliveryModal').addEventListener('click', function(e) {
-    if (e.target === this) closeDeliveryModal();
-});
 </script>
 
 <!-- Modal for editing cart items -->
@@ -4244,117 +3723,5 @@ document.getElementById('deliveryModal').addEventListener('click', function(e) {
     <div id="checkoutEditCartModalContent" class="bg-white rounded-lg shadow-lg p-6 w-1/2"></div>
 </div>
 
-<!-- Delivery Country Modal -->
-<div id="deliveryModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full">
-        <div class="px-6 py-4 border-b flex justify-between items-center">
-            <h2 class="text-xl font-bold text-gray-900">Select Delivery Country</h2>
-            <button onclick="closeDeliveryModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </button>
-        </div>
-        <div class="p-6">
-            <div class="space-y-3">
-                @php
-                    // Sort zones to put US first
-                    $sortedZones = $shippingZones->sortBy(function($zone) {
-                        $firstCountry = $zone->countries[0] ?? 'US';
-                        return $firstCountry === 'US' ? 0 : 1;
-                    });
-                @endphp
-                @foreach($sortedZones as $zone)
-                    @php
-                        $firstCountry = $zone->countries[0] ?? 'US';
-                        $countryFlags = [
-                            'US' => '🇺🇸', 'GB' => '🇬🇧', 'CA' => '🇨🇦', 'AU' => '🇦🇺',
-                            'DE' => '🇩🇪', 'FR' => '🇫🇷', 'IT' => '🇮🇹', 'ES' => '🇪🇸',
-                            'JP' => '🇯🇵', 'KR' => '🇰🇷', 'CN' => '🇨🇳', 'IN' => '🇮🇳',
-                            'BR' => '🇧🇷', 'MX' => '🇲🇽', 'RU' => '🇷🇺', 'ZA' => '🇿🇦'
-                        ];
-                        $flag = $countryFlags[$firstCountry] ?? '🌍';
-                        
-                        // Calculate actual shipping cost for this zone based on cart items
-                        $calculator = new \App\Services\ShippingCalculator();
-                        // Convert prices back to USD for shipping calculation (shipping calculator expects USD)
-                        // Use cartItems directly (same as cart page) to ensure consistency
-                        $cartItemsForCalc = $cartItems->map(function ($item) use ($currentCurrency, $currentCurrencyRate) {
-                            $priceInUSD = $currentCurrency !== 'USD' ? $item->price / $currentCurrencyRate : $item->price;
-                            return [
-                                'product_id' => $item->product_id,
-                                'quantity' => $item->quantity,
-                                'price' => $priceInUSD,
-                            ];
-                        });
-                        
-                        // Determine domain for this zone to prioritize default rate
-                        // Map country to currency, then find domain with that currency
-                        $countryToCurrency = [
-                            'US' => 'USD', 'GB' => 'GBP', 'CA' => 'CAD', 
-                            'MX' => 'MXN', 'VN' => 'VND', 'DE' => 'EUR'
-                        ];
-                        $expectedCurrency = $countryToCurrency[$firstCountry] ?? null;
-                        $domainForZone = null;
-                        
-                        if ($expectedCurrency) {
-                            // Find domain that uses this currency (currency is a string field, not a relationship)
-                            $domainConfig = \App\Models\DomainCurrencyConfig::where('currency', $expectedCurrency)
-                                ->where('is_active', true)
-                                ->first();
-                            
-                            if ($domainConfig && $domainConfig->domain) {
-                                $domainForZone = $domainConfig->domain;
-                            }
-                        }
-                        
-                        // If no domain found for this zone, use current domain if zone matches current currency country
-                        if (!$domainForZone) {
-                            $currentDomainForCalc = \App\Services\CurrencyService::getCurrentDomain();
-                            $currencyToCountry = [
-                                'USD' => 'US', 'GBP' => 'GB', 'CAD' => 'CA', 
-                                'MXN' => 'MX', 'VND' => 'VN', 'EUR' => 'DE'
-                            ];
-                            $currentCurrencyCountry = $currencyToCountry[$currentCurrency] ?? 'US';
-                            
-                            if ($firstCountry === $currentCurrencyCountry && $currentDomainForCalc) {
-                                $domainForZone = $currentDomainForCalc;
-                            }
-                        }
-                        
-                        // Calculate shipping with domain to prioritize default rate
-                        $shippingResult = $calculator->calculateShipping($cartItemsForCalc, $firstCountry, $domainForZone);
-                        $shippingCostUSD = $shippingResult['success'] ? $shippingResult['total_shipping'] : 0;
-                        // Convert shipping cost from USD to current currency
-                        $shippingCost = $currentCurrency !== 'USD' 
-                            ? \App\Services\CurrencyService::convertFromUSDWithRate($shippingCostUSD, $currentCurrency, $currentCurrencyRate)
-                            : $shippingCostUSD;
-                        $rateName = $shippingResult['success'] && !empty($shippingResult['items']) ? $shippingResult['items'][0]['shipping_rate_name'] : 'Standard shipping';
-                        $isDefaultRate = $shippingResult['success'] && !empty($shippingResult['items']) && ($shippingResult['items'][0]['is_default'] ?? false);
-                        if ($isDefaultRate) {
-                            $rateName .= ' (Default)';
-                        }
-                    @endphp
-                    <div class="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors" 
-                         onclick="selectCountry('{{ $firstCountry }}', '{{ $zone->name }}', {{ $shippingCost }})">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-3">
-                                <span class="text-2xl">{{ $flag }}</span>
-                                <div>
-                                    <div class="font-medium text-gray-900">{{ $zone->name }}</div>
-                                    <div class="text-sm text-gray-500">{{ $firstCountry }}</div>
-                                </div>
-                            </div>
-                            <div class="text-right">
-                                <div class="text-sm font-medium text-gray-900">{{ format_price((float) $shippingCost) }}</div>
-                                <div class="text-xs text-gray-500">{{ $rateName }}</div>
-                            </div>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </div>
-</div>
 
 @endsection

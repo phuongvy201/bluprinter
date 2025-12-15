@@ -423,28 +423,6 @@ class CheckoutController extends Controller
                 return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
             }
 
-            // Get shipping details from session (calculated earlier via AJAX)
-            $shippingDetails = session()->get('shipping_details');
-
-            // If no shipping details, calculate now
-            if (!$shippingDetails || !isset($shippingDetails['success']) || !$shippingDetails['success']) {
-                // Prepare items for calculator
-                $items = $cartItems->map(function ($item) {
-                    return [
-                        'product_id' => $item->product_id,
-                        'quantity' => $item->quantity,
-                        'price' => $item->price, // Use the actual price from cart (includes variant pricing)
-                    ];
-                });
-
-                $calculator = new ShippingCalculator();
-                $shippingDetails = $calculator->calculateShipping($items, $request->country);
-
-                if (!$shippingDetails['success']) {
-                    return back()->withInput()->withErrors(['shipping' => $shippingDetails['message']]);
-                }
-            }
-
             // Get currency and rate for conversion
             $orderCurrency = $request->currency ?? CurrencyService::getCurrencyForDomain();
             if (!$orderCurrency || $orderCurrency === 'USD') {
@@ -470,7 +448,113 @@ class CheckoutController extends Controller
 
             // Calculate totals
             $subtotal = 0;
-            $originalShippingCostUSD = $shippingDetails['total_shipping']; // Shipping cost in USD
+            
+            // PRIORITY: Use shipping_cost and shipping_zone_id from request if provided
+            // This ensures we use the exact shipping cost calculated on the frontend based on selected country/zone
+            $originalShippingCostUSD = null;
+            $shippingZoneId = null;
+            $shippingDetails = null;
+            $useRequestShippingCost = false;
+            
+            if ($request->has('shipping_cost') && $request->shipping_cost !== null && $request->shipping_cost !== '' && $request->shipping_cost > 0) {
+                $originalShippingCostUSD = (float) $request->shipping_cost;
+                $shippingZoneId = $request->shipping_zone_id ?? null;
+                $useRequestShippingCost = true;
+                
+                Log::info('🚚 Using shipping cost from request', [
+                    'shipping_cost_usd' => $originalShippingCostUSD,
+                    'shipping_zone_id' => $shippingZoneId,
+                    'country' => $request->country
+                ]);
+                
+                // Still calculate shipping details for order items breakdown
+                // But use the zone_id from request if provided
+                $items = $cartItems->map(function ($item) {
+                    return [
+                        'product_id' => $item->product_id,
+                        'quantity' => $item->quantity,
+                        'price' => $item->price,
+                    ];
+                });
+
+                $calculator = new ShippingCalculator();
+                
+                // If we have zone_id from request, we need to find country from zone or use provided country
+                // For now, use the country from request and let calculator find the zone
+                // But we'll override the total_shipping with the value from request
+                $shippingDetails = $calculator->calculateShipping($items, $request->country);
+                
+                // Override total_shipping with the value from request
+                if ($shippingDetails['success']) {
+                    $shippingDetails['total_shipping'] = $originalShippingCostUSD;
+                    // Override zone_id if provided in request
+                    if ($shippingZoneId) {
+                        $shippingDetails['zone_id'] = $shippingZoneId;
+                    }
+                } else {
+                    // If calculation failed but we have shipping_cost from request,
+                    // create a basic shipping details structure
+                    // This should rarely happen, but ensures we can proceed
+                    $shippingDetails = [
+                        'success' => true,
+                        'zone_id' => $shippingZoneId,
+                        'zone_name' => null,
+                        'country' => $request->country,
+                        'total_shipping' => $originalShippingCostUSD,
+                        'items' => [],
+                        'is_default' => false
+                    ];
+                    
+                    // Distribute shipping cost evenly across items
+                    $itemsCount = $cartItems->sum('quantity');
+                    $costPerItem = $itemsCount > 0 ? ($originalShippingCostUSD / $itemsCount) : 0;
+                    
+                    foreach ($cartItems as $cartItem) {
+                        $shippingDetails['items'][] = [
+                            'product_id' => $cartItem->product_id,
+                            'product_name' => $cartItem->product->name ?? 'Unknown',
+                            'quantity' => $cartItem->quantity,
+                            'shipping_cost' => $costPerItem * $cartItem->quantity,
+                            'total_item_shipping' => $costPerItem * $cartItem->quantity,
+                            'is_first_item' => false,
+                            'shipping_rate_id' => null,
+                            'shipping_rate_name' => 'Calculated',
+                            'is_default' => false
+                        ];
+                    }
+                }
+            } else {
+                // Fallback: Get shipping details from session (calculated earlier via AJAX)
+                $shippingDetails = session()->get('shipping_details');
+
+                // If no shipping details, calculate now
+                if (!$shippingDetails || !isset($shippingDetails['success']) || !$shippingDetails['success']) {
+                    // Prepare items for calculator
+                    $items = $cartItems->map(function ($item) {
+                        return [
+                            'product_id' => $item->product_id,
+                            'quantity' => $item->quantity,
+                            'price' => $item->price, // Use the actual price from cart (includes variant pricing)
+                        ];
+                    });
+
+                    $calculator = new ShippingCalculator();
+                    $shippingDetails = $calculator->calculateShipping($items, $request->country);
+
+                    if (!$shippingDetails['success']) {
+                        return back()->withInput()->withErrors(['shipping' => $shippingDetails['message']]);
+                    }
+                }
+                
+                $originalShippingCostUSD = $shippingDetails['total_shipping']; // Shipping cost in USD
+                $shippingZoneId = $shippingDetails['zone_id'] ?? null;
+                
+                Log::info('🚚 Calculated shipping cost from session/calculator', [
+                    'shipping_cost_usd' => $originalShippingCostUSD,
+                    'shipping_zone_id' => $shippingZoneId,
+                    'country' => $request->country
+                ]);
+            }
             $products = [];
 
             foreach ($cartItems as $item) {
@@ -590,13 +674,22 @@ class CheckoutController extends Controller
                 ]
             );
 
+            // Calculate adjustment ratio if using shipping cost from request
+            $calculatedTotalShipping = collect($shippingDetails['items'] ?? [])->sum('shipping_cost');
+            $adjustmentRatio = ($calculatedTotalShipping > 0 && $useRequestShippingCost) 
+                ? ($originalShippingCostUSD / $calculatedTotalShipping) 
+                : 1.0;
+
             // Create order items with shipping details
             foreach ($products as $item) {
                 // Find shipping details for this product
-                $itemShipping = collect($shippingDetails['items'])->firstWhere('product_id', $item['product']->id);
+                $itemShipping = collect($shippingDetails['items'] ?? [])->firstWhere('product_id', $item['product']->id);
 
                 // Get item shipping cost in USD
-                $itemShippingCostUSD = $itemShipping['shipping_cost'] ?? 0;
+                // Apply adjustment ratio if using shipping cost from request
+                $itemShippingCostUSD = ($itemShipping && isset($itemShipping['shipping_cost'])) 
+                    ? ($itemShipping['shipping_cost'] * $adjustmentRatio)
+                    : 0;
 
                 // Convert item shipping cost from USD to order currency
                 $itemShippingCostConverted = $orderCurrency !== 'USD' && $itemShippingCostUSD > 0
@@ -1997,6 +2090,137 @@ class CheckoutController extends Controller
             'currency' => $currency,
             'currency_rate' => $currencyRate,
             'converted_shipping' => $convertedShipping
+        ]);
+    }
+
+    /**
+     * Get all available shipping rates for domain (default + options)
+     * All rates are converted to domain's currency
+     */
+    public function getShippingRates(Request $request)
+    {
+        $request->validate([
+            'country' => 'required|string|size:2',
+        ]);
+
+        $sessionId = session()->getId();
+        $userId = Auth::id();
+
+        // Get cart items
+        $cartItems = Cart::with(['product.template.category'])
+            ->where(function ($query) use ($sessionId, $userId) {
+                if ($userId) {
+                    $query->where('user_id', $userId);
+                } else {
+                    $query->where('session_id', $sessionId);
+                }
+            })
+            ->get();
+
+        if ($cartItems->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cart is empty'
+            ], 400);
+        }
+
+        // Get domain, currency and rate
+        $currentDomain = CurrencyService::getCurrentDomain();
+        $currency = CurrencyService::getCurrencyForDomain();
+        $currencyRate = CurrencyService::getCurrencyRateForDomain() ?? 1.0;
+
+        // Find shipping zone from country
+        $zone = ShippingZone::findByCountry($request->country);
+        if (!$zone) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Shipping not available for this country'
+            ], 400);
+        }
+
+        // Calculate total items and value for checking applicability
+        $totalItems = $cartItems->sum('quantity');
+        $totalValue = 0;
+        foreach ($cartItems as $item) {
+            $priceInUSD = $currency !== 'USD' ? ($item->price / $currencyRate) : $item->price;
+            $totalValue += $priceInUSD * $item->quantity;
+        }
+
+        // Get all shipping rates for this domain and zone
+        // If no domain, get rates without domain filter as fallback
+        $rateQuery = \App\Models\ShippingRate::active()
+            ->where('shipping_zone_id', $zone->id);
+        
+        if ($currentDomain) {
+            $rateQuery->where('domain', $currentDomain);
+        }
+        
+        $allRates = $rateQuery->ordered()->get();
+
+        // Filter rates by applicability and prepare response
+        $applicableRates = [];
+        $defaultRate = null;
+
+        foreach ($allRates as $rate) {
+            // Check if rate is applicable for current cart
+            if (!$rate->isApplicable($totalItems, $totalValue)) {
+                continue;
+            }
+
+            // Calculate shipping cost for this rate (in USD)
+            $shippingCostUSD = $rate->calculateCost($totalItems);
+
+            // Convert to domain currency
+            $shippingCostConverted = CurrencyService::convertFromUSDWithRate(
+                $shippingCostUSD,
+                $currency,
+                $currencyRate
+            );
+
+            $rateData = [
+                'id' => $rate->id,
+                'name' => $rate->name,
+                'description' => $rate->description,
+                'is_default' => (bool) $rate->is_default,
+                'shipping_cost_usd' => round($shippingCostUSD, 2),
+                'shipping_cost' => round($shippingCostConverted, 2),
+                'first_item_cost_usd' => $rate->first_item_cost,
+                'first_item_cost' => CurrencyService::convertFromUSDWithRate(
+                    $rate->first_item_cost,
+                    $currency,
+                    $currencyRate
+                ),
+                'additional_item_cost_usd' => $rate->additional_item_cost,
+                'additional_item_cost' => CurrencyService::convertFromUSDWithRate(
+                    $rate->additional_item_cost,
+                    $currency,
+                    $currencyRate
+                ),
+            ];
+
+            if ($rate->is_default) {
+                $defaultRate = $rateData;
+            } else {
+                $applicableRates[] = $rateData;
+            }
+        }
+
+        // Sort: default first, then others
+        $rates = [];
+        if ($defaultRate) {
+            $rates[] = $defaultRate;
+        }
+        $rates = array_merge($rates, $applicableRates);
+
+        return response()->json([
+            'success' => true,
+            'zone_id' => $zone->id,
+            'zone_name' => $zone->name,
+            'country' => $request->country,
+            'currency' => $currency,
+            'currency_rate' => $currencyRate,
+            'rates' => $rates,
+            'default_rate' => $defaultRate
         ]);
     }
 

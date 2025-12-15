@@ -40,6 +40,9 @@ class CartController extends Controller
             return $item->getTotalPriceWithCustomizations();
         });
 
+        // Get current domain (needed for shipping zone filtering even if cart is empty)
+        $currentDomain = CurrencyService::getCurrentDomain();
+        
         // Calculate shipping using ShippingCalculator
         $shipping = 0;
         $shippingDetails = null;
@@ -76,9 +79,6 @@ class CartController extends Controller
                     'price' => $priceInUSD,
                 ];
             });
-
-            // Get current domain to determine country and prioritize default rate
-            $currentDomain = CurrencyService::getCurrentDomain();
             
             // Determine country from currency (same logic as products/show.blade.php)
             // Priority: currency -> domain name -> default to US
