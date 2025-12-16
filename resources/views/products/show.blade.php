@@ -26,10 +26,10 @@
     // Get current domain
     $currentDomain = \App\Services\CurrencyService::getCurrentDomain();
     
-    // Get all shipping rates for current domain with zones
-    $shippingRates = \App\Models\ShippingRate::where('domain', $currentDomain)
-        ->where('is_active', true)
+    // Get all shipping rates for all domains (apply to all domains)
+    $shippingRates = \App\Models\ShippingRate::where('is_active', true)
         ->with('shippingZone')
+        ->orderByRaw("CASE WHEN domain = ? THEN 0 ELSE 1 END", [$currentDomain]) // Prioritize current domain rates
         ->orderBy('is_default', 'desc')
         ->orderBy('sort_order')
         ->get();
@@ -70,6 +70,7 @@
             'zone_name' => $zoneName,
             'category_id' => $rate->category_id,
             'name' => $rate->name,
+            'domain' => $rate->domain, // Add domain info to distinguish domain-specific vs general domain rates
             'first_item_cost' => (float) $rate->first_item_cost,
             'additional_item_cost' => (float) $rate->additional_item_cost,
             'is_default' => (bool) $rate->is_default,
@@ -4778,11 +4779,27 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
     
     // Filter rates by zone if zoneId is provided
     let availableRates = SHIPPING_RATES;
+    let currentZoneName = null; // Initialize zone name variable for use throughout function
+    
     if (zoneId !== null) {
         // Extract zone_id from value if format is "zone_id:country_code"
         let actualZoneId = zoneId;
         if (typeof zoneId === 'string' && zoneId.includes(':')) {
             actualZoneId = zoneId.split(':')[0];
+        }
+        
+        // Determine zone name for display (set before filtering rates)
+        if (typeof actualZoneId === 'string' && actualZoneId.startsWith('general_')) {
+            // Extract zone name from zoneId (e.g., 'general_euro' -> 'Euro')
+            currentZoneName = actualZoneId.replace('general_', '').split('_').map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            ).join(' ');
+        } else {
+            // Regular zone: get name from SHIPPING_ZONES
+            const parsedZoneId = typeof actualZoneId === 'string' && !isNaN(actualZoneId) 
+                ? parseInt(actualZoneId) 
+                : actualZoneId;
+            currentZoneName = SHIPPING_ZONES.find(z => z.id === parsedZoneId)?.name || null;
         }
         
         // Check if it's a general domain zone (starts with 'general_')
@@ -4793,9 +4810,27 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
             ).join(' ');
             
             // Filter rates with null zone_id and matching zone_name
-            availableRates = SHIPPING_RATES.filter(r => 
-                r.zone_id === null && r.zone_name && r.zone_name.toLowerCase() === zoneName.toLowerCase()
-            );
+            // Use flexible matching: normalize both zone names for comparison
+            const normalizeZoneName = (name) => name ? name.toLowerCase().trim().replace(/\s+/g, ' ') : '';
+            const normalizedZoneName = normalizeZoneName(zoneName);
+            
+            availableRates = SHIPPING_RATES.filter(r => {
+                if (r.zone_id !== null) return false;
+                if (!r.zone_name) return false;
+                const normalizedRateZoneName = normalizeZoneName(r.zone_name);
+                return normalizedRateZoneName === normalizedZoneName || 
+                       normalizedRateZoneName.includes(normalizedZoneName) ||
+                       normalizedZoneName.includes(normalizedRateZoneName);
+            });
+            
+            // If no rates found with matching zone_name, fallback to all general domain rates (zone_id = null)
+            // This allows any general rate to be used when specific zone_name rates don't exist
+            if (availableRates.length === 0) {
+                const allGeneralRates = SHIPPING_RATES.filter(r => r.zone_id === null);
+                if (allGeneralRates.length > 0) {
+                    availableRates = allGeneralRates;
+                }
+            }
         } else {
             // Regular zone: filter by zone_id
             // Parse to integer if it's a numeric string
@@ -4803,25 +4838,15 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
                 ? parseInt(actualZoneId) 
                 : actualZoneId;
             availableRates = SHIPPING_RATES.filter(r => r.zone_id === parsedZoneId);
-        }
-        
-        // If a specific zone is selected but no rates exist for it, shipping is not available
-        if (availableRates.length === 0) {
-            const currentZoneName = typeof zoneId === 'string' && zoneId.startsWith('general_') 
-                ? zoneId.replace('general_', '').split('_').map(word => 
-                    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-                ).join(' ')
-                : (SHIPPING_ZONES.find(z => z.id === zoneId)?.name || null);
             
-            return {
-                cost: 0,
-                costConverted: 0,
-                rate: null,
-                name: null,
-                zoneId: zoneId,
-                zoneName: currentZoneName,
-                available: false
-            };
+            // If no rates found for this specific zone, include general domain rates (zone_id = null) as fallback
+            // This allows general rates to be used when zone-specific rates don't exist
+            if (availableRates.length === 0) {
+                const generalRates = SHIPPING_RATES.filter(r => r.zone_id === null);
+                if (generalRates.length > 0) {
+                    availableRates = generalRates;
+                }
+            }
         }
     }
     
@@ -4870,7 +4895,7 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
         // Find shipping rate for this category
         let rate = null;
         
-        // First, try to find rate specific to this category
+        // First, try to find rate specific to this category with all conditions
         if (categoryId) {
             rate = availableRates.find(r => 
                 r.category_id === categoryId && 
@@ -4881,7 +4906,12 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
             );
         }
         
-        // If no category-specific rate, try general rate (category_id is null)
+        // If no category-specific rate with conditions, try category-specific rate without quantity/order value conditions
+        if (!rate && categoryId) {
+            rate = availableRates.find(r => r.category_id === categoryId);
+        }
+        
+        // If no category-specific rate, try general rate (category_id is null) with all conditions
         if (!rate) {
             rate = availableRates.find(r => 
                 r.category_id === null &&
@@ -4892,22 +4922,69 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
             );
         }
         
+        // If no general rate with conditions, try any general rate (category_id is null)
+        if (!rate) {
+            rate = availableRates.find(r => r.category_id === null);
+        }
+        
         // If still no rate found, use default shipping rate (if it meets conditions and matches zone)
         if (!rate && DEFAULT_SHIPPING_RATE) {
             const defaultRate = DEFAULT_SHIPPING_RATE;
+            
+            // Extract actual zone ID for comparison
+            let actualZoneIdForComparison = zoneId;
+            if (zoneId !== null) {
+                if (typeof zoneId === 'string' && zoneId.includes(':')) {
+                    actualZoneIdForComparison = zoneId.split(':')[0];
+                }
+                // Parse to integer if it's a numeric string
+                if (typeof actualZoneIdForComparison === 'string' && !isNaN(actualZoneIdForComparison)) {
+                    actualZoneIdForComparison = parseInt(actualZoneIdForComparison);
+                }
+            }
+            
             // Check if default rate meets the conditions and zone
-            const meetsConditions = 
-                (zoneId === null || defaultRate.zone_id === zoneId) &&
-                (!defaultRate.min_items || quantity >= defaultRate.min_items) &&
-                (!defaultRate.max_items || quantity <= defaultRate.max_items) &&
-                (!defaultRate.min_order_value || baseSubtotal >= defaultRate.min_order_value) &&
-                (!defaultRate.max_order_value || baseSubtotal <= defaultRate.max_order_value);
+            // Allow default rate if: zoneId is null OR default rate zone matches OR default rate is general (zone_id = null)
+            // If availableRates is empty, be more lenient with zone matching
+            let zoneMatches = false;
+            if (availableRates.length === 0) {
+                // When no rates exist for the zone, allow default rate regardless of zone (as final fallback)
+                zoneMatches = true;
+            } else {
+                // Normal zone matching when rates exist
+                zoneMatches = zoneId === null || 
+                             defaultRate.zone_id === actualZoneIdForComparison || 
+                             defaultRate.zone_id === null; // General domain rate can be used for any zone
+            }
+            
+            // When availableRates is empty, be more lenient with conditions (use default rate as last resort)
+            const meetsConditions = zoneMatches && (
+                availableRates.length === 0 
+                    ? true // When no rates available, use default rate regardless of quantity/order value conditions
+                    : (
+                        (!defaultRate.min_items || quantity >= defaultRate.min_items) &&
+                        (!defaultRate.max_items || quantity <= defaultRate.max_items) &&
+                        (!defaultRate.min_order_value || baseSubtotal >= defaultRate.min_order_value) &&
+                        (!defaultRate.max_order_value || baseSubtotal <= defaultRate.max_order_value)
+                    )
+            );
             
             if (meetsConditions) {
                 rate = defaultRate;
             }
         }
         
+        // Priority 6: If still no rate, use first available rate from availableRates
+        if (!rate && availableRates.length > 0) {
+            rate = availableRates[0]; // Use first available rate
+        }
+        
+        // Priority 7: If still no rate, use first rate from all SHIPPING_RATES
+        if (!rate && SHIPPING_RATES.length > 0) {
+            rate = SHIPPING_RATES[0]; // Use first rate as final fallback
+        }
+        
+        // Always use a rate if available (never return unavailable)
         if (rate) {
             // Calculate cost for this group: first_item_cost + (quantity - 1) * additional_item_cost
             const groupCost = rate.first_item_cost + (quantity - 1) * rate.additional_item_cost;
@@ -4924,17 +5001,38 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
         }
     });
     
-    // If no rates found for any group, shipping is not available
+    // If no rates found for any group, try to use default rate or first available rate
     if (!allGroupsHaveRate || (totalShippingCost === 0 && !shippingRateUsed)) {
-        return {
-            cost: 0,
-            costConverted: 0,
-            rate: null,
-            name: null,
-            zoneId: zoneId,
-            zoneName: currentZoneName,
-            available: false
-        };
+        // Try to use default rate
+        if (DEFAULT_SHIPPING_RATE) {
+            const defaultRate = DEFAULT_SHIPPING_RATE;
+            const quantity = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+            const groupCost = defaultRate.first_item_cost + (quantity - 1) * defaultRate.additional_item_cost;
+            totalShippingCost = groupCost;
+            shippingRateUsed = defaultRate;
+            shippingName = defaultRate.name;
+            zoneName = defaultRate.zone_name;
+        } else if (SHIPPING_RATES.length > 0) {
+            // Use first available rate
+            const firstRate = SHIPPING_RATES[0];
+            const quantity = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+            const groupCost = firstRate.first_item_cost + (quantity - 1) * firstRate.additional_item_cost;
+            totalShippingCost = groupCost;
+            shippingRateUsed = firstRate;
+            shippingName = firstRate.name;
+            zoneName = firstRate.zone_name;
+        } else {
+            // Only return unavailable if absolutely no rates exist
+            return {
+                cost: 0,
+                costConverted: 0,
+                rate: null,
+                name: null,
+                zoneId: zoneId,
+                zoneName: currentZoneName,
+                available: false
+            };
+        }
     }
     
     // Convert to current currency if needed
