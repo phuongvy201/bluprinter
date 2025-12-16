@@ -884,7 +884,7 @@ function buildCheckoutCustomizationInputs(customizations) {
                                         @foreach($zonesWithCountries as $zone)
                                             <optgroup label="{{ $zone['name'] }}">
                                                 @foreach($zone['country_options'] as $country)
-                                                    <option value="{{ $country['value'] }}">
+                                                    <option value="{{ $country['value'] }}" data-zone-id="{{ $country['zone_id'] }}">
                                                         {{ $country['label'] }}
                                                     </option>
                                                 @endforeach
@@ -3240,6 +3240,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const cartItems = getCheckoutCartItems();
         const baseSubtotal = getCheckoutBaseSubtotal();
         
+        console.log('🚚 calculateCheckoutShippingCost called with zoneId:', zoneId);
+        console.log('📦 Cart items:', cartItems.length);
+        console.log('💰 Base subtotal:', baseSubtotal);
+        
         if (!cartItems || cartItems.length === 0) {
             return {
                 cost: 0,
@@ -3261,6 +3265,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Get current domain for filtering (prioritize current domain)
         const currentDomain = CHECKOUT_CURRENT_DOMAIN || null;
+        console.log('🌐 Current domain:', currentDomain);
+        console.log('📊 Total shipping rates available:', SHIPPING_RATES.length);
         
         if (zoneId !== null) {
             // Extract zone_id from value if format is "zone_id:country_code"
@@ -3276,11 +3282,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
                 ).join(' ');
             } else {
-                // Regular zone: get name from SHIPPING_ZONES
+                // Regular zone: get name from SHIPPING_ZONES or SHIPPING_ZONES_WITH_COUNTRIES
                 const parsedZoneId = typeof actualZoneId === 'string' && !isNaN(actualZoneId) 
                     ? parseInt(actualZoneId) 
                     : actualZoneId;
-                currentZoneName = SHIPPING_ZONES.find(z => z.id === parsedZoneId)?.name || null;
+                let zoneInfo = SHIPPING_ZONES.find(z => z.id === parsedZoneId);
+                if (!zoneInfo && SHIPPING_ZONES_WITH_COUNTRIES) {
+                    zoneInfo = SHIPPING_ZONES_WITH_COUNTRIES.find(z => z.id === parsedZoneId);
+                }
+                currentZoneName = zoneInfo ? zoneInfo.name : null;
             }
             
             // Check if it's a general domain zone (starts with 'general_')
@@ -3327,24 +3337,97 @@ document.addEventListener('DOMContentLoaded', function() {
                     ? parseInt(actualZoneId) 
                     : actualZoneId;
                 
-                // Current domain rates: domain = current domain and zone_id matches
-                domainSpecificRates = SHIPPING_RATES.filter(r => 
-                    r.domain === currentDomain && r.zone_id === parsedZoneId
-                );
+                // Get zone name from SHIPPING_ZONES or SHIPPING_ZONES_WITH_COUNTRIES for matching by name
+                let zoneInfo = SHIPPING_ZONES.find(z => z.id === parsedZoneId);
+                if (!zoneInfo && SHIPPING_ZONES_WITH_COUNTRIES) {
+                    zoneInfo = SHIPPING_ZONES_WITH_COUNTRIES.find(z => z.id === parsedZoneId);
+                }
+                const zoneName = zoneInfo ? zoneInfo.name : null;
                 
-                // Other domain rates: any other domain with matching zone_id
-                generalDomainRates = SHIPPING_RATES.filter(r => 
-                    r.domain !== currentDomain && r.zone_id === parsedZoneId
-                );
+                console.log(`📍 Zone info for zone ${parsedZoneId}:`, {
+                    zoneName: zoneName,
+                    zoneInfo: zoneInfo
+                });
+                
+                // Helper function to normalize zone names for matching
+                const normalizeZoneName = (name) => name ? name.toLowerCase().trim().replace(/\s+/g, ' ') : '';
+                const normalizedZoneName = zoneName ? normalizeZoneName(zoneName) : null;
+                
+                // Find rates by zone_id OR zone_name (for zones like Europe)
+                // Match by both zone_id and zone_name to ensure we find all relevant rates
+                // Current domain rates: domain = current domain and (zone_id matches OR zone_name matches)
+                domainSpecificRates = SHIPPING_RATES.filter(r => {
+                    if (r.domain !== currentDomain) return false;
+                    // Match by zone_id
+                    if (r.zone_id === parsedZoneId) return true;
+                    // Also match by zone_name if zone_id doesn't match (for zones like Europe)
+                    if (normalizedZoneName && r.zone_name) {
+                        const normalizedRateZoneName = normalizeZoneName(r.zone_name);
+                        return normalizedRateZoneName === normalizedZoneName || 
+                               normalizedRateZoneName.includes(normalizedZoneName) ||
+                               normalizedZoneName.includes(normalizedRateZoneName);
+                    }
+                    return false;
+                });
+                
+                console.log(`🔍 Domain-specific rates for zone ${parsedZoneId} (domain: ${currentDomain}):`, domainSpecificRates.length);
+                if (domainSpecificRates.length > 0) {
+                    console.log('   Rates:', domainSpecificRates.map(r => ({id: r.id, name: r.name, zone_id: r.zone_id, zone_name: r.zone_name})));
+                }
+                
+                // Other domain rates: any other domain with (zone_id matches OR zone_name matches)
+                generalDomainRates = SHIPPING_RATES.filter(r => {
+                    if (r.domain === currentDomain) return false;
+                    // Match by zone_id
+                    if (r.zone_id === parsedZoneId) return true;
+                    // Also match by zone_name if zone_id doesn't match (for zones like Europe)
+                    if (normalizedZoneName && r.zone_name) {
+                        const normalizedRateZoneName = normalizeZoneName(r.zone_name);
+                        return normalizedRateZoneName === normalizedZoneName || 
+                               normalizedRateZoneName.includes(normalizedZoneName) ||
+                               normalizedZoneName.includes(normalizedRateZoneName);
+                    }
+                    return false;
+                });
+                
+                console.log(`🔍 Other domain rates for zone ${parsedZoneId}:`, generalDomainRates.length);
+                if (generalDomainRates.length > 0) {
+                    console.log('   Rates:', generalDomainRates.map(r => ({id: r.id, name: r.name, zone_id: r.zone_id, zone_name: r.zone_name})));
+                }
                 
                 // Priority: current domain first, then other domains as fallback
-                availableRates = domainSpecificRates.length > 0 
-                    ? domainSpecificRates 
-                    : generalDomainRates;
+                // Sort rates to ensure consistent selection when multiple rates exist
+                if (domainSpecificRates.length > 0) {
+                    // Sort domain-specific rates by first_item_cost (ascending) to prefer lower cost rates
+                    availableRates = domainSpecificRates.sort((a, b) => 
+                        (a.first_item_cost || 0) - (b.first_item_cost || 0)
+                    );
+                } else if (generalDomainRates.length > 0) {
+                    // Sort general domain rates by first_item_cost (ascending) to prefer lower cost rates
+                    availableRates = generalDomainRates.sort((a, b) => 
+                        (a.first_item_cost || 0) - (b.first_item_cost || 0)
+                    );
+                } else {
+                    availableRates = [];
+                }
+                
+                console.log(`📊 Available rates after filtering: ${availableRates.length}`);
+                if (availableRates.length > 0) {
+                    console.log('   Sorted rates:', availableRates.map(r => ({
+                        id: r.id,
+                        name: r.name,
+                        zone_id: r.zone_id,
+                        zone_name: r.zone_name,
+                        first_item_cost: r.first_item_cost,
+                        domain: r.domain
+                    })));
+                }
                 
                 // If no rates found for this specific zone, include general domain rates (zone_id = null) as fallback
                 if (availableRates.length === 0) {
+                    console.log(`⚠️ No rates found for zone ${parsedZoneId}, trying general rates (zone_id = null)`);
                     const generalRates = SHIPPING_RATES.filter(r => r.zone_id === null);
+                    console.log(`🔍 General rates (zone_id = null):`, generalRates.length);
                     if (generalRates.length > 0) {
                         availableRates = generalRates;
                         domainSpecificRates = generalRates.filter(r => r.domain === currentDomain);
@@ -3352,6 +3435,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (generalDomainRates.length === 0) {
                             generalDomainRates = generalRates;
                         }
+                        console.log(`✅ Using general rates - Domain-specific: ${domainSpecificRates.length}, Other domains: ${generalDomainRates.length}`);
                     }
                 }
             }
@@ -3362,11 +3446,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 const parsedZoneId = typeof actualZoneId === 'string' && !isNaN(actualZoneId) 
                     ? parseInt(actualZoneId) 
                     : actualZoneId;
-                const zoneName = typeof actualZoneId === 'string' && actualZoneId.startsWith('general_') 
-                    ? actualZoneId.replace('general_', '').split('_').map(word => 
+                let zoneName = null;
+                if (typeof actualZoneId === 'string' && actualZoneId.startsWith('general_')) {
+                    zoneName = actualZoneId.replace('general_', '').split('_').map(word => 
                         word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-                    ).join(' ')
-                    : (SHIPPING_ZONES.find(z => z.id === actualZoneId)?.name || null);
+                    ).join(' ');
+                } else {
+                    let zoneInfo = SHIPPING_ZONES.find(z => z.id === parsedZoneId);
+                    if (!zoneInfo && SHIPPING_ZONES_WITH_COUNTRIES) {
+                        zoneInfo = SHIPPING_ZONES_WITH_COUNTRIES.find(z => z.id === parsedZoneId);
+                    }
+                    zoneName = zoneInfo ? zoneInfo.name : null;
+                }
                 
                 // Try to find rates with matching zone_name (any domain)
                 let fallbackRates = SHIPPING_RATES.filter(r => 
@@ -3439,6 +3530,11 @@ document.addEventListener('DOMContentLoaded', function() {
         let zoneName = null;
         let allGroupsHaveRate = true;
         
+        console.log(`📦 Items grouped by category:`, Object.keys(itemsByCategory).length, 'groups');
+        console.log(`📊 Available rates for selection:`, availableRates.length);
+        console.log(`   - Domain-specific: ${domainSpecificRates.length}`);
+        console.log(`   - General domain: ${generalDomainRates.length}`);
+        
         Object.values(itemsByCategory).forEach(group => {
             const categoryId = group.categoryId;
             const quantity = group.quantity;
@@ -3504,14 +3600,54 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Priority 6: If still no rate, use first available rate from availableRates
+            // Priority 6: If still no rate, find best matching rate from availableRates
+            // Try to find rate that best matches the conditions (prefer rates with matching conditions)
             if (!rate && availableRates.length > 0) {
-                rate = availableRates[0]; // Use first available rate
+                // First, try to find rate that matches quantity and order value conditions
+                const matchingConditions = availableRates.filter(r => 
+                    (!r.min_items || quantity >= r.min_items) &&
+                    (!r.max_items || quantity <= r.max_items) &&
+                    (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
+                    (!r.max_order_value || baseSubtotal <= r.max_order_value)
+                );
+                
+                if (matchingConditions.length > 0) {
+                    // If multiple rates match, prefer domain-specific, then by sort_order or first_item_cost
+                    rate = matchingConditions.sort((a, b) => {
+                        // Prefer current domain
+                        if (a.domain === currentDomain && b.domain !== currentDomain) return -1;
+                        if (a.domain !== currentDomain && b.domain === currentDomain) return 1;
+                        // Then by first_item_cost (lower is better)
+                        return (a.first_item_cost || 0) - (b.first_item_cost || 0);
+                    })[0];
+                } else {
+                    // If no rate matches conditions, use first available rate
+                    rate = availableRates[0];
+                }
             }
             
             // Priority 7: If still no rate, use first rate from all SHIPPING_RATES
             if (!rate && SHIPPING_RATES.length > 0) {
-                rate = SHIPPING_RATES[0]; // Use first rate as final fallback
+                // Try to find best matching rate from all rates
+                const allMatchingConditions = SHIPPING_RATES.filter(r => 
+                    (!r.min_items || quantity >= r.min_items) &&
+                    (!r.max_items || quantity <= r.max_items) &&
+                    (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
+                    (!r.max_order_value || baseSubtotal <= r.max_order_value)
+                );
+                
+                if (allMatchingConditions.length > 0) {
+                    rate = allMatchingConditions.sort((a, b) => {
+                        // Prefer current domain
+                        if (a.domain === currentDomain && b.domain !== currentDomain) return -1;
+                        if (a.domain !== currentDomain && b.domain === currentDomain) return 1;
+                        // Then by first_item_cost (lower is better)
+                        return (a.first_item_cost || 0) - (b.first_item_cost || 0);
+                    })[0];
+                } else {
+                    // Final fallback: use first rate
+                    rate = SHIPPING_RATES[0];
+                }
             }
             
             // Always use a rate if available (never return unavailable)
@@ -3519,12 +3655,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 const groupCost = rate.first_item_cost + (quantity - 1) * rate.additional_item_cost;
                 totalShippingCost += groupCost;
                 
+                console.log(`✅ Rate found for category ${categoryId || 'general'}:`, {
+                    rateId: rate.id,
+                    rateName: rate.name,
+                    zoneName: rate.zone_name,
+                    firstItemCost: rate.first_item_cost,
+                    additionalItemCost: rate.additional_item_cost,
+                    quantity: quantity,
+                    groupCost: groupCost
+                });
+                
                 if (!shippingRateUsed || (categoryId && rate.category_id === categoryId)) {
                     shippingRateUsed = rate;
                     shippingName = rate.name;
-                    zoneName = rate.zone_name;
+                    // Priority: use currentZoneName (zone selected from dropdown) over rate.zone_name
+                    zoneName = currentZoneName || rate.zone_name;
                 }
             } else {
+                console.log(`❌ No rate found for category ${categoryId || 'general'}, quantity: ${quantity}`);
                 allGroupsHaveRate = false;
             }
         });
@@ -3539,7 +3687,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 totalShippingCost = groupCost;
                 shippingRateUsed = defaultRate;
                 shippingName = defaultRate.name;
-                zoneName = defaultRate.zone_name;
+                // Priority: use currentZoneName (zone selected from dropdown) over defaultRate.zone_name
+                zoneName = currentZoneName || defaultRate.zone_name;
             } else if (SHIPPING_RATES.length > 0) {
                 // Use first available rate
                 const firstRate = SHIPPING_RATES[0];
@@ -3548,7 +3697,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 totalShippingCost = groupCost;
                 shippingRateUsed = firstRate;
                 shippingName = firstRate.name;
-                zoneName = firstRate.zone_name;
+                // Priority: use currentZoneName (zone selected from dropdown) over firstRate.zone_name
+                zoneName = currentZoneName || firstRate.zone_name;
             } else {
                 // Only return unavailable if absolutely no rates exist
                 return {
@@ -3568,13 +3718,29 @@ document.addEventListener('DOMContentLoaded', function() {
             ? totalShippingCost * CHECKOUT_CURRENCY_RATE
             : totalShippingCost;
         
+        // Final zoneName: prioritize currentZoneName (zone selected from dropdown) over zoneName from rate
+        const finalZoneName = currentZoneName || zoneName;
+        
+        console.log('💰 Final shipping calculation:', {
+            totalShippingCost: totalShippingCost,
+            costConverted: costConverted,
+            currency: CHECKOUT_CURRENCY,
+            rateUsed: shippingRateUsed ? {
+                id: shippingRateUsed.id,
+                name: shippingRateUsed.name,
+                zone_name: shippingRateUsed.zone_name
+            } : null,
+            zoneName: finalZoneName,
+            zoneId: zoneId
+        });
+        
         return {
             cost: totalShippingCost,
             costConverted: costConverted,
             rate: shippingRateUsed,
             name: shippingName || 'Standard Shipping',
             zoneId: zoneId,
-            zoneName: zoneName,
+            zoneName: finalZoneName,
             available: true
         };
     }
@@ -3583,8 +3749,18 @@ document.addEventListener('DOMContentLoaded', function() {
      * Update shipping cost display
      */
     function updateCheckoutShippingDisplay(zoneId = null) {
+        console.log('🔄 updateCheckoutShippingDisplay called with zoneId:', zoneId);
+        
+        // Force recalculation by clearing any cached values
         const shippingInfo = calculateCheckoutShippingCost(zoneId);
         const shippingCost = shippingInfo.costConverted;
+        
+        console.log('💰 Shipping info calculated:', {
+            cost: shippingInfo.cost,
+            costConverted: shippingCost,
+            zoneName: shippingInfo.zoneName,
+            available: shippingInfo.available
+        });
         
         const shippingCostEl = document.getElementById('checkout-shipping-cost');
         const shippingLabelEl = document.getElementById('checkout-shipping-label');
@@ -3642,6 +3818,20 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     function getZoneIdFromCountry(countryCode) {
         if (!countryCode) return null;
+        
+        // First try to get zone_id from selected option's data attribute
+        const countrySelect = document.getElementById('country');
+        if (countrySelect) {
+            const selectedOption = countrySelect.options[countrySelect.selectedIndex];
+            if (selectedOption && selectedOption.dataset.zoneId) {
+                const zoneIdFromData = parseInt(selectedOption.dataset.zoneId);
+                if (!isNaN(zoneIdFromData)) {
+                    return zoneIdFromData;
+                }
+            }
+        }
+        
+        // Fallback: use COUNTRY_TO_ZONE_MAP
         return COUNTRY_TO_ZONE_MAP[countryCode.toUpperCase()] || null;
     }
     
@@ -3656,22 +3846,53 @@ document.addEventListener('DOMContentLoaded', function() {
         const countryCode = countrySelect.value;
         let zoneId = null;
         
+        console.log('🌍 Country selected:', countryCode);
+        
         // Get zone from country if country is selected
         if (countryCode) {
-            zoneId = getZoneIdFromCountry(countryCode);
+            // First try to get from option's data attribute
+            const selectedOption = countrySelect.options[countrySelect.selectedIndex];
+            if (selectedOption && selectedOption.dataset.zoneId) {
+                zoneId = parseInt(selectedOption.dataset.zoneId);
+                if (isNaN(zoneId)) {
+                    zoneId = null;
+                } else {
+                    console.log('✅ Zone ID from data attribute:', zoneId);
+                }
+            }
+            
+            // If not found, try from map
+            if (!zoneId) {
+                zoneId = getZoneIdFromCountry(countryCode);
+                if (zoneId) {
+                    console.log('✅ Zone ID from map:', zoneId);
+                }
+            }
         }
         
         // If no zone found from country, use default shipping rate zone
         if (!zoneId && DEFAULT_SHIPPING_RATE && DEFAULT_SHIPPING_RATE.zone_id) {
             zoneId = DEFAULT_SHIPPING_RATE.zone_id;
+            console.log('⚠️ Using default shipping rate zone:', zoneId);
         }
         
         // If still no zone, use default shipping zone ID
         if (!zoneId) {
             zoneId = DEFAULT_SHIPPING_ZONE_ID;
+            console.log('⚠️ Using DEFAULT_SHIPPING_ZONE_ID:', zoneId);
         }
         
-        // Calculate shipping with zone
+        console.log('📦 Final zone ID for shipping calculation:', zoneId);
+        console.log('🔄 Recalculating shipping cost for country:', countryCode);
+        
+        // Update shipping zone ID input
+        const shippingZoneIdInput = document.getElementById('shipping_zone_id');
+        if (shippingZoneIdInput) {
+            shippingZoneIdInput.value = zoneId || '';
+        }
+        
+        // Force recalculation by passing zoneId explicitly
+        // This ensures shipping cost is recalculated even if zoneId is the same
         updateCheckoutShippingDisplay(zoneId);
     }
     
@@ -3682,7 +3903,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if country is selected and get zone from country
         const countrySelect = document.getElementById('country');
         if (countrySelect && countrySelect.value) {
-            selectedZoneId = getZoneIdFromCountry(countrySelect.value);
+            // First try to get from option's data attribute
+            const selectedOption = countrySelect.options[countrySelect.selectedIndex];
+            if (selectedOption && selectedOption.dataset.zoneId) {
+                selectedZoneId = parseInt(selectedOption.dataset.zoneId);
+                if (isNaN(selectedZoneId)) {
+                    selectedZoneId = null;
+                }
+            }
+            
+            // If not found, try from map
+            if (!selectedZoneId) {
+                selectedZoneId = getZoneIdFromCountry(countrySelect.value);
+            }
         }
         
         // If no zone found from country, use default shipping rate zone
@@ -3693,6 +3926,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // If still no zone, use default shipping zone ID
         if (!selectedZoneId) {
             selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
+        }
+        
+        // Update shipping zone ID input
+        const shippingZoneIdInput = document.getElementById('shipping_zone_id');
+        if (shippingZoneIdInput) {
+            shippingZoneIdInput.value = selectedZoneId || '';
         }
         
         // Calculate and display shipping cost
