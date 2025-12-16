@@ -48,84 +48,7 @@
         }
     }
     
-    // Prepare shipping rates data for JavaScript
-    $shippingRatesData = [];
-    $shippingRatesByZone = [];
-    
-    foreach ($shippingRates as $rate) {
-        $rateData = [
-            'id' => $rate->id,
-            'zone_id' => $rate->shipping_zone_id,
-            'zone_name' => $rate->shippingZone ? $rate->shippingZone->name : null,
-            'category_id' => $rate->category_id,
-            'name' => $rate->name,
-            'first_item_cost' => (float) $rate->first_item_cost,
-            'additional_item_cost' => (float) $rate->additional_item_cost,
-            'is_default' => (bool) $rate->is_default,
-            'min_items' => $rate->min_items,
-            'max_items' => $rate->max_items,
-            'min_order_value' => $rate->min_order_value ? (float) $rate->min_order_value : null,
-            'max_order_value' => $rate->max_order_value ? (float) $rate->max_order_value : null,
-        ];
-        
-        $shippingRatesData[] = $rateData;
-        
-        $zoneId = $rate->shipping_zone_id ?? 'none';
-        if (!isset($shippingRatesByZone[$zoneId])) {
-            $shippingRatesByZone[$zoneId] = [
-                'zone_id' => $rate->shipping_zone_id,
-                'zone_name' => $rate->shippingZone ? $rate->shippingZone->name : 'General',
-                'rates' => []
-            ];
-        }
-        $shippingRatesByZone[$zoneId]['rates'][] = $rateData;
-    }
-    
-    // Prepare zones data
-    $zonesData = $shippingZones->map(function($zone) {
-        return [
-            'id' => $zone->id,
-            'name' => $zone->name,
-            'description' => $zone->description,
-            'countries' => $zone->countries ?? [],
-        ];
-    })->toArray();
-    
-    // Prepare default shipping rate data
-    $defaultShippingRateData = null;
-    if ($defaultShippingRate) {
-        $defaultShippingRateData = [
-            'id' => $defaultShippingRate->id,
-            'category_id' => $defaultShippingRate->category_id,
-            'name' => $defaultShippingRate->name,
-            'first_item_cost' => (float) $defaultShippingRate->first_item_cost,
-            'additional_item_cost' => (float) $defaultShippingRate->additional_item_cost,
-            'is_default' => true,
-            'min_items' => $defaultShippingRate->min_items,
-            'max_items' => $defaultShippingRate->max_items,
-            'min_order_value' => $defaultShippingRate->min_order_value ? (float) $defaultShippingRate->min_order_value : null,
-            'max_order_value' => $defaultShippingRate->max_order_value ? (float) $defaultShippingRate->max_order_value : null,
-            'zone_id' => $defaultShippingRate->shipping_zone_id,
-            'zone_name' => $defaultShippingRate->shippingZone ? $defaultShippingRate->shippingZone->name : null,
-        ];
-    }
-    
-    // Get all countries from zones that have shipping rates
-    $availableCountries = [];
-    $zonesWithRates = $shippingRates->pluck('shipping_zone_id')->unique();
-    foreach ($shippingZones as $zone) {
-        if ($zonesWithRates->contains($zone->id)) {
-            $countries = $zone->countries ?? [];
-            foreach ($countries as $countryCode) {
-                if (!in_array(strtoupper($countryCode), $availableCountries)) {
-                    $availableCountries[] = strtoupper($countryCode);
-                }
-            }
-        }
-    }
-    sort($availableCountries); // Sort alphabetically
-    
-    // Country names mapping
+    // Country names mapping (must be defined before use in zonesWithCountries)
     $countryNames = [
         'US' => '🇺🇸 United States',
         'GB' => '🇬🇧 United Kingdom',
@@ -183,6 +106,104 @@
         'RU' => '🇷🇺 Russia',
         'UA' => '🇺🇦 Ukraine',
     ];
+    
+    // Prepare shipping rates data for JavaScript
+    $shippingRatesData = [];
+    $shippingRatesByZone = [];
+    
+    foreach ($shippingRates as $rate) {
+        $rateData = [
+            'id' => $rate->id,
+            'zone_id' => $rate->shipping_zone_id,
+            'zone_name' => $rate->shippingZone ? $rate->shippingZone->name : null,
+            'category_id' => $rate->category_id,
+            'name' => $rate->name,
+            'first_item_cost' => (float) $rate->first_item_cost,
+            'additional_item_cost' => (float) $rate->additional_item_cost,
+            'is_default' => (bool) $rate->is_default,
+            'min_items' => $rate->min_items,
+            'max_items' => $rate->max_items,
+            'min_order_value' => $rate->min_order_value ? (float) $rate->min_order_value : null,
+            'max_order_value' => $rate->max_order_value ? (float) $rate->max_order_value : null,
+        ];
+        
+        $shippingRatesData[] = $rateData;
+        
+        $zoneId = $rate->shipping_zone_id ?? 'none';
+        if (!isset($shippingRatesByZone[$zoneId])) {
+            $shippingRatesByZone[$zoneId] = [
+                'zone_id' => $rate->shipping_zone_id,
+                'zone_name' => $rate->shippingZone ? $rate->shippingZone->name : 'General',
+                'rates' => []
+            ];
+        }
+        $shippingRatesByZone[$zoneId]['rates'][] = $rateData;
+    }
+    
+    // Prepare zones data with countries grouped by zone
+    $zonesData = [];
+    $zonesWithCountries = [];
+    $zonesWithRates = $shippingRates->pluck('shipping_zone_id')->unique();
+    
+    foreach ($shippingZones as $zone) {
+        $countries = $zone->countries ?? [];
+        $countryCodes = is_array($countries) ? $countries : [];
+        
+        // Only include zones that have shipping rates
+        if ($zonesWithRates->contains($zone->id)) {
+            if (!empty($countryCodes)) {
+                // Zone with countries - create separate options for each country
+                $zoneData = [
+                    'id' => $zone->id,
+                    'name' => $zone->name,
+                    'description' => $zone->description,
+                    'countries' => $countryCodes,
+                    'country_options' => []
+                ];
+                
+                // Create an option for each country
+                foreach ($countryCodes as $countryCode) {
+                    $countryCodeUpper = strtoupper($countryCode);
+                    $countryName = $countryNames[$countryCodeUpper] ?? $countryCodeUpper;
+                    $zoneData['country_options'][] = [
+                        'value' => $countryCodeUpper,
+                        'label' => $countryName,
+                        'zone_id' => $zone->id,
+                        'country_code' => $countryCodeUpper
+                    ];
+                }
+                
+                $zonesWithCountries[] = $zoneData;
+            } else {
+                // Zone without countries
+                $zonesData[] = [
+                    'id' => $zone->id,
+                    'name' => $zone->name,
+                    'description' => $zone->description,
+                    'countries' => [],
+                ];
+            }
+        }
+    }
+    
+    // Prepare default shipping rate data
+    $defaultShippingRateData = null;
+    if ($defaultShippingRate) {
+        $defaultShippingRateData = [
+            'id' => $defaultShippingRate->id,
+            'category_id' => $defaultShippingRate->category_id,
+            'name' => $defaultShippingRate->name,
+            'first_item_cost' => (float) $defaultShippingRate->first_item_cost,
+            'additional_item_cost' => (float) $defaultShippingRate->additional_item_cost,
+            'is_default' => true,
+            'min_items' => $defaultShippingRate->min_items,
+            'max_items' => $defaultShippingRate->max_items,
+            'min_order_value' => $defaultShippingRate->min_order_value ? (float) $defaultShippingRate->min_order_value : null,
+            'max_order_value' => $defaultShippingRate->max_order_value ? (float) $defaultShippingRate->max_order_value : null,
+            'zone_id' => $defaultShippingRate->shipping_zone_id,
+            'zone_name' => $defaultShippingRate->shippingZone ? $defaultShippingRate->shippingZone->name : null,
+        ];
+    }
     
     // Calculate base subtotal in USD for shipping calculation
     $baseSubtotal = 0;
@@ -264,6 +285,7 @@ const CHECKOUT_CURRENT_DOMAIN = @json($currentDomain ?? null);
 const SHIPPING_RATES = @json($shippingRatesData);
 const SHIPPING_RATES_BY_ZONE = @json($shippingRatesByZone);
 const SHIPPING_ZONES = @json($zonesData);
+const SHIPPING_ZONES_WITH_COUNTRIES = @json($zonesWithCountries);
 const COUNTRY_TO_ZONE_MAP = @json($countryToZoneMap);
 const DEFAULT_SHIPPING_RATE = @json($defaultShippingRateData);
 const DEFAULT_SHIPPING_ZONE_ID = @json($defaultShippingRate ? $defaultShippingRate->shipping_zone_id : null);
@@ -857,11 +879,15 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 </label>
                                 <select id="country" name="country" class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5 cursor-pointer" required>
                                     <option value="">Select Country</option>
-                                    @if(count($availableCountries) > 0)
-                                        @foreach($availableCountries as $countryCode)
-                                            <option value="{{ $countryCode }}" {{ isset($countryNames[$countryCode]) ? '' : 'disabled' }}>
-                                                {{ $countryNames[$countryCode] ?? $countryCode }}
-                                            </option>
+                                    @if(count($zonesWithCountries) > 0)
+                                        @foreach($zonesWithCountries as $zone)
+                                            <optgroup label="{{ $zone['name'] }}">
+                                                @foreach($zone['country_options'] as $country)
+                                                    <option value="{{ $country['value'] }}">
+                                                        {{ $country['label'] }}
+                                                    </option>
+                                                @endforeach
+                                            </optgroup>
                                         @endforeach
                                     @else
                                         {{-- Fallback: show all countries if no shipping rates configured --}}
@@ -3225,22 +3251,84 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Filter rates by zone if zoneId is provided
+        // Priority: Domain-specific rates (zone_id has value) > General domain rates (zone_id = null)
         // When zoneId is null (no country selected), use all rates to allow default rate fallback
         let availableRates = SHIPPING_RATES;
+        let domainSpecificRates = [];
+        let generalDomainRates = [];
+        
         if (zoneId !== null) {
-            availableRates = SHIPPING_RATES.filter(r => r.zone_id === zoneId);
+            // Extract zone_id from value if format is "zone_id:country_code"
+            let actualZoneId = zoneId;
+            if (typeof zoneId === 'string' && zoneId.includes(':')) {
+                actualZoneId = zoneId.split(':')[0];
+            }
+            
+            // Check if it's a general domain zone (starts with 'general_' or zone_id is null in rates)
+            if (typeof actualZoneId === 'string' && actualZoneId.startsWith('general_')) {
+                // Extract zone name from zoneId (e.g., 'general_euro' -> 'Euro')
+                const zoneName = actualZoneId.replace('general_', '').split('_').map(word => 
+                    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                ).join(' ');
+                
+                // Filter general domain rates (zone_id = null) with matching zone_name
+                generalDomainRates = SHIPPING_RATES.filter(r => 
+                    r.zone_id === null && r.zone_name && r.zone_name.toLowerCase() === zoneName.toLowerCase()
+                );
+                
+                // Also include domain-specific rates for this zone if any exist
+                // (in case there are both general and specific rates)
+                domainSpecificRates = SHIPPING_RATES.filter(r => {
+                    const parsedZoneId = typeof actualZoneId === 'string' && !isNaN(actualZoneId) 
+                        ? parseInt(actualZoneId) 
+                        : actualZoneId;
+                    return r.zone_id === parsedZoneId;
+                });
+                
+                // Combine: domain-specific first, then general domain
+                availableRates = [...domainSpecificRates, ...generalDomainRates];
+            } else {
+                // Regular zone: filter by zone_id (domain-specific)
+                const parsedZoneId = typeof actualZoneId === 'string' && !isNaN(actualZoneId) 
+                    ? parseInt(actualZoneId) 
+                    : actualZoneId;
+                
+                domainSpecificRates = SHIPPING_RATES.filter(r => r.zone_id === parsedZoneId);
+                
+                // Also check for general domain rates that might apply
+                // (general domain rates have zone_id = null)
+                generalDomainRates = SHIPPING_RATES.filter(r => r.zone_id === null);
+                
+                // Priority: domain-specific first, then general domain as fallback
+                availableRates = domainSpecificRates.length > 0 
+                    ? domainSpecificRates 
+                    : generalDomainRates;
+            }
+            
             // If a specific zone is selected but no rates exist for it, shipping is not available
             if (availableRates.length === 0) {
+                const currentZoneName = typeof actualZoneId === 'string' && actualZoneId.startsWith('general_') 
+                    ? actualZoneId.replace('general_', '').split('_').map(word => 
+                        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                    ).join(' ')
+                    : (SHIPPING_ZONES.find(z => z.id === actualZoneId)?.name || null);
+                
                 return {
                     cost: 0,
                     costConverted: 0,
                     rate: null,
                     name: null,
                     zoneId: zoneId,
-                    zoneName: SHIPPING_ZONES.find(z => z.id === zoneId)?.name || null,
+                    zoneName: currentZoneName,
                     available: false
                 };
             }
+        } else {
+            // When zoneId is null, separate rates for priority handling
+            domainSpecificRates = SHIPPING_RATES.filter(r => r.zone_id !== null);
+            generalDomainRates = SHIPPING_RATES.filter(r => r.zone_id === null);
+            // Use all rates, but will prioritize domain-specific in rate selection
+            availableRates = SHIPPING_RATES;
         }
         
         // Group items by category
@@ -3285,50 +3373,58 @@ document.addEventListener('DOMContentLoaded', function() {
             const quantity = group.quantity;
             
             // Find shipping rate for this category
+            // Priority order (Category-specific ALWAYS prioritized over General category):
+            // 1) Domain-specific + Category-specific rate (highest)
+            // 2) General domain + Category-specific rate (category is more important than domain)
+            // 3) Domain-specific + General category rate
+            // 4) General domain + General category rate
+            // 5) Default shipping rate (fallback)
             let rate = null;
             
-            // When zoneId is null (no country selected), prioritize default shipping rate
-            if (zoneId === null && DEFAULT_SHIPPING_RATE) {
+            // Helper function to find rate in a specific rate set
+            const findRateInSet = (rateSet, requireCategoryId = null) => {
+                return rateSet.find(r => {
+                    const categoryMatch = requireCategoryId !== null 
+                        ? r.category_id === requireCategoryId
+                        : r.category_id === null;
+                    
+                    return categoryMatch &&
+                        (!r.min_items || quantity >= r.min_items) &&
+                        (!r.max_items || quantity <= r.max_items) &&
+                        (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
+                        (!r.max_order_value || baseSubtotal <= r.max_order_value);
+                });
+            };
+            
+            // Priority 1: Domain-specific + Category-specific rate (highest priority)
+            if (categoryId && domainSpecificRates.length > 0) {
+                rate = findRateInSet(domainSpecificRates, categoryId);
+            }
+            
+            // Priority 2: General domain + Category-specific rate
+            // Category-specific is more important than domain specificity
+            // Example: "Category nail box + domain general" beats "Category general + domain bluprinter"
+            if (!rate && categoryId && generalDomainRates.length > 0) {
+                rate = findRateInSet(generalDomainRates, categoryId);
+            }
+            
+            // Priority 3: Domain-specific + General category rate
+            if (!rate && domainSpecificRates.length > 0) {
+                rate = findRateInSet(domainSpecificRates, null);
+            }
+            
+            // Priority 4: General domain + General category rate
+            if (!rate && generalDomainRates.length > 0) {
+                rate = findRateInSet(generalDomainRates, null);
+            }
+            
+            // Priority 5: If still no rate found, use default shipping rate as fallback
+            // (only if it matches the zone or zoneId is null)
+            if (!rate && DEFAULT_SHIPPING_RATE) {
                 const defaultRate = DEFAULT_SHIPPING_RATE;
+                // Check if default rate meets the conditions and zone
                 const meetsConditions = 
-                    (!defaultRate.min_items || quantity >= defaultRate.min_items) &&
-                    (!defaultRate.max_items || quantity <= defaultRate.max_items) &&
-                    (!defaultRate.min_order_value || baseSubtotal >= defaultRate.min_order_value) &&
-                    (!defaultRate.max_order_value || baseSubtotal <= defaultRate.max_order_value);
-                
-                if (meetsConditions) {
-                    rate = defaultRate;
-                }
-            }
-            
-            // If no default rate used, try to find rate specific to this category
-            if (!rate && categoryId) {
-                rate = availableRates.find(r => 
-                    r.category_id === categoryId && 
-                    (!r.min_items || quantity >= r.min_items) &&
-                    (!r.max_items || quantity <= r.max_items) &&
-                    (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
-                    (!r.max_order_value || baseSubtotal <= r.max_order_value)
-                );
-            }
-            
-            // If no category-specific rate, try general rate (category_id is null)
-            if (!rate) {
-                rate = availableRates.find(r => 
-                    r.category_id === null &&
-                    (!r.min_items || quantity >= r.min_items) &&
-                    (!r.max_items || quantity <= r.max_items) &&
-                    (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
-                    (!r.max_order_value || baseSubtotal <= r.max_order_value)
-                );
-            }
-            
-            // If still no rate found and zoneId is set, try default shipping rate as fallback
-            if (!rate && DEFAULT_SHIPPING_RATE && zoneId !== null) {
-                const defaultRate = DEFAULT_SHIPPING_RATE;
-                // Only use default rate if it matches the zone
-                const meetsConditions = 
-                    defaultRate.zone_id === zoneId &&
+                    (zoneId === null || defaultRate.zone_id === zoneId) &&
                     (!defaultRate.min_items || quantity >= defaultRate.min_items) &&
                     (!defaultRate.max_items || quantity <= defaultRate.max_items) &&
                     (!defaultRate.min_order_value || baseSubtotal >= defaultRate.min_order_value) &&

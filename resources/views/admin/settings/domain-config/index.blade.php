@@ -58,6 +58,7 @@
                                         @elseif($config->currency === 'VND') ₫
                                         @elseif($config->currency === 'CAD') C$
                                         @elseif($config->currency === 'AUD') A$
+                                        @elseif($config->currency === 'NZD') NZ$
                                         @elseif($config->currency === 'MXN') MX$
                                         @else {{ $config->currency }}
                                         @endif

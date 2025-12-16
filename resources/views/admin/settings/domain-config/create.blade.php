@@ -242,7 +242,8 @@
             <li><strong>bluprinter.com</strong> → USD → Rate: 1.0 (1 USD = 1 USD)</li>
             <li><strong>bluprinter.vn</strong> → VND → Rate: 25000 (1 USD = 25000 VND)</li>
             <li><strong>bluprinter.co.uk</strong> → GBP → Rate: 0.79 (1 USD = 0.79 GBP)</li>
-            <li><strong>bluprinter.mx</strong> → MXN → Rate: 17.5 (1 USD = 17.5 MXN)</li>
+            <li><strong>bluprinter.mx</strong> → MXN → Rate: 18.19 (1 USD = 18.19 MXN)</li>
+            <li><strong>bluprinter.co.nz</strong> → NZD → Rate: 1.65 (1 USD = 1.65 NZD)</li>
         </ul>
     </div>
 </div>

@@ -38,11 +38,98 @@
     $shippingRatesByZone = [];
     $shippingRatesData = [];
     
+    // Mapping country codes to country names
+    $countryNamesMap = [
+        'US' => 'United States',
+        'GB' => 'United Kingdom',
+        'UK' => 'United Kingdom',
+        'CA' => 'Canada',
+        'AU' => 'Australia',
+        'MX' => 'Mexico',
+        'DE' => 'Germany',
+        'FR' => 'France',
+        'IT' => 'Italy',
+        'ES' => 'Spain',
+        'NL' => 'Netherlands',
+        'BE' => 'Belgium',
+        'CH' => 'Switzerland',
+        'AT' => 'Austria',
+        'SE' => 'Sweden',
+        'NO' => 'Norway',
+        'DK' => 'Denmark',
+        'FI' => 'Finland',
+        'IE' => 'Ireland',
+        'PT' => 'Portugal',
+        'GR' => 'Greece',
+        'PL' => 'Poland',
+        'CZ' => 'Czech Republic',
+        'HU' => 'Hungary',
+        'RO' => 'Romania',
+        'BG' => 'Bulgaria',
+        'HR' => 'Croatia',
+        'SK' => 'Slovakia',
+        'SI' => 'Slovenia',
+        'EE' => 'Estonia',
+        'LV' => 'Latvia',
+        'LT' => 'Lithuania',
+        'JP' => 'Japan',
+        'CN' => 'China',
+        'KR' => 'South Korea',
+        'SG' => 'Singapore',
+        'MY' => 'Malaysia',
+        'TH' => 'Thailand',
+        'ID' => 'Indonesia',
+        'PH' => 'Philippines',
+        'VN' => 'Vietnam',
+        'IN' => 'India',
+        'NZ' => 'New Zealand',
+        'BR' => 'Brazil',
+        'AR' => 'Argentina',
+        'CL' => 'Chile',
+        'CO' => 'Colombia',
+        'PE' => 'Peru',
+        'ZA' => 'South Africa',
+        'EG' => 'Egypt',
+        'AE' => 'United Arab Emirates',
+        'SA' => 'Saudi Arabia',
+        'IL' => 'Israel',
+        'TR' => 'Turkey',
+        'RU' => 'Russia',
+        'UA' => 'Ukraine',
+    ];
+    
+    // Helper function to convert country codes to names
+    $convertCountryCodesToNames = function($countryCodes) use ($countryNamesMap) {
+        if (empty($countryCodes) || !is_array($countryCodes)) {
+            return [];
+        }
+        return array_map(function($code) use ($countryNamesMap) {
+            $codeUpper = strtoupper($code);
+            return $countryNamesMap[$codeUpper] ?? $codeUpper;
+        }, $countryCodes);
+    };
+    
     foreach ($shippingRates as $rate) {
+        // Determine zone name: use shippingZone name if exists, otherwise try to extract from rate name or use 'General'
+        $zoneName = 'General';
+        if ($rate->shippingZone) {
+            $zoneName = $rate->shippingZone->name;
+        } elseif ($rate->shipping_zone_id === null) {
+            // For general domain rates, try to extract zone name from rate name
+            $rateName = strtolower($rate->name ?? '');
+            if (stripos($rateName, 'euro') !== false || stripos($rateName, 'europe') !== false) {
+                $zoneName = 'Euro';
+            } elseif (stripos($rateName, 'asia') !== false) {
+                $zoneName = 'Asia';
+            } elseif (stripos($rateName, 'america') !== false || stripos($rateName, 'us') !== false) {
+                $zoneName = 'America';
+            }
+        }
+        
         $rateData = [
             'id' => $rate->id,
             'zone_id' => $rate->shipping_zone_id,
-            'zone_name' => $rate->shippingZone ? $rate->shippingZone->name : null,
+            'zone_name' => $zoneName,
             'category_id' => $rate->category_id,
             'name' => $rate->name,
             'first_item_cost' => (float) $rate->first_item_cost,
@@ -61,7 +148,7 @@
         if (!isset($shippingRatesByZone[$zoneId])) {
             $shippingRatesByZone[$zoneId] = [
                 'zone_id' => $rate->shipping_zone_id,
-                'zone_name' => $rate->shippingZone ? $rate->shippingZone->name : 'General',
+                'zone_name' => $zoneName,
                 'rates' => []
             ];
         }
@@ -69,13 +156,114 @@
     }
     
     // Prepare zones data for dropdown
-    $zonesData = $shippingZones->map(function($zone) {
-        return [
-            'id' => $zone->id,
-            'name' => $zone->name,
-            'description' => $zone->description,
-        ];
-    })->toArray();
+    // Create separate options for each country in each zone
+    $zonesData = [];
+    $zonesWithCountries = [];
+    
+    // Include zones with shipping_zone_id (from ShippingZone model)
+    foreach ($shippingZones as $zone) {
+        // Get country codes from zone
+        $countries = $zone->countries ?? [];
+        $countryCodes = is_array($countries) ? $countries : [];
+        
+        // Convert country codes to country names
+        $countryNames = $convertCountryCodesToNames($countryCodes);
+        
+        // If zone has countries, create separate options for each country
+        if (!empty($countryCodes)) {
+            $zoneData = [
+                'id' => $zone->id,
+                'name' => $zone->name,
+                'description' => $zone->description,
+                'countries' => $countryCodes,
+                'country_options' => []
+            ];
+            
+            // Create an option for each country
+            foreach ($countryCodes as $index => $countryCode) {
+                $countryName = $countryNames[$index] ?? strtoupper($countryCode);
+                $zoneData['country_options'][] = [
+                    'value' => $zone->id . ':' . strtoupper($countryCode),
+                    'label' => $countryName,
+                    'zone_id' => $zone->id,
+                    'country_code' => strtoupper($countryCode)
+                ];
+            }
+            
+            $zonesWithCountries[] = $zoneData;
+        } else {
+            // Zone without countries - keep as single option
+            $zonesData[] = [
+                'id' => $zone->id,
+                'name' => $zone->name,
+                'description' => $zone->description,
+                'countries' => [],
+                'display_name' => $zone->name,
+            ];
+        }
+    }
+    
+    // Mapping for common general domain zones to country codes
+    $generalZoneCountries = [
+        'Euro' => ['AT', 'BE', 'DE', 'FR', 'IT', 'NL', 'ES', 'CH', 'UK'],
+        'Europe' => ['AT', 'BE', 'DE', 'FR', 'IT', 'NL', 'ES', 'CH', 'UK'],
+        'Asia' => ['CN', 'JP', 'KR', 'SG', 'MY', 'TH', 'ID', 'PH', 'VN'],
+        'America' => ['US', 'CA', 'MX'],
+        'US' => ['US'],
+    ];
+    
+    // Also include zones with null shipping_zone_id (general domain zones)
+    foreach ($shippingRatesByZone as $zoneId => $zoneData) {
+        if ($zoneId === 'none' || $zoneData['zone_id'] === null) {
+            // Check if this zone name already exists in zonesData
+            $exists = collect($zonesData)->contains(function($zone) use ($zoneData) {
+                return $zone['name'] === $zoneData['zone_name'];
+            });
+            
+            if (!$exists && !empty($zoneData['zone_name'])) {
+                // Get countries for this general domain zone from mapping
+                $zoneName = $zoneData['zone_name'];
+                $countries = $generalZoneCountries[$zoneName] ?? [];
+                
+                // Convert country codes to country names
+                $countryNames = $convertCountryCodesToNames($countries);
+                
+                // If zone has countries, create separate options for each country
+                if (!empty($countries)) {
+                    $zoneIdValue = 'general_' . strtolower(str_replace(' ', '_', $zoneName));
+                    $zoneDataItem = [
+                        'id' => $zoneIdValue,
+                        'name' => $zoneName,
+                        'description' => null,
+                        'countries' => $countries,
+                        'country_options' => []
+                    ];
+                    
+                    // Create an option for each country
+                    foreach ($countries as $index => $countryCode) {
+                        $countryName = $countryNames[$index] ?? strtoupper($countryCode);
+                        $zoneDataItem['country_options'][] = [
+                            'value' => $zoneIdValue . ':' . strtoupper($countryCode),
+                            'label' => $countryName,
+                            'zone_id' => $zoneIdValue,
+                            'country_code' => strtoupper($countryCode)
+                        ];
+                    }
+                    
+                    $zonesWithCountries[] = $zoneDataItem;
+                } else {
+                    // Zone without countries - keep as single option
+                    $zonesData[] = [
+                        'id' => 'general_' . strtolower(str_replace(' ', '_', $zoneName)),
+                        'name' => $zoneName,
+                        'description' => null,
+                        'countries' => [],
+                        'display_name' => $zoneName,
+                    ];
+                }
+            }
+        }
+    }
     
     // Prepare default shipping rate data for JavaScript
     $defaultShippingRateData = null;
@@ -94,6 +282,71 @@
             'zone_id' => $defaultShippingRate->shipping_zone_id,
             'zone_name' => $defaultShippingRate->shippingZone ? $defaultShippingRate->shippingZone->name : null,
         ];
+    }
+    
+    // Determine selected zone value for dropdown
+    $selectedZoneValue = null;
+    if ($defaultShippingRate) {
+        $defaultZoneId = $defaultShippingRate->shipping_zone_id;
+        
+        // First, try to find in zones with countries
+        foreach ($zonesWithCountries as $zone) {
+            if ($zone['id'] == $defaultZoneId) {
+                // If zone has countries, select first country option
+                if (!empty($zone['country_options'])) {
+                    $selectedZoneValue = $zone['country_options'][0]['value'];
+                    break;
+                }
+            }
+        }
+        
+        // If not found, try to find in regular zones
+        if (!$selectedZoneValue) {
+            foreach ($zonesData as $zone) {
+                if ($zone['id'] == $defaultZoneId) {
+                    $selectedZoneValue = $zone['id'];
+                    break;
+                }
+            }
+        }
+        
+        // If still not found and default zone is null, try to find general domain zone
+        if (!$selectedZoneValue && $defaultZoneId === null) {
+            $defaultZoneName = $defaultShippingRate->shippingZone 
+                ? $defaultShippingRate->shippingZone->name 
+                : ($defaultShippingRateData['zone_name'] ?? null);
+            
+            if ($defaultZoneName) {
+                // Try to find in zones with countries
+                foreach ($zonesWithCountries as $zone) {
+                    if (strtolower($zone['name']) === strtolower($defaultZoneName)) {
+                        if (!empty($zone['country_options'])) {
+                            $selectedZoneValue = $zone['country_options'][0]['value'];
+                            break;
+                        }
+                    }
+                }
+                
+                // Try to find in regular zones
+                if (!$selectedZoneValue) {
+                    foreach ($zonesData as $zone) {
+                        if (strtolower($zone['name']) === strtolower($defaultZoneName)) {
+                            $selectedZoneValue = $zone['id'];
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // If still no selected value, select first available option
+    if (!$selectedZoneValue) {
+        if (!empty($zonesWithCountries) && !empty($zonesWithCountries[0]['country_options'])) {
+            $selectedZoneValue = $zonesWithCountries[0]['country_options'][0]['value'];
+        } elseif (!empty($zonesData)) {
+            $selectedZoneValue = $zonesData[0]['id'];
+        }
     }
     
     // Calculate base subtotal in USD for shipping calculation
@@ -284,18 +537,32 @@
                             </div>
                             
                             <!-- Shipping Zone Selector -->
-                            @if(count($zonesData) > 1)
-                                <div class="flex items-center justify-between text-gray-600 mb-2">
-                                    <label for="shipping-zone-select" class="text-sm font-medium">Shipping Zone:</label>
+                            @if((count($zonesData) > 0) || (count($zonesWithCountries) > 0))
+                                <div class="mb-2">
+                                    <label for="shipping-zone-select" class="block text-sm font-medium text-gray-600 mb-1">Shipping Zone:</label>
                                     <select id="shipping-zone-select" 
                                             onchange="updateShippingZone(this.value)" 
-                                            class="ml-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#005366] focus:border-transparent">
-                                        @foreach($zonesData as $zone)
-                                            <option value="{{ $zone['id'] }}" 
-                                                    @if($defaultShippingRate && $defaultShippingRate->shipping_zone_id == $zone['id']) selected @endif>
-                                                {{ $zone['name'] }}
-                                            </option>
-                                        @endforeach
+                                            class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#005366] focus:border-transparent">
+                                        @if(count($zonesWithCountries) > 0)
+                                            @foreach($zonesWithCountries as $zone)
+                                                <optgroup label="{{ $zone['name'] }}">
+                                                    @foreach($zone['country_options'] as $country)
+                                                        <option value="{{ $country['value'] }}" 
+                                                                @if($selectedZoneValue == $country['value']) selected @endif>
+                                                            {{ $country['label'] }}
+                                                        </option>
+                                                    @endforeach
+                                                </optgroup>
+                                            @endforeach
+                                        @endif
+                                        @if(count($zonesData) > 0)
+                                            @foreach($zonesData as $zone)
+                                                <option value="{{ $zone['id'] }}" 
+                                                        @if($selectedZoneValue == $zone['id']) selected @endif>
+                                                    {{ $zone['display_name'] ?? $zone['name'] }}
+                                                </option>
+                                            @endforeach
+                                        @endif
                                     </select>
                                 </div>
                             @endif
@@ -469,8 +736,10 @@ const CURRENT_CURRENCY_RATE = {{ $currentCurrencyRate }};
 const SHIPPING_RATES = @json($shippingRatesData);
 const SHIPPING_RATES_BY_ZONE = @json($shippingRatesByZone);
 const SHIPPING_ZONES = @json($zonesData);
+const SHIPPING_ZONES_WITH_COUNTRIES = @json($zonesWithCountries);
 const DEFAULT_SHIPPING_RATE = @json($defaultShippingRateData);
 const DEFAULT_SHIPPING_ZONE_ID = @json($defaultShippingRate ? $defaultShippingRate->shipping_zone_id : null);
+const SELECTED_ZONE_VALUE = @json($selectedZoneValue);
 const BASE_SUBTOTAL = {{ $baseSubtotal }};
 
 
@@ -1058,16 +1327,47 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
     // Filter rates by zone if zoneId is provided
     let availableRates = SHIPPING_RATES;
     if (zoneId !== null) {
-        availableRates = SHIPPING_RATES.filter(r => r.zone_id === zoneId);
+        // Extract zone_id from value if format is "zone_id:country_code"
+        let actualZoneId = zoneId;
+        if (typeof zoneId === 'string' && zoneId.includes(':')) {
+            actualZoneId = zoneId.split(':')[0];
+        }
+        
+        // Check if it's a general domain zone (starts with 'general_')
+        if (typeof actualZoneId === 'string' && actualZoneId.startsWith('general_')) {
+            // Extract zone name from zoneId (e.g., 'general_euro' -> 'Euro')
+            const zoneName = actualZoneId.replace('general_', '').split('_').map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            ).join(' ');
+            
+            // Filter rates with null zone_id and matching zone_name
+            availableRates = SHIPPING_RATES.filter(r => 
+                r.zone_id === null && r.zone_name && r.zone_name.toLowerCase() === zoneName.toLowerCase()
+            );
+        } else {
+            // Regular zone: filter by zone_id
+            // Parse to integer if it's a numeric string
+            const parsedZoneId = typeof actualZoneId === 'string' && !isNaN(actualZoneId) 
+                ? parseInt(actualZoneId) 
+                : actualZoneId;
+            availableRates = SHIPPING_RATES.filter(r => r.zone_id === parsedZoneId);
+        }
+        
         // If a specific zone is selected but no rates exist for it, shipping is not available
         if (availableRates.length === 0) {
+            const currentZoneName = typeof actualZoneId === 'string' && actualZoneId.startsWith('general_') 
+                ? actualZoneId.replace('general_', '').split('_').map(word => 
+                    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                ).join(' ')
+                : (SHIPPING_ZONES.find(z => z.id === actualZoneId)?.name || null);
+            
             return {
                 cost: 0,
                 costConverted: 0,
                 rate: null,
                 name: null,
                 zoneId: zoneId,
-                zoneName: SHIPPING_ZONES.find(z => z.id === zoneId)?.name || null,
+                zoneName: currentZoneName,
                 available: false
             };
         }
@@ -1208,9 +1508,22 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
 function updateShippingZone(zoneId) {
     if (!zoneId) return;
     
-    zoneId = parseInt(zoneId);
+    // Extract zone_id from value if format is "zone_id:country_code"
+    let actualZoneId = zoneId;
+    if (typeof zoneId === 'string' && zoneId.includes(':')) {
+        actualZoneId = zoneId.split(':')[0];
+    }
     
-    // Save selected zone to localStorage
+    // Check if it's a general domain zone (starts with 'general_') or a numeric ID
+    // For general domain zones, keep as string; for regular zones, parse as integer
+    if (!actualZoneId.toString().startsWith('general_')) {
+        const parsed = parseInt(actualZoneId);
+        if (!isNaN(parsed)) {
+            actualZoneId = parsed;
+        }
+    }
+    
+    // Save selected zone to localStorage (save the full value including country code)
     localStorage.setItem('selectedShippingZoneId', zoneId);
     
     // Calculate base subtotal from cart items
@@ -1302,22 +1615,30 @@ function calculateBaseSubtotal(cartItems) {
 
 // Initialize shipping cost on page load
 function initializeShippingCost() {
-    // Get selected zone from localStorage or use default
+    // Get selected zone from localStorage or use default from server
     let selectedZoneId = localStorage.getItem('selectedShippingZoneId');
+    
+    // Verify selected zone exists in dropdown options
     if (selectedZoneId) {
-        selectedZoneId = parseInt(selectedZoneId);
-        // Verify zone exists
-        if (!SHIPPING_ZONES.find(z => z.id === selectedZoneId)) {
-            selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
+        const zoneSelect = document.getElementById('shipping-zone-select');
+        if (zoneSelect) {
+            // Check if the value exists in options
+            const optionExists = Array.from(zoneSelect.options).some(option => option.value === selectedZoneId);
+            if (!optionExists) {
+                selectedZoneId = null; // Reset if option doesn't exist
+            }
         }
-    } else {
-        selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
+    }
+    
+    // Use default selected value from server if no valid localStorage value
+    if (!selectedZoneId && SELECTED_ZONE_VALUE) {
+        selectedZoneId = SELECTED_ZONE_VALUE;
     }
     
     // Update dropdown if exists
     const zoneSelect = document.getElementById('shipping-zone-select');
-    if (zoneSelect) {
-        zoneSelect.value = selectedZoneId || '';
+    if (zoneSelect && selectedZoneId) {
+        zoneSelect.value = selectedZoneId;
     }
     
     // Calculate base subtotal from cart items
