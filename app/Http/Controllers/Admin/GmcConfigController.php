@@ -41,6 +41,8 @@ class GmcConfigController extends Controller
             'FR' => 'France (EUR)',
             'IT' => 'Italy (EUR)',
             'ES' => 'Spain (EUR)',
+            'MX' => 'Mexico (MXN)',
+            'NL' => 'Netherlands (EUR)',
         ];
 
         return view('admin.settings.gmc-config.create', compact('countries'));
@@ -131,6 +133,8 @@ class GmcConfigController extends Controller
             'FR' => 'France (EUR)',
             'IT' => 'Italy (EUR)',
             'ES' => 'Spain (EUR)',
+            'MX' => 'Mexico (MXN)',
+            'NL' => 'Netherlands (EUR)',
         ];
 
         return view('admin.settings.gmc-config.edit', compact('config', 'countries'));

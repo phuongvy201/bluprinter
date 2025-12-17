@@ -184,7 +184,7 @@
 function updateCurrencyAndLanguage(countryCode) {
     const languageMap = {
         'US': 'en', 'GB': 'en', 'VN': 'vi', 'CA': 'en', 'AU': 'en', 'NZ': 'en',
-        'DE': 'de', 'FR': 'fr', 'IT': 'it', 'ES': 'es',
+        'DE': 'de', 'FR': 'fr', 'IT': 'it', 'ES': 'es', 'MX': 'es', 'NL': 'nl',
     };
     if (countryCode && languageMap[countryCode]) {
         document.getElementById('content_language').value = languageMap[countryCode] || 'en';
