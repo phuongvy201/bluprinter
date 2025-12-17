@@ -203,7 +203,7 @@
 <script>
 function updateCurrencyAndLanguage(countryCode) {
     const languageMap = {
-        'US': 'en', 'GB': 'en', 'VN': 'vi', 'CA': 'en', 'AU': 'en',
+        'US': 'en', 'GB': 'en', 'VN': 'vi', 'CA': 'en', 'AU': 'en', 'NZ': 'en',
         'DE': 'de', 'FR': 'fr', 'IT': 'it', 'ES': 'es',
     };
     if (countryCode && languageMap[countryCode]) {
