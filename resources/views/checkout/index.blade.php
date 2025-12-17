@@ -3145,11 +3145,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // Convert tip from USD to current currency
         const convertedTip = convertFromUSD(tip, currentCurrency);
         
-        // Get shipping cost
+        // Get shipping cost - read from the display element which should have been updated
         const shippingCostEl = document.getElementById('checkout-shipping-cost');
-        const shippingCost = shippingCostEl ? parseFloat(shippingCostEl.textContent.replace(/[^0-9.-]/g, '')) || 0 : 0;
+        let shippingCost = 0;
+        if (shippingCostEl) {
+            // Extract numeric value from text (handles currency symbols)
+            const shippingText = shippingCostEl.textContent.trim();
+            shippingCost = parseFloat(shippingText.replace(/[^0-9.-]/g, '')) || 0;
+            console.log('💰 updateTotal - Shipping cost from display:', shippingCost, 'text:', shippingText);
+        }
         
         const total = subtotal + convertedTip + shippingCost;
+        
+        console.log('💰 updateTotal calculation:', {
+            subtotal: subtotal,
+            tip: convertedTip,
+            shippingCost: shippingCost,
+            total: total
+        });
         
         // Update tip line visibility
         const tipLine = document.getElementById('tip-line');
@@ -3157,15 +3170,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const totalDisplay = document.getElementById('checkout-total') || document.querySelector('.total-display');
         
         if (tip > 0) {
-            tipLine.style.display = 'flex';
-            tipAmountDisplay.textContent = formatPrice(convertedTip, currentCurrency);
+            if (tipLine) tipLine.style.display = 'flex';
+            if (tipAmountDisplay) tipAmountDisplay.textContent = formatPrice(convertedTip, currentCurrency);
         } else {
-            tipLine.style.display = 'none';
+            if (tipLine) tipLine.style.display = 'none';
         }
         
         // Update total
         if (totalDisplay) {
             totalDisplay.textContent = formatPrice(total, currentCurrency);
+            console.log('✅ Total updated to:', formatPrice(total, currentCurrency));
         }
         
         // Store tip amount for form submission (in USD)
@@ -3240,7 +3254,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const cartItems = getCheckoutCartItems();
         const baseSubtotal = getCheckoutBaseSubtotal();
         
-        console.log('🚚 calculateCheckoutShippingCost called with zoneId:', zoneId);
+        console.log('🚚 calculateCheckoutShippingCost called with zoneId:', zoneId, 'type:', typeof zoneId);
         console.log('📦 Cart items:', cartItems.length);
         console.log('💰 Base subtotal:', baseSubtotal);
         
@@ -3268,12 +3282,21 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('🌐 Current domain:', currentDomain);
         console.log('📊 Total shipping rates available:', SHIPPING_RATES.length);
         
-        if (zoneId !== null) {
+        if (zoneId !== null && zoneId !== undefined && zoneId !== '') {
             // Extract zone_id from value if format is "zone_id:country_code"
             let actualZoneId = zoneId;
             if (typeof zoneId === 'string' && zoneId.includes(':')) {
                 actualZoneId = zoneId.split(':')[0];
+                console.log('📝 Extracted zoneId from format "zone_id:country_code":', actualZoneId);
             }
+            
+            // Parse to integer if it's a numeric string (but not if it's a general zone)
+            if (typeof actualZoneId === 'string' && !actualZoneId.startsWith('general_') && !isNaN(actualZoneId)) {
+                actualZoneId = parseInt(actualZoneId);
+                console.log('📝 Parsed zoneId to integer:', actualZoneId);
+            }
+            
+            console.log('📍 Using actualZoneId for calculation:', actualZoneId, 'type:', typeof actualZoneId);
             
             // Determine zone name for display (set before filtering rates)
             if (typeof actualZoneId === 'string' && actualZoneId.startsWith('general_')) {
@@ -3747,6 +3770,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     /**
      * Update shipping cost display
+     * Similar to updateShippingZone in cart/index.blade.php
      */
     function updateCheckoutShippingDisplay(zoneId = null) {
         console.log('🔄 updateCheckoutShippingDisplay called with zoneId:', zoneId);
@@ -3790,7 +3814,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             if (shippingLabelEl) {
-                shippingLabelEl.textContent = `Shipping${shippingInfo.zoneName ? ` (${shippingInfo.zoneName})` : shippingInfo.name ? ` (${shippingInfo.name})` : ''}`;
+                // Prioritize zoneName from shippingInfo (which comes from currentZoneName or rate.zone_name)
+                const displayZoneName = shippingInfo.zoneName || shippingInfo.name || null;
+                shippingLabelEl.textContent = `Shipping${displayZoneName ? ` (${displayZoneName})` : ''}`;
                 shippingLabelEl.classList.remove('text-red-600');
             }
             
@@ -3804,12 +3830,7 @@ document.addEventListener('DOMContentLoaded', function() {
             shippingZoneIdInput.value = zoneId || '';
         }
         
-        // Save selected zone to localStorage
-        if (zoneId) {
-            localStorage.setItem('selectedShippingZoneId', zoneId);
-        }
-        
-        // Update total
+        // Update total - this will recalculate the total with new shipping cost
         updateTotal();
     }
     
@@ -3837,6 +3858,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     /**
      * Update shipping zone from country selection
+     * Similar to updateShippingZone in cart/index.blade.php
      */
     function updateShippingFromCountry() {
         const countrySelect = document.getElementById('country');
@@ -3853,18 +3875,26 @@ document.addEventListener('DOMContentLoaded', function() {
             // First try to get from option's data attribute
             const selectedOption = countrySelect.options[countrySelect.selectedIndex];
             if (selectedOption && selectedOption.dataset.zoneId) {
-                zoneId = parseInt(selectedOption.dataset.zoneId);
-                if (isNaN(zoneId)) {
-                    zoneId = null;
+                const zoneIdFromData = selectedOption.dataset.zoneId;
+                // Check if format is "zone_id:country_code" (like in cart page)
+                if (typeof zoneIdFromData === 'string' && zoneIdFromData.includes(':')) {
+                    zoneId = zoneIdFromData; // Keep full format for consistency
                 } else {
+                    const parsed = parseInt(zoneIdFromData);
+                    if (!isNaN(parsed)) {
+                        zoneId = parsed;
+                    }
+                }
+                if (zoneId) {
                     console.log('✅ Zone ID from data attribute:', zoneId);
                 }
             }
             
             // If not found, try from map
             if (!zoneId) {
-                zoneId = getZoneIdFromCountry(countryCode);
-                if (zoneId) {
+                const mappedZoneId = getZoneIdFromCountry(countryCode);
+                if (mappedZoneId) {
+                    zoneId = mappedZoneId;
                     console.log('✅ Zone ID from map:', zoneId);
                 }
             }
@@ -3885,15 +3915,43 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('📦 Final zone ID for shipping calculation:', zoneId);
         console.log('🔄 Recalculating shipping cost for country:', countryCode);
         
+        // Extract zone_id from value if format is "zone_id:country_code" (like cart page)
+        let actualZoneId = zoneId;
+        if (typeof zoneId === 'string' && zoneId.includes(':')) {
+            actualZoneId = zoneId.split(':')[0];
+        }
+        
+        // Check if it's a general domain zone (starts with 'general_') or a numeric ID
+        // For general domain zones, keep as string; for regular zones, parse as integer
+        if (!actualZoneId.toString().startsWith('general_')) {
+            const parsed = parseInt(actualZoneId);
+            if (!isNaN(parsed)) {
+                actualZoneId = parsed;
+            }
+        }
+        
         // Update shipping zone ID input
         const shippingZoneIdInput = document.getElementById('shipping_zone_id');
         if (shippingZoneIdInput) {
-            shippingZoneIdInput.value = zoneId || '';
+            shippingZoneIdInput.value = actualZoneId || '';
+        }
+        
+        // Save selected zone to localStorage (save the full value including country code if available)
+        if (zoneId) {
+            localStorage.setItem('selectedShippingZoneId', zoneId);
         }
         
         // Force recalculation by passing zoneId explicitly
         // This ensures shipping cost is recalculated even if zoneId is the same
-        updateCheckoutShippingDisplay(zoneId);
+        // Use actualZoneId (parsed) for calculation, but keep original zoneId for display
+        console.log('🔄 Calling updateCheckoutShippingDisplay with actualZoneId:', actualZoneId);
+        updateCheckoutShippingDisplay(actualZoneId);
+        
+        // Force a small delay to ensure DOM is updated
+        setTimeout(() => {
+            console.log('🔄 Re-checking shipping after delay...');
+            updateCheckoutShippingDisplay(actualZoneId);
+        }, 100);
     }
     
     // Initialize shipping cost on page load
@@ -3941,9 +3999,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listener for country change
     const countrySelect = document.getElementById('country');
     if (countrySelect) {
-        countrySelect.addEventListener('change', function() {
+        console.log('✅ Country select element found, attaching change listener');
+        countrySelect.addEventListener('change', function(e) {
+            console.log('🌍 Country dropdown changed to:', e.target.value);
             updateShippingFromCountry();
         });
+        
+        // Also listen for input event (for better compatibility)
+        countrySelect.addEventListener('input', function(e) {
+            console.log('🌍 Country dropdown input changed to:', e.target.value);
+            updateShippingFromCountry();
+        });
+    } else {
+        console.error('❌ Country select element not found!');
     }
     
     // Update checkoutProducts with checkoutItemsData if available (has categories)
