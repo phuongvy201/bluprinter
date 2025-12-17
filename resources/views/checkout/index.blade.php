@@ -3343,7 +3343,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 availableRates = [...domainSpecificRates, ...generalDomainRates];
                 
                 // If no rates found with matching zone_name, fallback to all general domain rates (zone_id = null)
-                if (availableRates.length === 0) {
+            if (availableRates.length === 0) {
                     const allGeneralRates = SHIPPING_RATES.filter(r => r.zone_id === null);
                     if (allGeneralRates.length > 0) {
                         availableRates = allGeneralRates;
@@ -3376,19 +3376,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 const normalizeZoneName = (name) => name ? name.toLowerCase().trim().replace(/\s+/g, ' ') : '';
                 const normalizedZoneName = zoneName ? normalizeZoneName(zoneName) : null;
                 
-                // Find rates by zone_id OR zone_name (for zones like Europe)
-                // Match by both zone_id and zone_name to ensure we find all relevant rates
+                // Find rates by zone_id FIRST (strict matching), then zone_name as fallback
                 // Current domain rates: domain = current domain and (zone_id matches OR zone_name matches)
                 domainSpecificRates = SHIPPING_RATES.filter(r => {
                     if (r.domain !== currentDomain) return false;
-                    // Match by zone_id
-                    if (r.zone_id === parsedZoneId) return true;
-                    // Also match by zone_name if zone_id doesn't match (for zones like Europe)
+                    // PRIORITY 1: Match by zone_id (strict matching - most important)
+                    if (r.zone_id === parsedZoneId) {
+                        console.log(`   ✅ Rate ${r.id} matches zone ${parsedZoneId} by zone_id (domain-specific)`);
+                        return true;
+                    }
+                    // PRIORITY 2: Also match by zone_name if zone_id doesn't match (for zones like Europe)
+                    // But only if zone_name is provided and matches
                     if (normalizedZoneName && r.zone_name) {
                         const normalizedRateZoneName = normalizeZoneName(r.zone_name);
-                        return normalizedRateZoneName === normalizedZoneName || 
-                               normalizedRateZoneName.includes(normalizedZoneName) ||
-                               normalizedZoneName.includes(normalizedRateZoneName);
+                        const matchesByName = normalizedRateZoneName === normalizedZoneName || 
+                                             normalizedRateZoneName.includes(normalizedZoneName) ||
+                                             normalizedZoneName.includes(normalizedRateZoneName);
+                        if (matchesByName) {
+                            console.log(`   ⚠️ Rate ${r.id} matches zone ${parsedZoneId} by zone_name (${r.zone_name}), but zone_id is ${r.zone_id} (domain-specific)`);
+                        }
+                        return matchesByName;
                     }
                     return false;
                 });
@@ -3398,13 +3405,50 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('   Rates:', domainSpecificRates.map(r => ({id: r.id, name: r.name, zone_id: r.zone_id, zone_name: r.zone_name})));
                 }
                 
-                // Other domain rates: any other domain with (zone_id matches OR zone_name matches)
+                // Other domain rates: any other domain with zone_id matches (strict matching first)
+                // Only match by zone_name if zone_id doesn't match (for zones like Europe)
                 generalDomainRates = SHIPPING_RATES.filter(r => {
                     if (r.domain === currentDomain) return false;
-                    // Match by zone_id
-                    if (r.zone_id === parsedZoneId) return true;
-                    // Also match by zone_name if zone_id doesn't match (for zones like Europe)
+                    // STRICT: Match by zone_id first (most important)
+                    if (r.zone_id === parsedZoneId) {
+                        console.log(`   ✅ Rate ${r.id} matches zone ${parsedZoneId} by zone_id`);
+                        return true;
+                    }
+                    // FALLBACK: Also match by zone_name if zone_id doesn't match (for zones like Europe)
+                    // But only if zone_name is provided and matches
                     if (normalizedZoneName && r.zone_name) {
+                        const normalizedRateZoneName = normalizeZoneName(r.zone_name);
+                        const matchesByName = normalizedRateZoneName === normalizedZoneName || 
+                                             normalizedRateZoneName.includes(normalizedZoneName) ||
+                                             normalizedZoneName.includes(normalizedRateZoneName);
+                        if (matchesByName) {
+                            console.log(`   ⚠️ Rate ${r.id} matches zone ${parsedZoneId} by zone_name (${r.zone_name}), but zone_id is ${r.zone_id}`);
+                        }
+                        return matchesByName;
+                    }
+                    return false;
+                });
+                
+                console.log(`🔍 Other domain rates for zone ${parsedZoneId}:`, generalDomainRates.length);
+                if (generalDomainRates.length > 0) {
+                    console.log('   Rates:', generalDomainRates.map(r => ({
+                        id: r.id, 
+                        name: r.name, 
+                        zone_id: r.zone_id, 
+                        zone_name: r.zone_name,
+                        first_item_cost: r.first_item_cost,
+                        domain: r.domain
+                    })));
+                }
+                
+                // Priority: current domain first, then other domains as fallback
+                // IMPORTANT: Only include rates that match the zone_id (strict matching)
+                // Filter out rates that don't match zone_id (only keep zone_name matches if zone_id matches too)
+                const strictDomainSpecificRates = domainSpecificRates.filter(r => {
+                    // Keep if zone_id matches (strict)
+                    if (r.zone_id === parsedZoneId) return true;
+                    // Also keep if zone_name matches AND zone_id is null (general rates for this zone name)
+                    if (normalizedZoneName && r.zone_name && r.zone_id === null) {
                         const normalizedRateZoneName = normalizeZoneName(r.zone_name);
                         return normalizedRateZoneName === normalizedZoneName || 
                                normalizedRateZoneName.includes(normalizedZoneName) ||
@@ -3413,25 +3457,45 @@ document.addEventListener('DOMContentLoaded', function() {
                     return false;
                 });
                 
-                console.log(`🔍 Other domain rates for zone ${parsedZoneId}:`, generalDomainRates.length);
-                if (generalDomainRates.length > 0) {
-                    console.log('   Rates:', generalDomainRates.map(r => ({id: r.id, name: r.name, zone_id: r.zone_id, zone_name: r.zone_name})));
-                }
+                const strictGeneralDomainRates = generalDomainRates.filter(r => {
+                    // Keep if zone_id matches (strict)
+                    if (r.zone_id === parsedZoneId) return true;
+                    // Also keep if zone_name matches AND zone_id is null (general rates for this zone name)
+                    if (normalizedZoneName && r.zone_name && r.zone_id === null) {
+                        const normalizedRateZoneName = normalizeZoneName(r.zone_name);
+                        return normalizedRateZoneName === normalizedZoneName || 
+                               normalizedRateZoneName.includes(normalizedZoneName) ||
+                               normalizedZoneName.includes(normalizedRateZoneName);
+                    }
+                    return false;
+                });
                 
-                // Priority: current domain first, then other domains as fallback
+                console.log(`🔍 Strict filtering - Domain-specific: ${strictDomainSpecificRates.length}, General domain: ${strictGeneralDomainRates.length}`);
+                
                 // Sort rates to ensure consistent selection when multiple rates exist
-                if (domainSpecificRates.length > 0) {
+                if (strictDomainSpecificRates.length > 0) {
                     // Sort domain-specific rates by first_item_cost (ascending) to prefer lower cost rates
-                    availableRates = domainSpecificRates.sort((a, b) => 
+                    availableRates = strictDomainSpecificRates.sort((a, b) => 
                         (a.first_item_cost || 0) - (b.first_item_cost || 0)
                     );
-                } else if (generalDomainRates.length > 0) {
+                } else if (strictGeneralDomainRates.length > 0) {
                     // Sort general domain rates by first_item_cost (ascending) to prefer lower cost rates
-                    availableRates = generalDomainRates.sort((a, b) => 
+                    availableRates = strictGeneralDomainRates.sort((a, b) => 
                         (a.first_item_cost || 0) - (b.first_item_cost || 0)
                     );
                 } else {
-                    availableRates = [];
+                    // If no strict matches, fallback to original filtered rates
+                    if (domainSpecificRates.length > 0) {
+                        availableRates = domainSpecificRates.sort((a, b) => 
+                            (a.first_item_cost || 0) - (b.first_item_cost || 0)
+                        );
+                    } else if (generalDomainRates.length > 0) {
+                        availableRates = generalDomainRates.sort((a, b) => 
+                            (a.first_item_cost || 0) - (b.first_item_cost || 0)
+                        );
+                    } else {
+                        availableRates = [];
+                    }
                 }
                 
                 console.log(`📊 Available rates after filtering: ${availableRates.length}`);
@@ -3563,129 +3627,168 @@ document.addEventListener('DOMContentLoaded', function() {
             const quantity = group.quantity;
             
             // Find shipping rate for this category
-            // Priority order (Category-specific ALWAYS prioritized over General category):
-            // 1) Domain-specific + Category-specific rate (highest)
-            // 2) General domain + Category-specific rate (category is more important than domain)
-            // 3) Domain-specific + General category rate
-            // 4) General domain + General category rate
-            // 5) Default shipping rate (fallback)
+            // Logic similar to cart/index.blade.php - prioritize rates in availableRates (already filtered by zone)
             let rate = null;
             
-            // Helper function to find rate in a specific rate set
-            const findRateInSet = (rateSet, requireCategoryId = null) => {
-                return rateSet.find(r => {
-                    const categoryMatch = requireCategoryId !== null 
-                        ? r.category_id === requireCategoryId
-                        : r.category_id === null;
+            // First, try to find rate specific to this category with all conditions (from availableRates)
+            if (categoryId && availableRates.length > 0) {
+                rate = availableRates.find(r => 
+                    r.category_id === categoryId && 
+                    (!r.min_items || quantity >= r.min_items) &&
+                    (!r.max_items || quantity <= r.max_items) &&
+                    (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
+                    (!r.max_order_value || baseSubtotal <= r.max_order_value)
+                );
+            }
+            
+            // If no category-specific rate with conditions, try category-specific rate without quantity/order value conditions
+            if (!rate && categoryId && availableRates.length > 0) {
+                rate = availableRates.find(r => r.category_id === categoryId);
+            }
+            
+            // If no category-specific rate, try general rate (category_id is null) with all conditions
+            if (!rate && availableRates.length > 0) {
+                rate = availableRates.find(r => 
+                    r.category_id === null &&
+                    (!r.min_items || quantity >= r.min_items) &&
+                    (!r.max_items || quantity <= r.max_items) &&
+                    (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
+                    (!r.max_order_value || baseSubtotal <= r.max_order_value)
+                );
+            }
+            
+            // If no general rate with conditions, try any general rate (category_id is null)
+            if (!rate && availableRates.length > 0) {
+                // Log all available rates for debugging
+                console.log(`🔍 Searching for general rate in ${availableRates.length} available rates:`, 
+                    availableRates.map(r => ({
+                        id: r.id,
+                        name: r.name,
+                        zone_id: r.zone_id,
+                        zone_name: r.zone_name,
+                        category_id: r.category_id,
+                        first_item_cost: r.first_item_cost
+                    }))
+                );
+                
+                rate = availableRates.find(r => r.category_id === null);
+                if (rate) {
+                    console.log(`✅ Found general rate (no category) from availableRates:`, {
+                        rateId: rate.id,
+                        rateName: rate.name,
+                        zone_id: rate.zone_id,
+                        zone_name: rate.zone_name,
+                        first_item_cost: rate.first_item_cost,
+                        expectedZoneId: parsedZoneId,
+                        expectedZoneName: zoneName
+                    });
                     
-                    return categoryMatch &&
-                        (!r.min_items || quantity >= r.min_items) &&
-                        (!r.max_items || quantity <= r.max_items) &&
-                        (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
-                        (!r.max_order_value || baseSubtotal <= r.max_order_value);
-                });
-            };
-            
-            // Priority 1: Domain-specific + Category-specific rate (highest priority)
-            if (categoryId && domainSpecificRates.length > 0) {
-                rate = findRateInSet(domainSpecificRates, categoryId);
+                    // Verify rate belongs to correct zone
+                    if (rate.zone_id !== parsedZoneId && rate.zone_id !== null) {
+                        console.warn(`⚠️ WARNING: Selected rate ${rate.id} has zone_id ${rate.zone_id} but expected zone_id is ${parsedZoneId}`);
+                    }
+                } else {
+                    console.log(`❌ No general rate found in availableRates`);
+                }
             }
             
-            // Priority 2: General domain + Category-specific rate
-            // Category-specific is more important than domain specificity
-            // Example: "Category nail box + domain general" beats "Category general + domain bluprinter"
-            if (!rate && categoryId && generalDomainRates.length > 0) {
-                rate = findRateInSet(generalDomainRates, categoryId);
-            }
-            
-            // Priority 3: Domain-specific + General category rate
-            if (!rate && domainSpecificRates.length > 0) {
-                rate = findRateInSet(domainSpecificRates, null);
-            }
-            
-            // Priority 4: General domain + General category rate
-            if (!rate && generalDomainRates.length > 0) {
-                rate = findRateInSet(generalDomainRates, null);
-            }
-            
-            // Priority 5: If still no rate found, use default shipping rate as fallback
+            // If still no rate found, use default shipping rate (if it meets conditions and matches zone)
             if (!rate && DEFAULT_SHIPPING_RATE) {
                 const defaultRate = DEFAULT_SHIPPING_RATE;
-                // Check if default rate meets the conditions (be lenient with zone matching)
-                const meetsConditions = 
+                
+                // Extract actual zone ID for comparison
+                let actualZoneIdForComparison = zoneId;
+                if (zoneId !== null) {
+                    if (typeof zoneId === 'string' && zoneId.includes(':')) {
+                        actualZoneIdForComparison = zoneId.split(':')[0];
+                    }
+                    // Parse to integer if it's a numeric string
+                    if (typeof actualZoneIdForComparison === 'string' && !isNaN(actualZoneIdForComparison)) {
+                        actualZoneIdForComparison = parseInt(actualZoneIdForComparison);
+                    }
+                }
+                
+                // Check if default rate meets the conditions and zone
+                // Allow default rate if: zoneId is null OR default rate zone matches OR default rate is general (zone_id = null)
+                // If availableRates is empty, be more lenient with zone matching
+                let zoneMatches = false;
+                if (availableRates.length === 0) {
+                    // When no rates exist for the zone, allow default rate regardless of zone (as final fallback)
+                    zoneMatches = true;
+                } else {
+                    // Normal zone matching when rates exist
+                    zoneMatches = zoneId === null || 
+                                 defaultRate.zone_id === actualZoneIdForComparison || 
+                                 defaultRate.zone_id === null; // General domain rate can be used for any zone
+                }
+                
+                // When availableRates is empty, be more lenient with conditions (use default rate as last resort)
+                const meetsConditions = zoneMatches && (
+                    availableRates.length === 0 
+                        ? true // When no rates available, use default rate regardless of quantity/order value conditions
+                        : (
                     (!defaultRate.min_items || quantity >= defaultRate.min_items) &&
                     (!defaultRate.max_items || quantity <= defaultRate.max_items) &&
                     (!defaultRate.min_order_value || baseSubtotal >= defaultRate.min_order_value) &&
-                    (!defaultRate.max_order_value || baseSubtotal <= defaultRate.max_order_value);
+                            (!defaultRate.max_order_value || baseSubtotal <= defaultRate.max_order_value)
+                        )
+                );
                 
                 if (meetsConditions) {
                     rate = defaultRate;
                 }
             }
             
-            // Priority 6: If still no rate, find best matching rate from availableRates
-            // Try to find rate that best matches the conditions (prefer rates with matching conditions)
+            // Priority 6: If still no rate, use first available rate from availableRates
             if (!rate && availableRates.length > 0) {
-                // First, try to find rate that matches quantity and order value conditions
-                const matchingConditions = availableRates.filter(r => 
-                    (!r.min_items || quantity >= r.min_items) &&
-                    (!r.max_items || quantity <= r.max_items) &&
-                    (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
-                    (!r.max_order_value || baseSubtotal <= r.max_order_value)
-                );
-                
-                if (matchingConditions.length > 0) {
-                    // If multiple rates match, prefer domain-specific, then by sort_order or first_item_cost
-                    rate = matchingConditions.sort((a, b) => {
-                        // Prefer current domain
-                        if (a.domain === currentDomain && b.domain !== currentDomain) return -1;
-                        if (a.domain !== currentDomain && b.domain === currentDomain) return 1;
-                        // Then by first_item_cost (lower is better)
-                        return (a.first_item_cost || 0) - (b.first_item_cost || 0);
-                    })[0];
-                } else {
-                    // If no rate matches conditions, use first available rate
-                    rate = availableRates[0];
-                }
+                rate = availableRates[0]; // Use first available rate
             }
             
             // Priority 7: If still no rate, use first rate from all SHIPPING_RATES
             if (!rate && SHIPPING_RATES.length > 0) {
-                // Try to find best matching rate from all rates
-                const allMatchingConditions = SHIPPING_RATES.filter(r => 
-                    (!r.min_items || quantity >= r.min_items) &&
-                    (!r.max_items || quantity <= r.max_items) &&
-                    (!r.min_order_value || baseSubtotal >= r.min_order_value) &&
-                    (!r.max_order_value || baseSubtotal <= r.max_order_value)
-                );
-                
-                if (allMatchingConditions.length > 0) {
-                    rate = allMatchingConditions.sort((a, b) => {
-                        // Prefer current domain
-                        if (a.domain === currentDomain && b.domain !== currentDomain) return -1;
-                        if (a.domain !== currentDomain && b.domain === currentDomain) return 1;
-                        // Then by first_item_cost (lower is better)
-                        return (a.first_item_cost || 0) - (b.first_item_cost || 0);
-                    })[0];
-                } else {
-                    // Final fallback: use first rate
-                    rate = SHIPPING_RATES[0];
-                }
+                rate = SHIPPING_RATES[0]; // Use first rate as final fallback
             }
             
             // Always use a rate if available (never return unavailable)
             if (rate) {
+                // Verify rate belongs to correct zone (if zoneId is specified)
+                let actualZoneIdForVerification = zoneId;
+                if (zoneId !== null) {
+                    if (typeof zoneId === 'string' && zoneId.includes(':')) {
+                        actualZoneIdForVerification = zoneId.split(':')[0];
+                    }
+                    if (typeof actualZoneIdForVerification === 'string' && !isNaN(actualZoneIdForVerification)) {
+                        actualZoneIdForVerification = parseInt(actualZoneIdForVerification);
+                    }
+                    
+                    // If rate doesn't match zone and zone is specified, try to find another rate
+                    if (rate.zone_id !== null && rate.zone_id !== actualZoneIdForVerification) {
+                        console.warn(`⚠️ Rate ${rate.id} has zone_id ${rate.zone_id} but expected ${actualZoneIdForVerification}, trying to find correct rate...`);
+                        // Try to find rate with correct zone_id from availableRates
+                        const correctRate = availableRates.find(r => 
+                            r.zone_id === actualZoneIdForVerification &&
+                            (categoryId ? r.category_id === categoryId : r.category_id === null)
+                        );
+                        if (correctRate) {
+                            console.log(`✅ Found correct rate ${correctRate.id} for zone ${actualZoneIdForVerification}`);
+                            rate = correctRate;
+                        }
+                    }
+                }
+                
                 const groupCost = rate.first_item_cost + (quantity - 1) * rate.additional_item_cost;
                 totalShippingCost += groupCost;
                 
                 console.log(`✅ Rate found for category ${categoryId || 'general'}:`, {
                     rateId: rate.id,
                     rateName: rate.name,
+                    zone_id: rate.zone_id,
                     zoneName: rate.zone_name,
                     firstItemCost: rate.first_item_cost,
                     additionalItemCost: rate.additional_item_cost,
                     quantity: quantity,
-                    groupCost: groupCost
+                    groupCost: groupCost,
+                    expectedZoneId: actualZoneIdForVerification
                 });
                 
                 if (!shippingRateUsed || (categoryId && rate.category_id === categoryId)) {
@@ -3724,15 +3827,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 zoneName = currentZoneName || firstRate.zone_name;
             } else {
                 // Only return unavailable if absolutely no rates exist
-                return {
-                    cost: 0,
-                    costConverted: 0,
-                    rate: null,
-                    name: null,
-                    zoneId: zoneId,
+            return {
+                cost: 0,
+                costConverted: 0,
+                rate: null,
+                name: null,
+                zoneId: zoneId,
                     zoneName: currentZoneName,
-                    available: false
-                };
+                available: false
+            };
             }
         }
         
@@ -3972,7 +4075,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // If not found, try from map
             if (!selectedZoneId) {
-                selectedZoneId = getZoneIdFromCountry(countrySelect.value);
+            selectedZoneId = getZoneIdFromCountry(countrySelect.value);
             }
         }
         
