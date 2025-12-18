@@ -125,6 +125,12 @@
                                     +{{ count($zone->countries) - 5 }} more
                                 </span>
                                 @endif
+                                @php $hasAustria = in_array('AT', $zone->countries ?? []); @endphp
+                                @if($hasAustria)
+                                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+                                    Austria (AT)
+                                </span>
+                                @endif
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">

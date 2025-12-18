@@ -42,6 +42,7 @@ class GmcConfig extends Model
             'FR' => 'EUR',
             'IT' => 'EUR',
             'ES' => 'EUR',
+            'AT' => 'EUR',
         ];
 
         return $mapping[strtoupper($countryCode)] ?? 'USD';
@@ -62,6 +63,7 @@ class GmcConfig extends Model
             'FR' => 'fr',
             'IT' => 'it',
             'ES' => 'es',
+            'AT' => 'de',
         ];
 
         return $mapping[strtoupper($countryCode)] ?? 'en';

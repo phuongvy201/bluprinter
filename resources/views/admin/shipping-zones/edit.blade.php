@@ -72,7 +72,7 @@
                           id="countries" 
                           rows="4"
                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('countries') border-red-500 @enderror"
-                          placeholder="US, CA, GB (mã quốc gia ISO 2 chữ, phân cách bằng dấu phẩy)"
+                          placeholder="US, CA, GB, AT (mã quốc gia ISO 2 chữ, phân cách bằng dấu phẩy)"
                           required>{{ old('countries', implode(', ', $shippingZone->countries ?? [])) }}</textarea>
                 <p class="mt-1 text-xs text-gray-500">
                     Nhập mã quốc gia ISO 2 chữ (VD: US, VN, GB), phân cách bằng dấu phẩy
@@ -80,6 +80,16 @@
                 @error('countries')
                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                 @enderror
+                <div class="mt-3 space-y-2">
+                    <p class="text-xs font-semibold text-gray-700">Thêm nhanh mã quốc gia</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button"
+                                class="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-lg hover:bg-indigo-100 transition-colors"
+                                onclick="window.addCountryCode?.('AT')">
+                            Austria (AT)
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- Description -->
@@ -137,4 +147,19 @@
     </form>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    window.addCountryCode = function (code) {
+        var textarea = document.getElementById('countries');
+        if (!textarea || !code) return;
+        var parts = textarea.value.split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
+        if (parts.indexOf(code) === -1) {
+            parts.push(code);
+        }
+        textarea.value = parts.join(', ');
+        textarea.focus();
+    };
+</script>
+@endpush
 

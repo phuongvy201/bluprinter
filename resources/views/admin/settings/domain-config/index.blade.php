@@ -29,6 +29,7 @@
         <div class="mb-4">
             <h2 class="text-xl font-bold text-gray-900">Cấu hình Currency</h2>
             <p class="text-sm text-gray-600">Quản lý loại tiền tệ cho từng domain</p>
+            <p class="text-xs text-blue-600 mt-1">Gợi ý: domain .at thường dùng EUR</p>
         </div>
         <div class="bg-white shadow-md rounded-2xl overflow-hidden">
             <div class="overflow-x-auto">
@@ -193,6 +194,7 @@
             <li>Hệ thống sẽ tự động convert và hiển thị giá theo currency đã cấu hình</li>
             <li>Exchange rate nên được cập nhật định kỳ để đảm bảo chính xác</li>
             <li>Nếu domain không có cấu hình, hệ thống sẽ sử dụng USD mặc định</li>
+            <li>Ví dụ: domain <strong>.at</strong> thường dùng EUR (AT → EUR)</li>
         </ul>
     </div>
 </div>

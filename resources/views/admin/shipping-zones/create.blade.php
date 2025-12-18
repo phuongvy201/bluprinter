@@ -71,7 +71,7 @@
                           id="countries" 
                           rows="4"
                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('countries') border-red-500 @enderror"
-                          placeholder="US, CA, GB (mã quốc gia ISO 2 chữ, phân cách bằng dấu phẩy)"
+                          placeholder="US, CA, GB, AT (mã quốc gia ISO 2 chữ, phân cách bằng dấu phẩy)"
                           required>{{ old('countries') }}</textarea>
                 <p class="mt-1 text-xs text-gray-500">
                     Nhập mã quốc gia ISO 2 chữ (VD: US, VN, GB), phân cách bằng dấu phẩy

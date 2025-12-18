@@ -84,6 +84,7 @@
                 <p class="mt-2 text-xs text-gray-500">
                     Tỉ giá chuyển đổi từ USD. Ví dụ: <strong>1.0</strong> cho USD, <strong>0.79</strong> cho GBP (1 USD = 0.79 GBP), <strong>25000</strong> cho VND (1 USD = 25000 VND).
                 </p>
+                <p class="mt-1 text-xs text-blue-600">Gợi ý: Austria dùng EUR → điền rate tương ứng (VD 0.93)</p>
             </div>
 
             <div>
@@ -244,6 +245,7 @@
             <li><strong>bluprinter.co.uk</strong> → GBP → Rate: 0.79 (1 USD = 0.79 GBP)</li>
             <li><strong>bluprinter.mx</strong> → MXN → Rate: 18.19 (1 USD = 18.19 MXN)</li>
             <li><strong>bluprinter.co.nz</strong> → NZD → Rate: 1.65 (1 USD = 1.65 NZD)</li>
+            <li><strong>bluprinter.at</strong> → EUR → Rate: 0.93 (1 USD ≈ 0.93 EUR)</li>
         </ul>
     </div>
 </div>
