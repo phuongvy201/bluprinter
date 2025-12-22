@@ -48,6 +48,8 @@ use App\Http\Controllers\SupportController;
 use App\Http\Controllers\BulkOrderController;
 use App\Http\Controllers\PromoCodeController;
 use App\Http\Controllers\NewsletterController;
+use App\Http\Controllers\SellerApplicationController;
+use App\Http\Controllers\Admin\SellerApplicationAdminController;
 
 // Public routes
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -158,6 +160,10 @@ Route::post('/bulk-order', [BulkOrderController::class, 'store'])->name('bulk.or
 // Promo Code routes
 Route::get('/promo-code', [PromoCodeController::class, 'create'])->name('promo.code.create');
 Route::post('/promo-code', [PromoCodeController::class, 'store'])->name('promo.code.store');
+
+// Seller Application routes
+Route::get('/become-a-seller', [SellerApplicationController::class, 'create'])->name('seller.apply');
+Route::post('/become-a-seller', [SellerApplicationController::class, 'store'])->name('seller.apply.submit');
 
 // Customer Profile routes (requires authentication)
 Route::middleware('auth')->prefix('customer')->name('customer.')->group(function () {
@@ -586,6 +592,12 @@ Route::middleware('auth')->group(function () {
 
         // API Token (Admin only)
         Route::get('/api-token', [App\Http\Controllers\ApiDocController::class, 'tokenDashboard'])->name('api-token');
+
+        // Seller Applications
+        Route::get('seller-applications', [SellerApplicationAdminController::class, 'index'])->name('seller-applications.index');
+        Route::get('seller-applications/{sellerApplication}', [SellerApplicationAdminController::class, 'show'])->name('seller-applications.show');
+        Route::post('seller-applications/{sellerApplication}/approve', [SellerApplicationAdminController::class, 'approve'])->name('seller-applications.approve');
+        Route::post('seller-applications/{sellerApplication}/reject', [SellerApplicationAdminController::class, 'reject'])->name('seller-applications.reject');
     });
 
     // Orders management (Admin + Ad-Partner) - using controller middleware

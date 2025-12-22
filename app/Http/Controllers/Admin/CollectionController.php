@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Collection;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -34,7 +35,13 @@ class CollectionController extends Controller
                     ->orderBy('created_at', 'desc')
                     ->paginate(12);
             } else {
-                $collections = collect()->paginate(12);
+                $collections = new LengthAwarePaginator(
+                    [],
+                    0,
+                    12,
+                    1,
+                    ['path' => request()->url(), 'query' => request()->query()]
+                );
             }
         }
 

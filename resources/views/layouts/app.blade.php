@@ -407,6 +407,7 @@
                         <h3 class="text-lg font-bold mb-4">Company</h3>
                         <ul class="space-y-3 text-sm">
                             <li><a href="/page/about-us" class="text-gray-300 hover:text-white transition-colors">About Us</a></li>
+
                             <li><a href="/page/privacy-policy" class="text-gray-300 hover:text-white transition-colors">Privacy Policy</a></li>
                             <li><a href="/page/terms-of-service" class="text-gray-300 hover:text-white transition-colors">Terms of Service</a></li>
                             <li><a href="/page/secure-payments" class="text-gray-300 hover:text-white transition-colors">Secure Payments</a></li>
@@ -438,6 +439,8 @@
                         <ul class="space-y-3 text-sm">
                             <li><a href="/bulk-order" class="text-gray-300 hover:text-white transition-colors">Bulk Order</a></li>
                             <li><a href="/promo-code" class="text-gray-300 hover:text-white transition-colors">Promo Code</a></li>
+                            <li><a href="{{ route('seller.apply') }}" class="text-gray-300 hover:text-white transition-colors">Sell on Bluprinter</a></li>
+
                         </ul>
                     </div>
                 </div>
