@@ -11,106 +11,65 @@
     .wishlist-card {
         transition: all 0.3s ease;
         border: 1px solid #e5e7eb;
-        border-radius: 12px;
+        border-radius: 14px;
     }
-
     .wishlist-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        border-color: #3b82f6;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        border-color: #0ea5e9;
     }
-
     .product-image {
         width: 100%;
-        height: 200px;
+        height: 220px;
         object-fit: cover;
-        border-radius: 8px;
+        border-radius: 10px;
     }
-
     .remove-btn {
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
     }
-
     .remove-btn:hover {
-        transform: scale(1.1);
+        transform: scale(1.05);
     }
-
-    .add-to-cart-btn {
-        transition: all 0.3s ease;
-    }
-
-    .add-to-cart-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    /* Toast notification styles */
     .toast {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 9999;
-        min-width: 300px;
-        max-width: 400px;
-        padding: 16px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        transform: translateX(100%);
-        transition: transform 0.3s ease-in-out;
-        display: flex;
-        align-items: center;
-        gap: 12px;
+        position: fixed; top: 20px; right: 20px; z-index: 9999;
+        min-width: 300px; max-width: 400px; padding: 14px 18px;
+        border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        transform: translateX(100%); transition: transform 0.3s ease-in-out;
+        display: flex; align-items: center; gap: 12px;
     }
-
-    .toast.show {
-        transform: translateX(0);
-    }
-
-    .toast.success {
-        background-color: #10b981;
-        color: white;
-    }
-
-    .toast.error {
-        background-color: #ef4444;
-        color: white;
-    }
-
-    .toast.warning {
-        background-color: #f59e0b;
-        color: white;
-    }
-
-    .toast-icon {
-        flex-shrink: 0;
-        width: 20px;
-        height: 20px;
-    }
+    .toast.show { transform: translateX(0); }
+    .toast.success { background-color: #10b981; color: white; }
+    .toast.error { background-color: #ef4444; color: white; }
+    .toast.warning { background-color: #f59e0b; color: white; }
+    .toast-icon { flex-shrink: 0; width: 20px; height: 20px; }
 </style>
 
 <div class="min-h-screen bg-gray-50 py-8">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Header -->
         <div class="mb-8">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-900">My Wishlist</h1>
-                    <p class="text-gray-600 mt-2">Your favorite products saved for later</p>
+                    <p class="text-gray-600 mt-2">Items you love, saved for later.</p>
                 </div>
                 <div class="flex space-x-3">
+                    <a href="{{ route('products.index') }}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                        Browse products
+                    </a>
                     <button id="clear-wishlist-btn" 
-                            class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg transition-colors">
                         <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                         </svg>
-                        Clear All
+                        Clear all
                     </button>
                 </div>
             </div>
         </div>
 
         <!-- Clear Wishlist Modal -->
-        <div id="clear-wishlist-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div id="clear-wishlist-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 items-center justify-center">
             <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
                 <div class="flex items-center mb-4">
                     <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
@@ -138,7 +97,7 @@
         </div>
 
         <!-- Remove Item Modal -->
-        <div id="remove-item-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div id="remove-item-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 items-center justify-center">
             <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
                 <div class="flex items-center mb-4">
                     <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mr-4">
@@ -228,13 +187,11 @@
                                 <div class="flex space-x-2 pt-2">
                                     <a href="{{ route('products.show', $wishlistItem->product->slug) }}" 
                                        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-center py-2 px-4 rounded-lg transition-colors">
-                                        View Details
+                                        View details
                                     </a>
-                                    <button class="add-to-cart-btn bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors"
-                                            onclick="addToCart({{ $wishlistItem->product_id }})">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01"></path>
-                                        </svg>
+                                    <button class="bg-white border border-gray-200 text-gray-700 py-2 px-4 rounded-lg transition-colors hover:border-gray-300"
+                                            onclick="removeFromWishlist({{ $wishlistItem->product_id }})">
+                                        Remove
                                     </button>
                                 </div>
                             @else
@@ -392,44 +349,6 @@ confirmRemoveBtn.addEventListener('click', function() {
         });
     }
 });
-
-// Add to cart
-function addToCart(productId) {
-    fetch('{{ route("api.cart.add") }}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        },
-        body: JSON.stringify({
-            id: productId,
-            quantity: 1,
-            price: 0 // Will be set by the controller
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Track Facebook Pixel AddToCart event
-            if (typeof fbq !== 'undefined') {
-                fbq('track', 'AddToCart', {
-                    content_ids: [productId],
-                    content_type: 'product'
-                });
-            }
-            
-            showToast('Product added to cart successfully!', 'success');
-            // Update cart count if needed
-            updateCartCount();
-        } else {
-            showToast(data.message || 'Failed to add product to cart.', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showToast('An error occurred while adding the product to cart.', 'error');
-    });
-}
 
 // Clear wishlist modal functionality
 const clearWishlistBtn = document.getElementById('clear-wishlist-btn');

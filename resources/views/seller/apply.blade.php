@@ -1,6 +1,9 @@
 @extends('layouts.app')
 
 @section('content')
+@php
+    $recaptchaSiteKey = env('RECAPTCHA_SITE_KEY');
+@endphp
 <main class="bg-gray-50">
     <!-- Hero -->
     <section class="bg-gradient-to-br from-sky-600 via-sky-500 to-blue-700 text-white">
@@ -57,8 +60,9 @@
                     <p class="text-gray-600">Share a few details and we’ll review to activate your seller account.</p>
                 </div>
 
-                <form action="{{ route('seller.apply.submit') }}" method="POST" class="space-y-6">
+                <form action="{{ route('seller.apply.submit') }}" method="POST" class="space-y-6" id="seller-apply-form">
                     @csrf
+                    <input type="text" name="hp_email" id="hp_email" value="" style="display:none;" tabindex="-1" autocomplete="off">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Full name *</label>
@@ -97,11 +101,19 @@
                             Submit application
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                         </button>
+                        @if($recaptchaSiteKey)
+                            <div class="w-full mt-2">
+                                <div class="g-recaptcha" data-sitekey="{{ $recaptchaSiteKey }}"></div>
+                            </div>
+                        @endif
                     </div>
                 </form>
             </div>
         </div>
     </section>
+    @if($recaptchaSiteKey)
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    @endif
 
     <!-- How it works -->
     <section class="bg-white py-14">
@@ -135,10 +147,10 @@
     <section class="bg-gradient-to-b from-white to-sky-50 py-14">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-10 items-center">
             <div class="order-2 lg:order-1 space-y-4">
-                <p class="text-sm font-semibold text-sky-600">Sản phẩm</p>
+                <p class="text-sm font-semibold text-sky-600">Product</p>
                 <h2 class="text-3xl font-bold text-gray-900">Sell what you love</h2>
                 <p class="text-gray-600">From handmade crafts to creative merch—if you create value, Bluprinter gets it to customers.</p>
-                <ul class="space-y-2 text-gray-700">
+                <ul class="space-y-2 text-gray-700">        
                     <li class="flex items-start gap-2"><span class="mt-1 text-sky-600">•</span> Multi-category, no listing fee.</li>
                     <li class="flex items-start gap-2"><span class="mt-1 text-sky-600">•</span> Tools for shop, order, and inventory management.</li>
                     <li class="flex items-start gap-2"><span class="mt-1 text-sky-600">•</span> Marketing support and analytics.</li>
@@ -154,7 +166,7 @@
     <section id="join" class="bg-white py-14">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-10 items-center">
             <div class="space-y-4">
-                <p class="text-sm font-semibold text-sky-600">Cộng đồng</p>
+                <p class="text-sm font-semibold text-sky-600">Community</p>
                 <h2 class="text-3xl font-bold text-gray-900">Join thousands of successful sellers</h2>
                 <p class="text-gray-600">Bluprinter is home to creators, professional sellers, and passionate makers. They earn daily—you can too.</p>
                 <div class="flex flex-wrap gap-3">
@@ -237,7 +249,7 @@
                                 <tr>
                                     <td colspan="3" class="py-3">
                                         <a href="https://meear.com/modules/seller/printerval-seller-commissions.pdf" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-500 text-white font-semibold hover:bg-sky-600 transition">
-                                            Xem bảng đầy đủ
+                                            See full table
                                         </a>
                                     </td>
                                 </tr>
@@ -295,3 +307,4 @@
 </main>
 @endsection
 
+ 

@@ -8,6 +8,7 @@ use App\Models\SellerApplication;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Http;
 
 class SellerApplicationController extends Controller
 {
@@ -27,7 +28,38 @@ class SellerApplicationController extends Controller
             'store_name' => 'nullable|string|max:255',
             'product_categories' => 'required|string|max:255',
             'message' => 'nullable|string|max:2000',
+            'g-recaptcha-response' => 'required|string',
+            'hp_email' => 'nullable|string|max:0', // honeypot must stay empty
         ]);
+
+        // Honeypot check
+        if (!empty($data['hp_email'])) {
+            return back()->withInput()->with('error', 'Invalid submission.');
+        }
+
+        // Verify reCAPTCHA v3
+        $secret = env('RECAPTCHA_SECRET');
+        if (empty($secret)) {
+            return back()->withInput()->with('error', 'Captcha configuration is missing.');
+        }
+
+        try {
+            $captchaResponse = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+                'secret' => $secret,
+                'response' => $data['g-recaptcha-response'],
+                'remoteip' => $request->ip(),
+            ])->json();
+
+            if (empty($captchaResponse['success'])) {
+                return back()->withInput()->with('error', 'Captcha verification failed. Please try again.');
+            }
+        } catch (\Throwable $e) {
+            Log::error('reCAPTCHA verification error', ['error' => $e->getMessage()]);
+            return back()->withInput()->with('error', 'Captcha verification failed. Please try again.');
+        }
+
+        // Remove non-persistent fields
+        unset($data['g-recaptcha-response'], $data['hp_email']);
 
         $application = SellerApplication::create([
             'name' => $data['name'],
