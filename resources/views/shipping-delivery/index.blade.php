@@ -69,57 +69,72 @@
                 </div>
             </div>
 
-            <!-- Shipping Costs -->
-            @if($formattedCosts->isNotEmpty())
+            @php
+                $regionColors = [
+                    'US' => ['from-blue-600', 'to-cyan-600', 'border-blue-300', 'bg-blue-100', 'text-blue-700'],
+                    'UK' => ['from-purple-600', 'to-indigo-600', 'border-purple-300', 'bg-purple-100', 'text-purple-700'],
+                    'CA' => ['from-red-600', 'to-rose-600', 'border-red-300', 'bg-red-100', 'text-red-700'],
+                    'MX' => ['from-orange-600', 'to-amber-600', 'border-orange-300', 'bg-orange-100', 'text-orange-700'],
+                    'EU' => ['from-indigo-600', 'to-violet-600', 'border-indigo-300', 'bg-indigo-100', 'text-indigo-700'],
+                ];
+            @endphp
+
+
+            <!-- All Regions Shipping Costs -->
+            @if(isset($allFormattedCosts) && $allFormattedCosts->isNotEmpty())
             <div class="mb-12">
-                <div class="bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-5 rounded-t-lg">
-                    <h2 class="text-3xl font-bold text-center">Shipping Costs</h2>
-                    <p class="text-center text-green-100 mt-2">Handling Fee: <strong>7%</strong> of order value</p>
+                <div class="bg-gradient-to-r from-indigo-600 via-blue-600 to-teal-600 text-white px-6 py-5 rounded-t-lg">
+                    <h2 class="text-3xl font-bold text-center">All Regions & Categories Shipping Fees</h2>
+                    <p class="text-center text-blue-100 mt-2">Includes rates configured for this domain and shared general rates.</p>
                 </div>
-                
-                <div class="mb-8">
+                <div class="bg-blue-50 border-2 border-blue-200 rounded-b-lg p-6 mb-6">
+                    <p class="text-gray-800 font-semibold mb-2">Important notes:</p>
+                    <ul class="list-disc list-inside text-gray-700 space-y-1">
+                        <li>Prices are converted to your currency using the current rate.</li>  
+                        <li>A 7% handling fee applies to the order value (before shipping).</li>
+                        <li><strong>First Item</strong> is for the first product; <strong>Additional Items</strong> applies to each extra product.</li>
+                        <li>Taxes/duties (if any) are paid by the receiver per local regulations.</li>
+                        <li>Domain-specific category rates are prioritized; otherwise general rates are shown.</li>
+                    </ul>
+                </div>
+
+                <div class="space-y-8">
+                    @foreach($allFormattedCosts as $regionKey => $costs)
                     @php
-                        $regionColors = [
-                            'US' => ['from-blue-600', 'to-cyan-600', 'border-blue-300', 'bg-blue-100', 'text-blue-700'],
-                            'UK' => ['from-purple-600', 'to-indigo-600', 'border-purple-300', 'bg-purple-100', 'text-purple-700'],
-                            'CA' => ['from-red-600', 'to-rose-600', 'border-red-300', 'bg-red-100', 'text-red-700'],
-                            'MX' => ['from-orange-600', 'to-amber-600', 'border-orange-300', 'bg-orange-100', 'text-orange-700'],
-                        ];
-                        $colors = $regionColors[$region] ?? $regionColors['US'];
+                        $colors = $regionColors[$regionKey] ?? $regionColors['US'];
+                        $regionLabel = $regionNames[$regionKey] ?? $regionKey;
                     @endphp
-                    <div class="bg-gradient-to-r {{ $colors[0] }} {{ $colors[1] }} text-white px-6 py-3 rounded-t-lg">
-                        <h3 class="text-2xl font-bold text-center">{{ $regionName }} Shipping</h3>
+                    <div class="border-2 {{ $colors[2] }} rounded-lg overflow-hidden shadow-sm">
+                        <div class="bg-gradient-to-r {{ $colors[0] }} {{ $colors[1] }} text-white px-6 py-3 flex items-center justify-between">
+                            <h3 class="text-2xl font-bold">{{ $regionLabel }}</h3>
+                            
+                        </div>
+                        <div class="bg-white overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="{{ $colors[3] }}">
+                                    <tr>
+                                        <th class="px-4 py-4 text-left font-bold text-gray-800 border-b-2 {{ $colors[2] }}">Product Type</th>
+                                        <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 {{ $colors[2] }}">First Item</th>
+                                        <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 {{ $colors[2] }}">Additional Items</th>
+                                        <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 {{ $colors[2] }}">Delivery</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">
+                                    @foreach($costs as $cost)
+                                    <tr class="hover:bg-gray-50 transition {{ $loop->even ? 'bg-gray-50' : '' }}">
+                                        <td class="px-4 py-3 font-semibold text-gray-800">
+                                            {{ ucfirst(str_replace('_', ' ', $cost['product_type'])) }}
+                                        </td>
+                                        <td class="px-4 py-3 text-center {{ $colors[4] }} font-bold">{{ $cost['first_item'] }}</td>
+                                        <td class="px-4 py-3 text-center text-gray-700">{{ $cost['additional_item'] }}</td>
+                                        <td class="px-4 py-3 text-center text-gray-700">{{ $cost['delivery_text'] ?? '—' }}</td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div class="bg-white border-2 {{ $colors[2] }} border-t-0 rounded-b-lg overflow-x-auto">
-                        <table class="w-full">
-                            <thead class="{{ $colors[3] }}">
-                                <tr>
-                                    <th class="px-4 py-4 text-left font-bold text-gray-800 border-b-2 {{ $colors[2] }}">Product Type</th>
-                                    <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 {{ $colors[2] }}">First Item</th>
-                                    <th class="px-4 py-4 text-center font-bold text-gray-800 border-b-2 {{ $colors[2] }}">Additional Items</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200">
-                                @foreach($formattedCosts as $cost)
-                                <tr class="hover:bg-gray-50 transition {{ $loop->even ? 'bg-gray-50' : '' }}">
-                                    <td class="px-4 py-3 font-semibold text-gray-800">
-                                        {{ ucfirst(str_replace('_', ' ', $cost['product_type'])) }}
-                                    </td>
-                                    <td class="px-4 py-3 text-center {{ $colors[4] }} font-bold">{{ $cost['first_item'] }}</td>
-                                    <td class="px-4 py-3 text-center text-gray-700">{{ $cost['additional_item'] }}</td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            @else
-            <div class="mb-12">
-                <div class="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6">
-                    <p class="text-yellow-800 text-center">
-                        <strong>⚠️</strong> Shipping costs information is not available for this domain at the moment. Please contact our support team for shipping estimates.
-                    </p>
+                    @endforeach
                 </div>
             </div>
             @endif
@@ -207,6 +222,11 @@
     </div>
 </div>
 @endsection
+
+
+
+
+
 
 
 

@@ -111,6 +111,7 @@
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Zone</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Pricing</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Delivery</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Default</th>
                         <th class="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
@@ -158,6 +159,26 @@
                                 <div><span class="text-gray-500">Additional:</span> <span class="font-semibold text-gray-900">${{ number_format($rate->additional_item_cost, 2) }}</span></div>
                             </div>
                             <div class="text-xs text-gray-400 mt-1">First item includes all fees</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            @php
+                                $min = $rate->delivery_min_days;
+                                $max = $rate->delivery_max_days;
+                                $deliveryText = null;
+                                if(!is_null($min) && !is_null($max)) {
+                                    $deliveryText = $min == $max ? "{$min} days" : "{$min} - {$max} days";
+                                } elseif(!is_null($min)) {
+                                    $deliveryText = "{$min}+ days";
+                                } elseif(!is_null($max)) {
+                                    $deliveryText = "Up to {$max} days";
+                                } elseif($rate->delivery_note) {
+                                    $deliveryText = $rate->delivery_note;
+                                }
+                            @endphp
+                            <span class="text-sm text-gray-700">{{ $deliveryText ?? '—' }}</span>
+                            @if($deliveryText && $rate->delivery_note && $deliveryText !== $rate->delivery_note)
+                                <div class="text-xs text-gray-500">{{ $rate->delivery_note }}</div>
+                            @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             @if($rate->is_active)

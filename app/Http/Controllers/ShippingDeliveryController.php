@@ -21,20 +21,17 @@ class ShippingDeliveryController extends Controller
         // Get region from domain
         $region = DomainShippingCost::getRegionFromDomain($domain);
 
-        // Get shipping costs for this domain and region
-        $shippingCosts = DomainShippingCost::where('domain', $domain)
-            ->where('region', $region)
-            ->where('is_active', true)
+        // Lấy toàn bộ phí ship cho domain hiện tại và phí general (domain null)
+        $shippingCosts = DomainShippingCost::where('is_active', true)
+            ->where(function ($query) use ($domain) {
+                $query->where('domain', $domain)
+                    ->orWhereNull('domain');
+            })
+            ->orderBy('region')
+            ->orderBy('product_type')
             ->get();
 
-        // If no costs found for this domain, try to get by region only
-        if ($shippingCosts->isEmpty()) {
-            $shippingCosts = DomainShippingCost::where('region', $region)
-                ->where('is_active', true)
-                ->get();
-        }
-
-        // If still no costs found, fallback to shipping_rates
+        // Nếu chưa có dữ liệu DomainShippingCost, fallback sang ShippingRate (domain + general)
         if ($shippingCosts->isEmpty()) {
             $shippingRates = ShippingRate::where(function ($query) use ($domain) {
                 $query->where('domain', $domain)
@@ -47,31 +44,8 @@ class ShippingDeliveryController extends Controller
                 ->orderBy('sort_order')
                 ->get();
 
-            // Determine region from shipping zones if available
-            if ($shippingRates->isNotEmpty()) {
-                $firstRate = $shippingRates->first();
-                if ($firstRate->shippingZone) {
-                    $zone = $firstRate->shippingZone;
-                    $countries = $zone->countries ?? [];
-                    $zoneName = strtolower($zone->name ?? '');
-
-                    // First try to get region from countries
-                    $detectedRegion = $this->getRegionFromCountries($countries, null);
-
-                    // If no region from countries, try to get from zone name
-                    if (!$detectedRegion) {
-                        $detectedRegion = $this->getRegionFromZoneName($zoneName, null);
-                    }
-
-                    // Use detected region if found, otherwise keep the default
-                    if ($detectedRegion) {
-                        $region = $detectedRegion;
-                    }
-                }
-            }
-
-            // Convert shipping rates to domain shipping costs format
-            $shippingCosts = $shippingRates->map(function ($rate) {
+            // Chuyển ShippingRate thành cấu trúc DomainShippingCost tương ứng
+            $shippingCosts = $shippingRates->map(function ($rate) use ($region) {
                 $productType = 'general';
                 if ($rate->category) {
                     $productType = strtolower(str_replace(' ', '_', $rate->category->name));
@@ -79,35 +53,85 @@ class ShippingDeliveryController extends Controller
                     $productType = strtolower(str_replace(' ', '_', $rate->name));
                 }
 
+                // Xác định region từ shipping zone (nếu có)
+                $detectedRegion = $region;
+                if ($rate->shippingZone) {
+                    $zone = $rate->shippingZone;
+                    $countries = $zone->countries ?? [];
+                    $zoneName = strtolower($zone->name ?? '');
+
+                    $detectedRegion = $this->getRegionFromCountries($countries, $detectedRegion);
+                    $detectedRegion = $this->getRegionFromZoneName($zoneName, $detectedRegion);
+                }
+
                 return (object) [
+                    'region' => $detectedRegion ?? 'US',
                     'product_type' => $productType,
                     'first_item_cost' => (float) $rate->first_item_cost,
                     'additional_item_cost' => (float) $rate->additional_item_cost,
+                    'delivery_min_days' => $rate->delivery_min_days,
+                    'delivery_max_days' => $rate->delivery_max_days,
+                    'delivery_note' => $rate->delivery_note,
                     'is_active' => $rate->is_active,
                 ];
             });
         }
 
-        // Format shipping costs with currency conversion
-        $formattedCosts = $shippingCosts->map(function ($cost) use ($currency, $currencyRate, $domain) {
-            $firstItemConverted = CurrencyService::convertFromUSDWithRate(
-                $cost->first_item_cost,
-                $currency,
-                $currencyRate
-            );
-            $additionalItemConverted = CurrencyService::convertFromUSDWithRate(
-                $cost->additional_item_cost,
-                $currency,
-                $currencyRate
-            );
+        // Helper to format costs with currency conversion
+        $formatCosts = function ($costCollection) use ($currency, $currencyRate, $domain) {
+            return $costCollection->map(function ($cost) use ($currency, $currencyRate, $domain) {
+                $firstItemConverted = CurrencyService::convertFromUSDWithRate(
+                    $cost->first_item_cost,
+                    $currency,
+                    $currencyRate
+                );
+                $additionalItemConverted = CurrencyService::convertFromUSDWithRate(
+                    $cost->additional_item_cost,
+                    $currency,
+                    $currencyRate
+                );
 
-            return [
-                'product_type' => $cost->product_type,
-                'first_item' => CurrencyService::formatPrice($firstItemConverted, $currency, $domain),
-                'additional_item' => CurrencyService::formatPrice($additionalItemConverted, $currency, $domain),
-                'first_item_raw' => $firstItemConverted,
-                'additional_item_raw' => $additionalItemConverted,
-            ];
+                $minDays = $cost->delivery_min_days ?? null;
+                $maxDays = $cost->delivery_max_days ?? null;
+                $deliveryNote = $cost->delivery_note ?? null;
+
+                $deliveryText = null;
+                if (!is_null($minDays) && !is_null($maxDays)) {
+                    $deliveryText = $minDays == $maxDays
+                        ? "{$minDays} days"
+                        : "{$minDays} - {$maxDays} days";
+                } elseif (!is_null($minDays)) {
+                    $deliveryText = "{$minDays}+ days";
+                } elseif (!is_null($maxDays)) {
+                    $deliveryText = "Up to {$maxDays} days";
+                }
+                if (!$deliveryText && $deliveryNote) {
+                    $deliveryText = $deliveryNote;
+                }
+
+                return [
+                    'product_type' => $cost->product_type,
+                    'first_item' => CurrencyService::formatPrice($firstItemConverted, $currency, $domain),
+                    'additional_item' => CurrencyService::formatPrice($additionalItemConverted, $currency, $domain),
+                    'first_item_raw' => $firstItemConverted,
+                    'additional_item_raw' => $additionalItemConverted,
+                    'delivery_text' => $deliveryText,
+                ];
+            });
+        };
+
+        // Format shipping costs cho khu vực chính của domain
+        $formattedCosts = $formatCosts(
+            $shippingCosts->where('region', $region)
+        );
+
+        // Gom nhóm tất cả khu vực (bao gồm domain chỉ định + general)
+        $allShippingCosts = $shippingCosts->groupBy('region');
+
+        $allFormattedCosts = $allShippingCosts->map(function ($costs) use ($formatCosts) {
+            return $formatCosts($costs);
+        })->filter(function ($costs) {
+            return $costs->isNotEmpty();
         });
 
         // Region display names
@@ -116,6 +140,7 @@ class ShippingDeliveryController extends Controller
             'UK' => 'United Kingdom',
             'CA' => 'Canada',
             'MX' => 'Mexico',
+            'EU' => 'Europe',
         ];
 
         $regionName = $regionNames[$region] ?? $region;
@@ -126,7 +151,9 @@ class ShippingDeliveryController extends Controller
             'region',
             'regionName',
             'formattedCosts',
-            'shippingCosts'
+            'shippingCosts',
+            'allFormattedCosts',
+            'regionNames'
         ));
     }
 
@@ -147,10 +174,20 @@ class ShippingDeliveryController extends Controller
             'MEX' => 'MX',
         ];
 
+        // Map EU countries to Europe (EU)
+        $euCountries = [
+            'AL','AD','AM','AT','AZ','BY','BE','BA','BG','CH','CY','CZ','DE','DK','EE','ES','FI','FO',
+            'FR','GB','GE','GI','GR','HR','HU','IE','IS','IT','LI','LT','LU','LV','MC','MD','ME','MK',
+            'MT','NL','NO','PL','PT','RO','RS','RU','SE','SI','SJ','SK','SM','TR','UA','VA'
+        ];
+
         foreach ($countries as $country) {
             $countryUpper = strtoupper($country);
             if (isset($countryToRegion[$countryUpper])) {
                 return $countryToRegion[$countryUpper];
+            }
+            if (in_array($countryUpper, $euCountries, true)) {
+                return 'EU';
             }
         }
 
@@ -163,6 +200,14 @@ class ShippingDeliveryController extends Controller
     private function getRegionFromZoneName(string $zoneName, ?string $defaultRegion = null): ?string
     {
         $zoneNameLower = strtolower($zoneName);
+
+        // Check for Europe
+        if (
+            strpos($zoneNameLower, 'europe') !== false ||
+            strpos($zoneNameLower, 'eu') !== false
+        ) {
+            return 'EU';
+        }
 
         // Check for UK
         if (

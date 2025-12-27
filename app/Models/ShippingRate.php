@@ -14,6 +14,9 @@ class ShippingRate extends Model
         'category_id',
         'name',
         'description',
+        'delivery_min_days',
+        'delivery_max_days',
+        'delivery_note',
         'first_item_cost',
         'additional_item_cost',
         'min_items',
@@ -37,6 +40,8 @@ class ShippingRate extends Model
         'is_active' => 'boolean',
         'is_default' => 'boolean',
         'sort_order' => 'integer',
+        'delivery_min_days' => 'integer',
+        'delivery_max_days' => 'integer',
     ];
 
     /**

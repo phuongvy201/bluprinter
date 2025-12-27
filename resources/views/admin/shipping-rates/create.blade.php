@@ -94,6 +94,40 @@
                         </select>
                         <p class="mt-1 text-xs text-gray-500">Để trống = áp dụng chung cho tất cả categories</p>
                     </div>
+
+                    <!-- Delivery Time -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            Delivery Time (days)
+                        </label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <input type="number" name="delivery_min_days" value="{{ old('delivery_min_days') }}"
+                                       min="0"
+                                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                       placeholder="Min">
+                            </div>
+                            <div>
+                                <input type="number" name="delivery_max_days" value="{{ old('delivery_max_days') }}"
+                                       min="0"
+                                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                       placeholder="Max">
+                            </div>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">Leave blank if not specified. If both set, shows “min - max days”.</p>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <label for="delivery_note" class="block text-sm font-semibold text-gray-700 mb-2">
+                        Delivery Note (optional)
+                    </label>
+                    <input type="text"
+                           name="delivery_note"
+                           id="delivery_note"
+                           value="{{ old('delivery_note') }}"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           placeholder="e.g., Express items ship faster">
                 </div>
 
                 <!-- Rate Name -->

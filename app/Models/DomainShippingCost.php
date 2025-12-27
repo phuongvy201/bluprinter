@@ -52,8 +52,8 @@ class DomainShippingCost extends Model
             'vietnam' => 'US',
             'de' => 'UK', // Germany defaults to UK region
             'germany' => 'UK',
-            'eu' => 'UK',
-            'europe' => 'UK',
+            'eu' => 'EU',
+            'europe' => 'EU',
         ];
 
         // Check if domain matches any key
