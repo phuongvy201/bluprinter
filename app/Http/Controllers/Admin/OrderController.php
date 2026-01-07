@@ -87,12 +87,14 @@ class OrderController extends Controller
         $request->validate([
             'status' => 'required|in:pending,processing,shipped,delivered,cancelled',
             'payment_status' => 'required|in:pending,paid,failed,refunded',
+            'tracking_number' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:1000'
         ]);
 
         $order->update([
             'status' => $request->status,
             'payment_status' => $request->payment_status,
+            'tracking_number' => $request->tracking_number,
             'notes' => $request->notes
         ]);
 
