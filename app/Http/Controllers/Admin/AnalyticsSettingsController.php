@@ -47,6 +47,6 @@ class AnalyticsSettingsController extends Controller
 
         return redirect()
             ->route('admin.settings.analytics.edit')
-            ->with('success', 'Đã cập nhật cấu hình tracking.');
+                ->with('success', 'Tracking configuration updated successfully.');
     }
 }

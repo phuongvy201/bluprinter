@@ -453,17 +453,27 @@ class LianLianPayController extends Controller
                                 'session_id' => $sessionId
                             ]);
 
-                            // Send order confirmation email
+                            // Send order confirmation email to customer and admin
+                            $adminEmail = config('mail.from.address');
                             try {
                                 Mail::to($order->customer_email)->send(new OrderConfirmation($order));
                                 Log::info('📧 Order confirmation email sent', [
                                     'order_number' => $order->order_number,
                                     'email' => $order->customer_email
                                 ]);
+
+                                if ($adminEmail) {
+                                    Mail::to($adminEmail)->send(new OrderConfirmation($order));
+                                    Log::info('📧 Admin new-order email sent', [
+                                        'order_number' => $order->order_number,
+                                        'email' => $adminEmail
+                                    ]);
+                                }
                             } catch (\Exception $e) {
                                 Log::error('❌ Failed to send order confirmation email', [
                                     'order_number' => $order->order_number,
                                     'email' => $order->customer_email,
+                                    'admin_email' => $adminEmail,
                                     'error' => $e->getMessage()
                                 ]);
                             }
@@ -550,17 +560,27 @@ class LianLianPayController extends Controller
                             'session_id' => $sessionId
                         ]);
 
-                        // Send order confirmation email
+                        // Send order confirmation email to customer and admin
+                        $adminEmail = config('mail.from.address');
                         try {
                             Mail::to($order->customer_email)->send(new OrderConfirmation($order));
                             Log::info('📧 Order confirmation email sent (fallback)', [
                                 'order_number' => $order->order_number,
                                 'email' => $order->customer_email
                             ]);
+
+                            if ($adminEmail) {
+                                Mail::to($adminEmail)->send(new OrderConfirmation($order));
+                                Log::info('📧 Admin new-order email sent (fallback)', [
+                                    'order_number' => $order->order_number,
+                                    'email' => $adminEmail
+                                ]);
+                            }
                         } catch (\Exception $e) {
                             Log::error('❌ Failed to send order confirmation email (fallback)', [
                                 'order_number' => $order->order_number,
                                 'email' => $order->customer_email,
+                                'admin_email' => $adminEmail,
                                 'error' => $e->getMessage()
                             ]);
                         }

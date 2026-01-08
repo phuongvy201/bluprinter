@@ -2,7 +2,7 @@
 
 @section('content')
 @php
-    $recaptchaSiteKey = env('RECAPTCHA_SITE_KEY');
+    $recaptchaSiteKey = config('services.recaptcha.site_key');
 @endphp
 <main class="bg-gray-50">
     <!-- Hero -->

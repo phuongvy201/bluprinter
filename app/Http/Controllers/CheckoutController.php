@@ -996,17 +996,27 @@ class CheckoutController extends Controller
                         // Clear shipping session
                         Session::forget('shipping_details');
 
-                        // Send order confirmation email
+                        // Send order confirmation email to customer and admin
+                        $adminEmail = config('mail.from.address');
                         try {
                             Mail::to($order->customer_email)->send(new OrderConfirmation($order));
                             Log::info('📧 Order confirmation email sent for Stripe payment', [
                                 'order_number' => $order->order_number,
                                 'email' => $order->customer_email
                             ]);
+
+                            if ($adminEmail) {
+                                Mail::to($adminEmail)->send(new OrderConfirmation($order));
+                                Log::info('📧 Admin new-order email sent for Stripe payment', [
+                                    'order_number' => $order->order_number,
+                                    'email' => $adminEmail
+                                ]);
+                            }
                         } catch (\Exception $e) {
                             Log::error('❌ Failed to send order confirmation email for Stripe payment', [
                                 'order_number' => $order->order_number,
                                 'email' => $order->customer_email,
+                                'admin_email' => $adminEmail,
                                 'error' => $e->getMessage()
                             ]);
                         }
@@ -1219,17 +1229,27 @@ class CheckoutController extends Controller
                             // Clear shipping session
                             Session::forget('shipping_details');
 
-                            // Send order confirmation email
+                            // Send order confirmation email to customer and admin
+                            $adminEmail = config('mail.from.address');
                             try {
                                 Mail::to($order->customer_email)->send(new OrderConfirmation($order));
                                 Log::info('📧 Order confirmation email sent for immediate LianLian payment', [
                                     'order_number' => $order->order_number,
                                     'email' => $order->customer_email
                                 ]);
+
+                                if ($adminEmail) {
+                                    Mail::to($adminEmail)->send(new OrderConfirmation($order));
+                                    Log::info('📧 Admin new-order email sent for immediate LianLian payment', [
+                                        'order_number' => $order->order_number,
+                                        'email' => $adminEmail
+                                    ]);
+                                }
                             } catch (\Exception $e) {
                                 Log::error('❌ Failed to send order confirmation email for LianLian payment', [
                                     'order_number' => $order->order_number,
                                     'email' => $order->customer_email,
+                                    'admin_email' => $adminEmail,
                                     'error' => $e->getMessage()
                                 ]);
                             }
@@ -1826,17 +1846,27 @@ class CheckoutController extends Controller
                 }
             })->delete();
 
-            // Send order confirmation email
+            // Send order confirmation email to customer and admin
+            $adminEmail = config('mail.from.address');
             try {
                 Mail::to($order->customer_email)->send(new OrderConfirmation($order));
                 Log::info('📧 Order confirmation email sent', [
                     'order_number' => $order->order_number,
                     'email' => $order->customer_email
                 ]);
+
+                if ($adminEmail) {
+                    Mail::to($adminEmail)->send(new OrderConfirmation($order));
+                    Log::info('📧 Admin new-order email sent', [
+                        'order_number' => $order->order_number,
+                        'email' => $adminEmail
+                    ]);
+                }
             } catch (\Exception $e) {
                 Log::error('❌ Failed to send order confirmation email', [
                     'order_number' => $order->order_number,
                     'email' => $order->customer_email,
+                    'admin_email' => $adminEmail,
                     'error' => $e->getMessage()
                 ]);
             }
@@ -1915,17 +1945,27 @@ class CheckoutController extends Controller
                 }
             })->delete();
 
-            // Send order confirmation email
+            // Send order confirmation email to customer and admin
+            $adminEmail = config('mail.from.address');
             try {
                 Mail::to($order->customer_email)->send(new OrderConfirmation($order));
                 Log::info('📧 Order confirmation email sent', [
                     'order_number' => $order->order_number,
                     'email' => $order->customer_email
                 ]);
+
+                if ($adminEmail) {
+                    Mail::to($adminEmail)->send(new OrderConfirmation($order));
+                    Log::info('📧 Admin new-order email sent', [
+                        'order_number' => $order->order_number,
+                        'email' => $adminEmail
+                    ]);
+                }
             } catch (\Exception $e) {
                 Log::error('❌ Failed to send order confirmation email', [
                     'order_number' => $order->order_number,
                     'email' => $order->customer_email,
+                    'admin_email' => $adminEmail,
                     'error' => $e->getMessage()
                 ]);
             }
@@ -2152,7 +2192,13 @@ class CheckoutController extends Controller
             ->where('shipping_zone_id', $zone->id);
         
         if ($currentDomain) {
-            $rateQuery->where('domain', $currentDomain);
+            $rateQuery->where(function ($q) use ($currentDomain) {
+                $q->forDomain($currentDomain)
+                    ->orWhere(function ($q2) {
+                        $q2->whereNull('domain')
+                            ->orWhereNull('domains');
+                    });
+            });
         }
         
         $allRates = $rateQuery->ordered()->get();

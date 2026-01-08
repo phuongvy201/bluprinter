@@ -154,12 +154,12 @@ class ProductController extends Controller
 
         // Get current domain first
         $currentDomain = CurrencyService::getCurrentDomain();
-        
+
         // Get shipping zones that have rates for this product's category
         // PRIORITY: Pass domain to prioritize zones for current domain
         $categoryId = $product->template->category_id ?? null;
         $shippingZones = ShippingRate::getZonesForCategory($categoryId, $currentDomain);
-        
+
         // Get default zone for current domain (PRIORITY: zone matching current domain)
         $defaultZone = null;
         if ($currentDomain) {
@@ -167,7 +167,7 @@ class ProductController extends Controller
             $defaultZone = $shippingZones->first(function ($zone) use ($currentDomain) {
                 return $zone->domain === $currentDomain;
             });
-            
+
             // If not found in shippingZones, try to get any zone for this domain
             if (!$defaultZone) {
                 $defaultZone = ShippingZone::active()
@@ -176,12 +176,12 @@ class ProductController extends Controller
                     ->first();
             }
         }
-        
+
         // If no zone found for domain, try to get first zone from shippingZones
         if (!$defaultZone && $shippingZones->isNotEmpty()) {
             $defaultZone = $shippingZones->first();
         }
-        
+
         // Get all available zones for selector (zones that have rates for this category)
         // PRIORITY: Sort zones to put current domain's zones first
         $availableZones = $shippingZones;
@@ -191,20 +191,20 @@ class ProductController extends Controller
                 return $zone->domain === $currentDomain ? 0 : 1;
             })->values();
         }
-        
+
         // If no zones found for category, get all active zones
         if ($availableZones->isEmpty()) {
             $allZones = ShippingZone::active()->ordered()->get();
-            
+
             // PRIORITY: Sort zones to put current domain's zones first
             if ($currentDomain) {
                 $allZones = $allZones->sortBy(function ($zone) use ($currentDomain) {
                     return $zone->domain === $currentDomain ? 0 : 1;
                 })->values();
             }
-            
+
             $availableZones = $allZones;
-            
+
             // Set default zone to first available if not set
             if (!$defaultZone && $availableZones->isNotEmpty()) {
                 $defaultZone = $availableZones->first();
@@ -214,10 +214,10 @@ class ProductController extends Controller
         $this->trackTikTokViewContent($request, $product);
 
         return view('products.show', compact(
-            'product', 
-            'relatedProducts', 
-            'breadcrumbs', 
-            'shopAvailable', 
+            'product',
+            'relatedProducts',
+            'breadcrumbs',
+            'shopAvailable',
             'shippingZones',
             'defaultZone',
             'availableZones',
@@ -251,7 +251,7 @@ class ProductController extends Controller
 
         // PRIORITY: Find shipping rate matching current domain first
         $shippingRate = null;
-        
+
         if ($currentDomain) {
             // First priority: Rate matching zone, domain, and category
             $shippingRate = ShippingRate::active()
@@ -264,7 +264,7 @@ class ProductController extends Controller
                     return $rate->isApplicable($quantity, $productPrice);
                 });
         }
-        
+
         if (!$shippingRate) {
             // Second priority: Rate matching zone and category (without domain filter)
             $shippingRate = ShippingRate::active()
@@ -274,13 +274,13 @@ class ProductController extends Controller
                 ->get()
                 ->first(function ($rate) use ($quantity, $productPrice, $currentDomain) {
                     // If we have current domain, prioritize rates matching that domain
-                    if ($currentDomain && $rate->domain === $currentDomain) {
+                    if ($currentDomain && $rate->matchesDomain($currentDomain)) {
                         return $rate->isApplicable($quantity, $productPrice);
                     }
                     return false;
                 });
         }
-        
+
         if (!$shippingRate) {
             // Third priority: Any rate for this zone and category
             $shippingRate = ShippingRate::active()

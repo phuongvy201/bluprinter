@@ -127,14 +127,26 @@
                             @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            @if($rate->domain)
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
-                                {{ $rate->domain }}
-                            </span>
+                            @php
+                                $domains = collect($rate->domains ?? []);
+                                if ($rate->domain) {
+                                    $domains->prepend($rate->domain);
+                                }
+                                $domains = $domains->filter()->unique()->values();
+                            @endphp
+
+                            @if($domains->isNotEmpty())
+                                <div class="flex flex-wrap gap-1">
+                                    @foreach($domains as $d)
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                                            {{ $d }}
+                                        </span>
+                                    @endforeach
+                                </div>
                             @else
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                                General
-                            </span>
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                    General
+                                </span>
                             @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">

@@ -306,3 +306,5 @@ class DomainConfigController extends Controller
             ->with('success', 'Đã xóa cấu hình Google Analytics cho domain: ' . $domain);
     }
 }
+
+

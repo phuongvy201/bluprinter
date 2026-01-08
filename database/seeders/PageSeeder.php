@@ -14,7 +14,7 @@ class PageSeeder extends Seeder
      */
     public function run(): void
     {
-        // Lấy user admin
+        // Get admin user
         $admin = User::role('admin')->first();
 
         if (!$admin) {
@@ -22,21 +22,21 @@ class PageSeeder extends Seeder
         }
 
         if (!$admin) {
-            $this->command->error('Không tìm thấy user nào trong database. Vui lòng tạo user trước.');
+            $this->command->error('No users found in the database. Please create a user first.');
             return;
         }
 
-        // Xóa tất cả pages cũ trước khi seed
+        // Truncate old pages before seeding
         Page::truncate();
 
-        $this->command->info('Bắt đầu tạo các trang...');
+        $this->command->info('Starting to create pages...');
 
-        // Mảng chứa các trang sẽ được tạo
+        // Pages to create
         $pages = [
             [
                 'user_id' => $admin->id,
                 'title' => 'DMCA & Intellectual Property Policy',
-                'slug' => 'dmca-policy',
+                'slug' => 'dmca',
                 'content' => '<div class="max-w-5xl mx-auto py-8 px-4">
                     <div class="bg-white rounded-lg shadow-lg overflow-hidden">
                         <!-- Header -->
@@ -550,7 +550,7 @@ class PageSeeder extends Seeder
             [
                 'user_id' => $admin->id,
                 'title' => 'Our Intellectual Property Policy',
-                'slug' => 'intellectual-property-policy',
+                'slug' => 'our-intellectual-property-policy',
                 'content' => '<div class="max-w-5xl mx-auto py-8 px-4">
                     <div class="bg-white rounded-lg shadow-2xl overflow-hidden">
                         <!-- Hero Header -->
@@ -1495,7 +1495,7 @@ class PageSeeder extends Seeder
             [
                 'user_id' => $admin->id,
                 'title' => 'Cancel or Change Order',
-                'slug' => 'cancel-change-order',
+                'slug' => 'cancelchange-order',
                 'content' => '<div class="max-w-5xl mx-auto py-8 px-4">
                     <div class="bg-white rounded-lg shadow-2xl overflow-hidden">
                         <!-- Hero Header -->
@@ -2710,7 +2710,7 @@ class PageSeeder extends Seeder
                                     </div>
                                 </div>
                                 <h1 class="text-6xl font-bold mb-4">Local Support</h1>
-                                <p class="text-2xl text-red-100">Hỗ Trợ Địa Phương - Vietnam</p>
+                                <p class="text-2xl text-red-100">Local Support - Vietnam</p>
                                 <p class="text-lg text-yellow-100 mt-4 max-w-3xl mx-auto">
                                     Connect with our local team in Ho Chi Minh City for personalized assistance
                                 </p>
@@ -2720,7 +2720,7 @@ class PageSeeder extends Seeder
                         <div class="px-8 py-12">
                             <!-- Introduction -->
                             <div class="bg-gradient-to-br from-red-50 to-yellow-50 border-l-4 border-red-500 rounded-r-lg p-6 mb-10 text-center">
-                                <h2 class="text-3xl font-bold text-gray-800 mb-3">Contact Us - Liên Hệ</h2>
+                                <h2 class="text-3xl font-bold text-gray-800 mb-3">Contact Us</h2>
                                 <p class="text-gray-700 text-lg">
                                     Reach out to our Vietnam support team for local assistance
                                 </p>
@@ -2750,7 +2750,7 @@ class PageSeeder extends Seeder
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
                                             </svg>
                                         </div>
-                                        <h3 class="text-2xl font-bold text-gray-800 mb-3">Call Us - Gọi Điện</h3>
+                                        <h3 class="text-2xl font-bold text-gray-800 mb-3">Call Us</h3>
                                         <a href="tel:+18563782798" class="text-green-600 hover:text-green-800 font-bold text-2xl">+1 856-378-2798</a>
                                         <p class="text-gray-600 text-sm mt-2">Available during business hours</p>
                                     </div>
@@ -2792,7 +2792,7 @@ class PageSeeder extends Seeder
                                         <svg class="w-9 h-9 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                                         </svg>
-                                        Office Address - Địa Chỉ Văn Phòng
+                                        Office Address
                                     </h2>
                                 </div>
                                 <div class="bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 border-t-0 rounded-b-lg p-8">
@@ -2835,7 +2835,7 @@ class PageSeeder extends Seeder
                                     <svg class="w-8 h-8 mr-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                     </svg>
-                                    Quick Access - Truy Cập Nhanh
+                                    Quick Access
                                 </h3>
                                 
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2847,7 +2847,7 @@ class PageSeeder extends Seeder
                                         </div>
                                         <div>
                                             <h4 class="font-bold text-gray-800 text-lg">Send Email</h4>
-                                            <p class="text-gray-600 text-sm">Gửi email cho chúng tôi</p>
+                                            <p class="text-gray-600 text-sm">Email us</p>
                                         </div>
                                     </a>
 
@@ -2859,7 +2859,7 @@ class PageSeeder extends Seeder
                                         </div>
                                         <div>
                                             <h4 class="font-bold text-gray-800 text-lg">Call Now</h4>
-                                            <p class="text-gray-600 text-sm">Gọi ngay</p>
+                                            <p class="text-gray-600 text-sm">Call now</p>
                                         </div>
                                     </a>
 
@@ -2871,7 +2871,7 @@ class PageSeeder extends Seeder
                                         </div>
                                         <div>
                                             <h4 class="font-bold text-gray-800 text-lg">iMessage</h4>
-                                            <p class="text-gray-600 text-sm">Nhắn tin qua iMessage</p>
+                                            <p class="text-gray-600 text-sm">Message via iMessage</p>
                                         </div>
                                     </a>
 
@@ -2883,7 +2883,7 @@ class PageSeeder extends Seeder
                                         </div>
                                         <div>
                                             <h4 class="font-bold text-gray-800 text-lg">WhatsApp</h4>
-                                            <p class="text-gray-600 text-sm">Chat qua WhatsApp</p>
+                                            <p class="text-gray-600 text-sm">Chat via WhatsApp</p>
                                         </div>
                                     </a>
                                 </div>
@@ -2903,7 +2903,7 @@ class PageSeeder extends Seeder
                                             <svg class="w-6 h-6 text-yellow-500 mr-2 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                             </svg>
-                                            <p class="text-gray-800"><strong>Vietnamese Language Support</strong> - Hỗ trợ tiếng Việt</p>
+                                            <p class="text-gray-800"><strong>Vietnamese Language Support</strong></p>
                                         </div>
                                     </div>
                                     <div class="bg-white rounded-lg p-4 shadow-sm">
@@ -2911,7 +2911,7 @@ class PageSeeder extends Seeder
                                             <svg class="w-6 h-6 text-yellow-500 mr-2 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                             </svg>
-                                            <p class="text-gray-800"><strong>Local Business Hours</strong> - Giờ làm việc địa phương</p>
+                                            <p class="text-gray-800"><strong>Local Business Hours</strong></p>
                                         </div>
                                     </div>
                                     <div class="bg-white rounded-lg p-4 shadow-sm">
@@ -2919,7 +2919,7 @@ class PageSeeder extends Seeder
                                             <svg class="w-6 h-6 text-yellow-500 mr-2 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                             </svg>
-                                            <p class="text-gray-800"><strong>Faster Response Time</strong> - Phản hồi nhanh hơn</p>
+                                            <p class="text-gray-800"><strong>Faster Response Time</strong></p>
                                         </div>
                                     </div>
                                     <div class="bg-white rounded-lg p-4 shadow-sm">
@@ -2927,7 +2927,7 @@ class PageSeeder extends Seeder
                                             <svg class="w-6 h-6 text-yellow-500 mr-2 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                                             </svg>
-                                            <p class="text-gray-800"><strong>Local Understanding</strong> - Hiểu văn hóa địa phương</p>
+                                            <p class="text-gray-800"><strong>Local Understanding</strong></p>
                                         </div>
                                     </div>
                                 </div>
@@ -2942,7 +2942,7 @@ class PageSeeder extends Seeder
                                         </svg>
                                     </div>
                                 </div>
-                                <h3 class="text-3xl font-bold mb-4">Sẵn Sàng Hỗ Trợ Bạn!</h3>
+                                <h3 class="text-3xl font-bold mb-4">Ready to Support You!</h3>
                                 <p class="text-xl text-yellow-100 mb-6 max-w-3xl mx-auto">
                                     Our local team in Vietnam is ready to assist you in your preferred language. Contact us today!
                                 </p>
@@ -2971,7 +2971,7 @@ class PageSeeder extends Seeder
                 'show_in_menu' => true,
                 'menu_title' => 'Local Support',
                 'sort_order' => 10,
-                'meta_title' => 'Local Support Vietnam - Bluprinter Hỗ Trợ Địa Phương',
+                'meta_title' => 'Local Support Vietnam - Bluprinter Local Support',
                 'meta_description' => 'Contact Bluprinter local support team in Ho Chi Minh City, Vietnam. Vietnamese language support via email, phone, iMessage, and WhatsApp.',
             ],
             [
@@ -4126,14 +4126,184 @@ class PageSeeder extends Seeder
                 'meta_title' => 'Shipping & Delivery - Bluprinter Worldwide Shipping Information',
                 'meta_description' => 'Learn about Bluprinter shipping and delivery. Processing times, delivery times by product, shipping costs within USA, order tracking, and customs information.',
             ],
+            [
+                'user_id' => $admin->id,
+                'title' => 'Order Tracking',
+                'slug' => 'order-tracking',
+                'content' => '<div class="max-w-4xl mx-auto py-10 px-4">
+                    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-8 text-center">
+                            <h1 class="text-4xl font-bold mb-2">Order Tracking</h1>
+                            <p class="text-indigo-100">Check your order status with your order ID and email</p>
+                        </div>
+                        <div class="p-6 space-y-6">
+                            <div class="bg-indigo-50 border-l-4 border-indigo-500 rounded-lg p-5">
+                                <p class="text-gray-800 mb-2">Enter the <strong>Order ID</strong> and <strong>Email</strong> you used at checkout to track:</p>
+                                <ul class="list-disc list-inside text-gray-700 space-y-1">
+                                    <li>Open your order confirmation email to copy the order ID</li>
+                                    <li>Fill in the Order ID and Email in the tracking form</li>
+                                    <li>Click <strong>Track</strong> to see the latest status</li>
+                                </ul>
+                            </div>
+                            <div class="bg-white border border-gray-200 rounded-lg p-5">
+                                <h2 class="text-xl font-semibold text-gray-900 mb-3">Can’t find your order?</h2>
+                                <p class="text-gray-700 mb-3">Contact support with your order ID and email so we can check quickly.</p>
+                                <a href="mailto:support@bluprinter.com" class="inline-flex items-center px-5 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">
+                                    support@bluprinter.com
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>',
+                'excerpt' => 'Track your Bluprinter order status with Order ID and email.',
+                'status' => 'published',
+                'published_at' => now(),
+                'template' => 'default',
+                'show_in_menu' => true,
+                'menu_title' => 'Order Tracking',
+                'sort_order' => 14,
+                'meta_title' => 'Order Tracking - Bluprinter',
+                'meta_description' => 'Track Bluprinter orders using Order ID and email; get support if you cannot find your order.',
+            ],
+            [
+                'user_id' => $admin->id,
+                'title' => 'Secure Payments',
+                'slug' => 'secure-payments',
+                'content' => '<div class="max-w-4xl mx-auto py-10 px-4">
+                    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                        <div class="bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-8 text-center">
+                            <h1 class="text-4xl font-bold mb-2">Secure Payments</h1>
+                            <p class="text-green-100">Secure checkout with SSL encryption and trusted partners</p>
+                        </div>
+                        <div class="p-6 space-y-5">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                    <h3 class="text-lg font-semibold text-green-800 mb-2">Encryption & Security</h3>
+                                    <p class="text-gray-700">Card data is SSL-encrypted and processed through PCI-DSS compliant gateways.</p>
+                                </div>
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <h3 class="text-lg font-semibold text-blue-800 mb-2">Supported methods</h3>
+                                    <p class="text-gray-700">Visa, MasterCard, American Express, PayPal, and popular digital wallets.</p>
+                                </div>
+                                <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                    <h3 class="text-lg font-semibold text-amber-800 mb-2">Fraud protection</h3>
+                                    <p class="text-gray-700">Automated risk checks detect unusual transactions to protect users.</p>
+                                </div>
+                                <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                    <h3 class="text-lg font-semibold text-purple-800 mb-2">Fast support</h3>
+                                    <p class="text-gray-700">Payment issue? Contact us for assistance and order confirmation.</p>
+                                </div>
+                            </div>
+                            <div class="text-center">
+                                <a href="mailto:support@bluprinter.com" class="inline-flex items-center px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">support@bluprinter.com</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>',
+                'excerpt' => 'Information about Bluprinter secure payments: SSL, PCI compliance, and supported methods.',
+                'status' => 'published',
+                'published_at' => now(),
+                'template' => 'default',
+                'show_in_menu' => true,
+                'menu_title' => 'Secure Payments',
+                'sort_order' => 15,
+                'meta_title' => 'Secure Payments - Bluprinter',
+                'meta_description' => 'Learn how Bluprinter secures payments with SSL, PCI compliance, fraud protection, and supported methods.',
+            ],
+            [
+                'user_id' => $admin->id,
+                'title' => 'Help Center',
+                'slug' => 'help-center',
+                'content' => '<div class="max-w-5xl mx-auto py-10 px-4">
+                    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-8 text-center">
+                            <h1 class="text-4xl font-bold mb-2">Help Center</h1>
+                            <p class="text-blue-100">All guides and support in one place</p>
+                        </div>
+                        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <a href="/faqs" class="block bg-blue-50 border border-blue-200 rounded-lg p-5 hover:bg-blue-100">
+                                <h3 class="text-lg font-semibold text-blue-900 mb-1">FAQs</h3>
+                                <p class="text-gray-700 text-sm">Common questions about ordering, shipping, and returns.</p>
+                            </a>
+                            <a href="/shipping-delivery" class="block bg-green-50 border border-green-200 rounded-lg p-5 hover:bg-green-100">
+                                <h3 class="text-lg font-semibold text-green-900 mb-1">Shipping & Delivery</h3>
+                                <p class="text-gray-700 text-sm">Processing times, delivery windows, and shipping fees.</p>
+                            </a>
+                            <a href="/refund-policy" class="block bg-amber-50 border border-amber-200 rounded-lg p-5 hover:bg-amber-100">
+                                <h3 class="text-lg font-semibold text-amber-900 mb-1">Refund & Returns</h3>
+                                <p class="text-gray-700 text-sm">Refund policy, returns, and free-return details.</p>
+                            </a>
+                            <a href="/contact-us" class="block bg-purple-50 border border-purple-200 rounded-lg p-5 hover:bg-purple-100">
+                                <h3 class="text-lg font-semibold text-purple-900 mb-1">Contact support</h3>
+                                <p class="text-gray-700 text-sm">Submit a ticket or email for direct assistance.</p>
+                            </a>
+                        </div>
+                        <div class="p-6 text-center">
+                            <p class="text-gray-800 mb-3">Can’t find the answer? Contact us now.</p>
+                            <a href="mailto:support@bluprinter.com" class="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">support@bluprinter.com</a>
+                        </div>
+                    </div>
+                </div>',
+                'excerpt' => 'Central help center linking FAQs, shipping, refunds, and contact support.',
+                'status' => 'published',
+                'published_at' => now(),
+                'template' => 'default',
+                'show_in_menu' => true,
+                'menu_title' => 'Help Center',
+                'sort_order' => 16,
+                'meta_title' => 'Help Center - Bluprinter Support',
+                'meta_description' => 'Visit Bluprinter Help Center for FAQs, shipping info, refund policy, and contact options.',
+            ],
+            [
+                'user_id' => $admin->id,
+                'title' => 'Sitemap',
+                'slug' => 'sitemap',
+                'content' => '<div class="max-w-4xl mx-auto py-10 px-4">
+                    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                        <div class="bg-gradient-to-r from-gray-700 to-slate-900 text-white px-6 py-8 text-center">
+                            <h1 class="text-4xl font-bold mb-2">Sitemap</h1>
+                            <p class="text-slate-200">All key pages on Bluprinter</p>
+                        </div>
+                        <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/about-us">About Us</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/contact-us">Contact Us</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/help-center">Help Center</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/order-tracking">Order Tracking</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/shipping-delivery">Shipping & Delivery</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/refund-policy">Refund Policy</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/returns-exchanges-policy">Returns & Exchanges</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/free-return">Free Return</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/faqs">FAQs</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/privacy-policy">Privacy Policy</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/terms-of-service">Terms of Service</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/dmca">DMCA & IP Policy</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/our-intellectual-property-policy">Our Intellectual Property Policy</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/cancelchange-order">Cancel or Change Order</a>
+                            <a class="block px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100" href="/secure-payments">Secure Payments</a>
+                        </div>
+                        <div class="p-6 text-center text-gray-700">
+                            <p>Need more help? <a href="mailto:support@bluprinter.com" class="text-indigo-600 font-semibold">support@bluprinter.com</a></p>
+                        </div>
+                    </div>
+                </div>',
+                'excerpt' => 'Sitemap listing key pages: About, Help Center, Tracking, Shipping, Policies.',
+                'status' => 'published',
+                'published_at' => now(),
+                'template' => 'default',
+                'show_in_menu' => true,
+                'menu_title' => 'Sitemap',
+                'sort_order' => 17,
+                'meta_title' => 'Sitemap - Bluprinter',
+                'meta_description' => 'Sitemap of Bluprinter including help, tracking, policies, and contact pages.',
+            ],
         ];
 
-        // Tạo các pages
+        // Create pages
         foreach ($pages as $page) {
             Page::create($page);
-            $this->command->info("✓ Đã tạo trang: {$page['title']}");
+            $this->command->info("✓ Created page: {$page['title']}");
         }
 
-        $this->command->info('Hoàn tất! Đã tạo ' . count($pages) . ' trang.');
+        $this->command->info('Done! Created ' . count($pages) . ' pages.');
     }
 }

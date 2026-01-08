@@ -87,6 +87,7 @@ class DomainAnalyticsConfigController extends Controller
     public function update(Request $request, string $id): RedirectResponse
     {
         $config = DomainAnalyticsConfig::findOrFail($id);
+        $oldDomain = $config->domain;
 
         $validated = $request->validate([
             'domain' => ['required', 'string', 'max:255', 'unique:domain_analytics_configs,domain,' . $id],

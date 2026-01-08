@@ -393,7 +393,8 @@ class LianLianPayServiceV2
                         ]);
                     }
 
-                    // Send order confirmation email
+                    // Send order confirmation email to customer and admin
+                    $adminEmail = config('mail.from.address');
                     try {
                         \Illuminate\Support\Facades\Mail::to($order->customer_email)
                             ->send(new \App\Mail\OrderConfirmation($order));
@@ -401,9 +402,20 @@ class LianLianPayServiceV2
                             'order_number' => $order->order_number,
                             'email' => $order->customer_email
                         ]);
+
+                        if ($adminEmail) {
+                            \Illuminate\Support\Facades\Mail::to($adminEmail)
+                                ->send(new \App\Mail\OrderConfirmation($order));
+                            Log::info('📧 Admin new-order email sent (webhook)', [
+                                'order_number' => $order->order_number,
+                                'email' => $adminEmail
+                            ]);
+                        }
                     } catch (\Exception $e) {
                         Log::error('❌ Failed to send order confirmation email (webhook)', [
                             'order_number' => $order->order_number,
+                            'email' => $order->customer_email,
+                            'admin_email' => $adminEmail,
                             'error' => $e->getMessage()
                         ]);
                     }

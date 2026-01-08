@@ -694,7 +694,7 @@
                         </button>
                         
                         <!-- Help Center Dropdown -->
-                        <div class="absolute left-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                        <div class="absolute left-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 max-h-[70vh] overflow-y-auto">
                             <div class="p-4">
                                 <h3 class="text-sm font-semibold text-gray-900 mb-3">Help & Support</h3>
                                 <div class="grid grid-cols-1 gap-2">

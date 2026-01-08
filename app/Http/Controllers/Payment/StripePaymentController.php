@@ -7,9 +7,11 @@ use App\Models\Order;
 use App\Services\ShippingCalculator;
 use App\Services\TikTokEventsService;
 use App\Services\CurrencyService;
+use App\Mail\OrderConfirmation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Stripe\Stripe;
 use Stripe\PaymentIntent;
 use Stripe\Webhook;
@@ -315,6 +317,31 @@ class StripePaymentController extends Controller
                 'payment_intent_id' => $paymentIntent->id,
                 'amount' => $totalAmount,
             ]);
+
+            // Send order confirmation email to customer and admin
+            $adminEmail = config('mail.from.address');
+            try {
+                Mail::to($order->customer_email)->send(new OrderConfirmation($order));
+                Log::info('📧 Order confirmation email sent (Stripe controller)', [
+                    'order_number' => $order->order_number,
+                    'email' => $order->customer_email
+                ]);
+
+                if ($adminEmail) {
+                    Mail::to($adminEmail)->send(new OrderConfirmation($order));
+                    Log::info('📧 Admin new-order email sent (Stripe controller)', [
+                        'order_number' => $order->order_number,
+                        'email' => $adminEmail
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error('❌ Failed to send order confirmation email (Stripe controller)', [
+                    'order_number' => $order->order_number,
+                    'email' => $order->customer_email,
+                    'admin_email' => $adminEmail,
+                    'error' => $e->getMessage()
+                ]);
+            }
 
             return response()->json([
                 'success' => true,

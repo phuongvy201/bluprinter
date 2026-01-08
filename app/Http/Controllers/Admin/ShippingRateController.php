@@ -40,9 +40,13 @@ class ShippingRateController extends Controller
         // Filter by domain
         if ($request->filled('domain')) {
             if ($request->domain === 'null') {
-                $query->whereNull('domain');
+                $query->whereNull('domain')
+                    ->whereNull('domains');
             } else {
-                $query->where('domain', $request->domain);
+                $query->where(function ($q) use ($request) {
+                    $q->where('domain', $request->domain)
+                        ->orWhereJsonContains('domains', $request->domain);
+                });
             }
         }
 
@@ -104,7 +108,9 @@ class ShippingRateController extends Controller
     {
         $validated = $request->validate([
             'shipping_zone_id' => 'required|exists:shipping_zones,id',
-            'domain' => 'nullable|string|max:255',
+            'domain' => 'nullable|string|max:255', // legacy single domain (optional)
+            'domains' => 'nullable|array',
+            'domains.*' => 'string|max:255',
             'category_id' => 'nullable|exists:categories,id',
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -120,10 +126,12 @@ class ShippingRateController extends Controller
             'sort_order' => 'nullable|integer|min:0',
         ]);
 
-        // Convert empty string to null
-        if (empty($validated['domain'])) {
-            $validated['domain'] = null;
-        }
+        // Normalize domains input
+        $domains = array_values(array_filter($request->input('domains', [])));
+        $primaryDomain = $domains[0] ?? ($request->input('domain') ?: null);
+
+        $validated['domain'] = $primaryDomain ?: null;
+        $validated['domains'] = $domains ?: null;
 
         $validated['is_active'] = $request->has('is_active');
         $validated['is_default'] = $request->has('is_default');
@@ -169,7 +177,9 @@ class ShippingRateController extends Controller
     {
         $validated = $request->validate([
             'shipping_zone_id' => 'required|exists:shipping_zones,id',
-            'domain' => 'nullable|string|max:255',
+            'domain' => 'nullable|string|max:255', // legacy single domain (optional)
+            'domains' => 'nullable|array',
+            'domains.*' => 'string|max:255',
             'category_id' => 'nullable|exists:categories,id',
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -185,10 +195,12 @@ class ShippingRateController extends Controller
             'sort_order' => 'nullable|integer|min:0',
         ]);
 
-        // Convert empty string to null
-        if (empty($validated['domain'])) {
-            $validated['domain'] = null;
-        }
+        // Normalize domains input
+        $domains = array_values(array_filter($request->input('domains', [])));
+        $primaryDomain = $domains[0] ?? ($request->input('domain') ?: null);
+
+        $validated['domain'] = $primaryDomain ?: null;
+        $validated['domains'] = $domains ?: null;
 
         $validated['is_active'] = $request->has('is_active');
         $wasDefault = $shippingRate->is_default;

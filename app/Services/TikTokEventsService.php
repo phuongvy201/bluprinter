@@ -74,17 +74,6 @@ class TikTokEventsService
                     'status' => $response->status(),
                     'body' => $response->json(),
                 ]);
-            } else {
-                $body = $response->json();
-
-                Log::info('TikTok Events API request sent', [
-                    'event' => $event,
-                    'status' => $response->status(),
-                    'request_id' => Arr::get($body, 'request_id'),
-                    'response_code' => Arr::get($body, 'code'),
-                    'response_message' => Arr::get($body, 'message'),
-                    'test_event_code' => $this->testEventCode,
-                ]);
             }
         } catch (\Throwable $exception) {
             Log::error('TikTok Events API request exception', [

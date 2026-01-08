@@ -217,7 +217,7 @@ class ShippingCalculator
                 ->get()
                 ->first(function ($r) use ($itemCount, $orderValue, $domain) {
                     // If domain provided, prioritize rates matching domain
-                    if ($domain && $r->domain === $domain) {
+                    if ($domain && $r->matchesDomain($domain)) {
                         return $r->isApplicable($itemCount, $orderValue);
                     }
                     return false;

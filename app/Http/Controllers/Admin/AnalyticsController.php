@@ -13,7 +13,7 @@ class AnalyticsController extends Controller
 
     public function __construct()
     {
-        // Không khởi tạo service ở đây, sẽ khởi tạo trong index() dựa trên selected_domain
+        // Không khởi tạo service ở đây, sẽ khởi tạo trong ind  exex() dựa trên selected_domain
     }
 
     public function index(Request $request)
@@ -25,24 +25,24 @@ class AnalyticsController extends Controller
         // Lấy danh sách domain đã cấu hình trong database
         $availableDomains = \App\Models\DomainAnalyticsConfig::getAllDomains();
 
-        // Kiểm tra nếu không có domain nào được cấu hình
+        // Check if no domain is configured
         if (empty($availableDomains)) {
             return redirect()->route('admin.settings.domain-config.index')
-                ->with('error', 'Chưa có domain nào được cấu hình. Vui lòng cấu hình domain trước khi xem analytics.');
+                ->with('error', 'No domain is configured. Please configure a domain before viewing analytics.');
         }
 
-        // Lấy domain được chọn từ request
+        // Get the domain selected from the request
         $selectedDomainParam = $request->get('selected_domain');
 
-        // Chỉ chấp nhận domain từ database, không cho phép default
+        // Only accept domain from database, not allow default
         if ($selectedDomainParam === 'default' || $selectedDomainParam === '' || $selectedDomainParam === null) {
-            // Nếu không có domain được chọn, dùng domain đầu tiên trong danh sách
+            // If no domain is selected, use the first domain in the list
             $selectedDomain = $availableDomains[0];
         } else {
-            // Kiểm tra domain có tồn tại trong database không
+            // Check if the domain exists in the database
             if (!in_array($selectedDomainParam, $availableDomains)) {
                 return redirect()->route('admin.analytics.index')
-                    ->with('error', 'Domain không hợp lệ. Domain phải được cấu hình trong database.');
+                    ->with('error', 'Invalid domain. Domain must be configured in the database.');
             }
             $selectedDomain = $selectedDomainParam;
         }
@@ -50,10 +50,10 @@ class AnalyticsController extends Controller
         $this->selectedDomain = $selectedDomain;
         $this->analyticsService = AnalyticsService::forDomain($selectedDomain);
 
-        // Kiểm tra nếu service không được khởi tạo (do không có config)
+        // Check if the service is not initialized (due to no config)
         if (!$this->analyticsService->isInitialized()) {
             return redirect()->route('admin.settings.domain-config.index')
-                ->with('error', "Domain '{$selectedDomain}' chưa được cấu hình đầy đủ. Vui lòng kiểm tra lại cấu hình.");
+                ->with('error', "Domain '{$selectedDomain}' is not fully configured. Please check the configuration.");
         }
 
         $displayDomain = $selectedDomain;
@@ -67,16 +67,16 @@ class AnalyticsController extends Controller
             'availableDomains' => $availableDomains,
         ];
 
-        // Dữ liệu chung cho tất cả tabs
+        // Common data for all tabs
         $data['summaryMetrics'] = $this->analyticsService->getSummaryMetrics($days);
 
-        // Load dữ liệu cho tất cả các tab để có thể switch tab mà không cần reload
+        // Load data for all tabs to be able to switch tab without reloading
         // Acquisition data
         $data['sessionsByDate'] = $this->analyticsService->getSessionsByDate($days);
         $data['channels'] = $this->analyticsService->getAcquisitionChannels($days);
         $data['trafficSources'] = $this->analyticsService->getTrafficSources($days);
 
-        // Filter data based on filter parameter (chỉ áp dụng khi tab là acquisition)
+                // Filter data based on filter parameter (only applies when tab is acquisition)
         if ($tab === 'acquisition' && $filter !== 'all') {
             $data['trafficSources'] = $this->filterTrafficSources($data['trafficSources'], $filter);
             $data['channels'] = $this->filterChannels($data['channels'], $filter);

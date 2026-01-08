@@ -34,8 +34,18 @@ class ShippingDeliveryController extends Controller
         // Nếu chưa có dữ liệu DomainShippingCost, fallback sang ShippingRate (domain + general)
         if ($shippingCosts->isEmpty()) {
             $shippingRates = ShippingRate::where(function ($query) use ($domain) {
-                $query->where('domain', $domain)
-                    ->orWhereNull('domain'); // Include general rates
+                if ($domain) {
+                    $query->where(function ($q) use ($domain) {
+                        $q->where('domain', $domain)
+                            ->orWhereJsonContains('domains', $domain);
+                    });
+                }
+
+                // Include general rates (no domain)
+                $query->orWhere(function ($q) {
+                    $q->whereNull('domain')
+                        ->orWhereNull('domains');
+                });
             })
                 ->where('is_active', true)
                 ->whereNotNull('first_item_cost')

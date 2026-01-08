@@ -12,6 +12,7 @@ class ShippingRate extends Model
         'shipping_zone_id',
         'domain',
         'category_id',
+        'domains',
         'name',
         'description',
         'delivery_min_days',
@@ -42,6 +43,7 @@ class ShippingRate extends Model
         'sort_order' => 'integer',
         'delivery_min_days' => 'integer',
         'delivery_max_days' => 'integer',
+        'domains' => 'array',
     ];
 
     /**
@@ -153,7 +155,29 @@ class ShippingRate extends Model
         if (!$domain) {
             return $query;
         }
-        return $query->where('domain', $domain);
+
+        return $query->where(function ($q) use ($domain) {
+            $q->where('domain', $domain)
+                ->orWhereJsonContains('domains', $domain);
+        });
+    }
+
+    /**
+     * Check if this rate matches a given domain (supports multi-domain)
+     */
+    public function matchesDomain(?string $domain): bool
+    {
+        if (!$domain) {
+            return true;
+        }
+
+        if ($this->domain === $domain) {
+            return true;
+        }
+
+        $domains = is_array($this->domains) ? $this->domains : [];
+
+        return in_array($domain, $domains, true);
     }
 
     /**
@@ -187,7 +211,10 @@ class ShippingRate extends Model
         }
 
         $query = self::where('is_active', true)
-            ->where('domain', $domain);
+            ->where(function ($q) use ($domain) {
+                $q->where('domain', $domain)
+                    ->orWhereJsonContains('domains', $domain);
+            });
 
         if ($zoneId) {
             $query->where('shipping_zone_id', $zoneId);
