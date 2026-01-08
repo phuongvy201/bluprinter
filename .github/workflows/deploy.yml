@@ -1,67 +1,43 @@
-name: Deploy to AWS EC2
-on:
-  push:
-    branches:
-      - main
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@v3
+- name: Deploy to EC2
+  run: |
+    ssh -i ~/.ssh/id_ed25519 ec2-user@3.107.252.204 << 'EOF'
+      set -e
+      PROJECT_PATH=/var/www/html
+      WEB_USER=nginx
+      cd $PROJECT_PATH
 
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H 3.107.252.204 >> ~/.ssh/known_hosts
+      # 🔧 Fix dubious ownership (chạy dưới ec2-user là đủ)
+      git config --global --add safe.directory $PROJECT_PATH
 
-      - name: Deploy to EC2
-        run: |
-          ssh -i ~/.ssh/id_ed25519 ec2-user@3.107.252.204 << 'EOF'
-            set -e
-            cd /var/www/html
+      # 🔑 Đảm bảo owner là ec2-user (deploy user), group là nginx
+      echo "🔑 Fixing ownership (ec2-user:nginx)..."
+      sudo chown -R ec2-user:$WEB_USER $PROJECT_PATH
 
-            # 🔧 Fix Git "dubious ownership"
-            git config --global --add safe.directory /var/www/html
+      # 🔄 Git pull/reset - chạy dưới ec2-user (có quyền full)
+      echo "🔄 Pulling latest code..."
+      git fetch origin main
+      git reset --hard origin/main
 
-            echo "🔄 Pulling latest code..."
-            git fetch origin main
-            git reset --hard origin/main
+      # 📦 Composer install - chạy dưới ec2-user (composer thường nằm trong /usr/local/bin, ổn)
+      echo "📦 Installing dependencies..."
+      composer install --no-dev --optimize-autoloader --no-interaction
 
-            echo "🔐 Fixing permissions..."
-            sudo chown -R ec2-user:nginx /var/www/html/storage
-            sudo chown -R ec2-user:nginx /var/www/html/bootstrap/cache
-            sudo chmod -R 775 /var/www/html/storage
-            sudo chmod -R 775 /var/www/html/bootstrap/cache
+      # 🗄 Laravel commands - có thể chạy dưới ec2-user vì storage đã group writable
+      echo "🗄 Running migrations..."
+      php artisan migrate --force
 
-            # 📦 Composer install if needed
-            if ! cmp -s composer.json composer.lock; then
-              echo "📦 composer.json changed, installing dependencies..."
-              sudo composer install --no-dev --optimize-autoloader
-            else
-              echo "📦 No composer changes, skipping composer install"
-            fi
+      echo "🧹 Clearing & optimizing cache..."
+      php artisan optimize:clear
+      php artisan optimize
 
-            # 🗄 Run migrations
-            echo "🗄 Running migrations..."
-            php artisan migrate --force
+      # 🔐 Đảm bảo storage & cache directories group writable
+      echo "🔐 Fixing storage permissions..."
+      sudo chmod -R 775 $PROJECT_PATH/storage $PROJECT_PATH/bootstrap/cache
 
-            echo "🧹 Clearing Laravel cache..."
-            php artisan config:clear || { echo "❌ Failed to clear config cache"; exit 1; }
-            php artisan cache:clear || { echo "❌ Failed to clear application cache"; exit 1; }
-            php artisan route:clear || { echo "❌ Failed to clear route cache"; exit 1; }
-            php artisan view:clear || { echo "❌ Failed to clear view cache"; exit 1; }
+      # 🚀 Restart services
+      echo "🚀 Restarting PHP-FPM and Nginx..."
+      sudo systemctl restart php-fpm
+      sudo systemctl restart nginx
 
-            echo "⚙️ Optimizing Laravel..."
-            php artisan config:cache || { echo "❌ Failed to cache config"; exit 1; }
-            php artisan route:cache || { echo "❌ Failed to cache routes"; exit 1; }
-            php artisan view:cache || { echo "❌ Failed to cache views"; exit 1; }
-
-            echo "🚀 Restarting PHP-FPM and Nginx..."
-            sudo systemctl restart php-fpm
-            sudo systemctl restart nginx
-
-            echo "✅ Deployment completed successfully!"
-          EOF
+      echo "✅ Deployment completed successfully!"
+    EOF
