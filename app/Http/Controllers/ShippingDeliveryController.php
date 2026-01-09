@@ -35,10 +35,16 @@ class ShippingDeliveryController extends Controller
         if ($shippingCosts->isEmpty()) {
             $shippingRates = ShippingRate::where(function ($query) use ($domain) {
                 if ($domain) {
+                    // Ưu tiên domain hiện tại
                     $query->where(function ($q) use ($domain) {
                         $q->where('domain', $domain)
                             ->orWhereJsonContains('domains', $domain);
-                    });
+                    })
+                        // Lấy thêm general (domain null) làm fallback nhưng không trộn domain khác
+                        ->orWhere(function ($q) {
+                            $q->whereNull('domain')
+                                ->orWhereNull('domains');
+                        });
                 } else {
                     // Không có domain: chỉ lấy general
                     $query->whereNull('domain')
