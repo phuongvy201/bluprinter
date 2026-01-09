@@ -138,15 +138,15 @@
                             @if($domains->isNotEmpty())
                                 <div class="flex flex-wrap gap-1">
                                     @foreach($domains as $d)
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
                                             {{ $d }}
-                                        </span>
+                            </span>
                                     @endforeach
                                 </div>
                             @else
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                                    General
-                                </span>
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                General
+                            </span>
                             @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">

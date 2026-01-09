@@ -31,7 +31,7 @@ class ShippingDeliveryController extends Controller
             ->orderBy('product_type')
             ->get();
 
-        // Nếu chưa có dữ liệu DomainShippingCost, fallback sang ShippingRate (domain + general)
+        // Nếu chưa có dữ liệu DomainShippingCost, fallback sang ShippingRate (ưu tiên theo domain)
         if ($shippingCosts->isEmpty()) {
             $shippingRates = ShippingRate::where(function ($query) use ($domain) {
                 if ($domain) {
@@ -39,13 +39,11 @@ class ShippingDeliveryController extends Controller
                         $q->where('domain', $domain)
                             ->orWhereJsonContains('domains', $domain);
                     });
-                }
-
-                // Include general rates (no domain)
-                $query->orWhere(function ($q) {
-                    $q->whereNull('domain')
+                } else {
+                    // Không có domain: chỉ lấy general
+                    $query->whereNull('domain')
                         ->orWhereNull('domains');
-                });
+                }
             })
                 ->where('is_active', true)
                 ->whereNotNull('first_item_cost')
@@ -55,7 +53,7 @@ class ShippingDeliveryController extends Controller
                 ->get();
 
             // Chuyển ShippingRate thành cấu trúc DomainShippingCost tương ứng
-            $shippingCosts = $shippingRates->map(function ($rate) use ($region) {
+            $shippingCosts = $shippingRates->map(function ($rate) {
                 $productType = 'general';
                 if ($rate->category) {
                     $productType = strtolower(str_replace(' ', '_', $rate->category->name));
@@ -64,7 +62,7 @@ class ShippingDeliveryController extends Controller
                 }
 
                 // Xác định region từ shipping zone (nếu có)
-                $detectedRegion = $region;
+                $detectedRegion = null;
                 if ($rate->shippingZone) {
                     $zone = $rate->shippingZone;
                     $countries = $zone->countries ?? [];
@@ -75,7 +73,7 @@ class ShippingDeliveryController extends Controller
                 }
 
                 return (object) [
-                    'region' => $detectedRegion ?? 'US',
+                    'region' => $detectedRegion,
                     'product_type' => $productType,
                     'first_item_cost' => (float) $rate->first_item_cost,
                     'additional_item_cost' => (float) $rate->additional_item_cost,
@@ -84,6 +82,9 @@ class ShippingDeliveryController extends Controller
                     'delivery_note' => $rate->delivery_note,
                     'is_active' => $rate->is_active,
                 ];
+            })->filter(function ($cost) {
+                // Bỏ các rate không xác định được region
+                return !empty($cost->region);
             });
         }
 
@@ -186,9 +187,58 @@ class ShippingDeliveryController extends Controller
 
         // Map EU countries to Europe (EU)
         $euCountries = [
-            'AL','AD','AM','AT','AZ','BY','BE','BA','BG','CH','CY','CZ','DE','DK','EE','ES','FI','FO',
-            'FR','GB','GE','GI','GR','HR','HU','IE','IS','IT','LI','LT','LU','LV','MC','MD','ME','MK',
-            'MT','NL','NO','PL','PT','RO','RS','RU','SE','SI','SJ','SK','SM','TR','UA','VA'
+            'AL',
+            'AD',
+            'AM',
+            'AT',
+            'AZ',
+            'BY',
+            'BE',
+            'BA',
+            'BG',
+            'CH',
+            'CY',
+            'CZ',
+            'DE',
+            'DK',
+            'EE',
+            'ES',
+            'FI',
+            'FO',
+            'FR',
+            'GB',
+            'GE',
+            'GI',
+            'GR',
+            'HR',
+            'HU',
+            'IE',
+            'IS',
+            'IT',
+            'LI',
+            'LT',
+            'LU',
+            'LV',
+            'MC',
+            'MD',
+            'ME',
+            'MK',
+            'MT',
+            'NL',
+            'NO',
+            'PL',
+            'PT',
+            'RO',
+            'RS',
+            'RU',
+            'SE',
+            'SI',
+            'SJ',
+            'SK',
+            'SM',
+            'TR',
+            'UA',
+            'VA'
         ];
 
         foreach ($countries as $country) {

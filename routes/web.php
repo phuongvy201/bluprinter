@@ -39,6 +39,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
+use App\Http\Controllers\Customer\ReturnRequestController;
 
 RateLimiter::for('register', function (Request $request) {
     return Limit::perMinute(5)->by($request->ip());
@@ -126,6 +127,7 @@ Route::middleware(['auth'])->prefix('my')->name('customer.')->group(function () 
     Route::get('/orders', [App\Http\Controllers\Customer\OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{orderNumber}', [App\Http\Controllers\Customer\OrderController::class, 'show'])->name('orders.show');
     Route::post('/orders/{orderNumber}/cancel', [App\Http\Controllers\Customer\OrderController::class, 'cancel'])->name('orders.cancel');
+    Route::post('/orders/{orderNumber}/return-request', [ReturnRequestController::class, 'store'])->name('orders.return-request');
 });
 
 // Order tracking (public - no login required)

@@ -225,6 +225,112 @@
                 @endif
             </div>
         </div>
+
+        <!-- Return / Exchange Request -->
+        <div class="mt-10 bg-white rounded-xl shadow-sm p-6">
+            @php
+                $returnRoute = \Illuminate\Support\Facades\Route::has('customer.orders.return-request')
+                    ? route('customer.orders.return-request', $order->order_number)
+                    : null;
+            @endphp
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">Return / Exchange Request</h2>
+                    <p class="text-sm text-gray-600 mt-1">Tell us why you want to return or exchange this order.</p>
+                </div>
+                @if(!$returnRoute)
+                    <span class="px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                        Submission not configured yet
+                    </span>
+                @endif
+            </div>
+
+            @if(!$returnRoute)
+                <div class="mb-4 text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    This form is for your reference. Please contact support to submit the request.
+                </div>
+            @endif
+
+            <form class="space-y-5" method="POST" action="{{ $returnRoute ?? '#' }}" enctype="multipart/form-data">
+                @csrf
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Reason</label>
+                    <select name="reason"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            {{ $returnRoute ? '' : 'disabled' }}>
+                        <option value="">Select a reason</option>
+                        <option value="product_defect">Product defect</option>
+                        <option value="not_as_described">Not as described</option>
+                        <option value="wrong_item">Wrong item received</option>
+                        <option value="size_issue">Does not fit the size</option>
+                        <option value="changed_mind">Changed my mind</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Preferred resolution</label>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        @php
+                            $resolutions = [
+                                ['value' => 'refund', 'label' => 'Refund to original payment'],
+                                ['value' => 'exchange', 'label' => 'Exchange for a new product'],
+                                ['value' => 'store_credit', 'label' => 'Store credit'],
+                            ];
+                        @endphp
+                        @foreach($resolutions as $res)
+                            <label class="flex items-start gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:border-blue-500">
+                                <input type="radio"
+                                       name="resolution"
+                                       value="{{ $res['value'] }}"
+                                       class="mt-1 text-blue-600 focus:ring-blue-500"
+                                       {{ $returnRoute ? '' : 'disabled' }}>
+                                <span class="text-sm text-gray-700">{{ $res['label'] }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Tell us more (optional)</label>
+                    <textarea name="description"
+                              rows="4"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Describe the issue briefly..."
+                              {{ $returnRoute ? '' : 'disabled' }}></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Upload evidence (images, optional)</label>
+                    <input type="file"
+                           name="evidence[]"
+                           accept="image/*"
+                           multiple
+                           class="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                           {{ $returnRoute ? '' : 'disabled' }}>
+                    <p class="text-xs text-gray-500 mt-1">You can upload product photos, package photos, or any proof.</p>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox"
+                           id="confirm"
+                           name="confirm"
+                           class="text-blue-600 focus:ring-blue-500 rounded"
+                           {{ $returnRoute ? '' : 'disabled' }}>
+                    <label for="confirm" class="text-sm text-gray-700">
+                        I confirm the information above is accurate.
+                    </label>
+                </div>
+
+                <div class="pt-2">
+                    <button type="{{ $returnRoute ? 'submit' : 'button' }}"
+                            class="px-5 py-3 rounded-lg text-white font-semibold shadow-sm transition
+                            {{ $returnRoute ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed' }}">
+                        Submit Request
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 @endsection
