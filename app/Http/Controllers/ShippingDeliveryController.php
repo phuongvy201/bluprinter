@@ -94,6 +94,28 @@ class ShippingDeliveryController extends Controller
             });
         }
 
+        // Ưu tiên: nếu trong cùng region có sản phẩm cụ thể, ẩn general; mỗi product_type chỉ giữ rate ưu tiên (thấp nhất first_item_cost, rồi additional)
+        $shippingCosts = $shippingCosts
+            ->filter(fn($c) => !empty($c->region)) // đảm bảo có region
+            ->groupBy('region')
+            ->flatMap(function ($itemsByRegion) {
+                // Nếu có product_type khác 'general', bỏ hết 'general'
+                $hasSpecific = $itemsByRegion->contains(function ($c) {
+                    return $c->product_type !== 'general';
+                });
+                if ($hasSpecific) {
+                    $itemsByRegion = $itemsByRegion->filter(fn($c) => $c->product_type !== 'general');
+                }
+
+                // Mỗi product_type chọn 1 rate ưu tiên (cost thấp nhất)
+                return $itemsByRegion->groupBy('product_type')->map(function ($group) {
+                    return $group->sortBy([
+                        ['first_item_cost', 'asc'],
+                        ['additional_item_cost', 'asc'],
+                    ])->first();
+                })->values();
+            });
+
         // Helper to format costs with currency conversion
         $formatCosts = function ($costCollection) use ($currency, $currencyRate, $domain) {
             return $costCollection->map(function ($cost) use ($currency, $currencyRate, $domain) {
