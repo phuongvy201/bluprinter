@@ -772,6 +772,26 @@ class CheckoutController extends Controller
                             'paid_at' => now()
                         ]);
 
+                        // Try to fetch capture_id for tracking
+                        try {
+                            $paypalService = new PayPalService();
+                            $captureResult = $paypalService->capturePayment($request->paypal_order_id);
+                            $captureId = null;
+                            if (!empty($captureResult->data['purchase_units'][0]['payments']['captures'][0]['id'])) {
+                                $captureId = $captureResult->data['purchase_units'][0]['payments']['captures'][0]['id'];
+                            }
+                            if ($captureId) {
+                                $order->paypal_capture_id = $captureId;
+                                $order->save();
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('Failed to fetch PayPal capture id for SDK order', [
+                                'order_id' => $order->id,
+                                'paypal_order_id' => $request->paypal_order_id,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+
                         Log::info('✅ PayPal Order Status Updated (following LianLian Pay pattern)', [
                             'order_id' => $order->id,
                             'order_number' => $order->order_number,

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
+use Illuminate\Support\Facades\Log;
+use App\Services\StripeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -19,7 +21,15 @@ class OrderController extends Controller
         // Admin and ad-partner can access index, show, and export
         $this->middleware(function ($request, $next) {
             $user = Auth::user();
-            if (!$user || (!$user->hasRole('admin') && !$user->hasRole('ad-partner'))) {
+            $roleNames = [];
+            if ($user && method_exists($user, 'roles')) {
+                $roleNames = $user->roles->pluck('name')->toArray();
+            }
+
+            if (
+                !$user ||
+                (!in_array('admin', $roleNames, true) && !in_array('ad-partner', $roleNames, true))
+            ) {
                 abort(403, 'Unauthorized');
             }
             return $next($request);
@@ -97,6 +107,30 @@ class OrderController extends Controller
             'tracking_number' => $request->tracking_number,
             'notes' => $request->notes
         ]);
+
+        // Nếu có tracking_number và đơn PayPal đã có capture_id, đẩy tracking sang PayPal
+        if ($request->filled('tracking_number') && $order->payment_method === 'paypal' && $order->paypal_capture_id) {
+            try {
+                $paypalOrderId = $order->payment_id; // lưu order_id trong payment_id
+                $captureId = $order->paypal_capture_id;
+                $trackingNumber = $request->tracking_number;
+                $carrier = 'OTHER'; // carrier mặc định, có thể thay đổi theo dữ liệu thực tế
+
+                $paypalService = new \App\Services\PayPalService();
+                $paypalService->addTracking($paypalOrderId, $captureId, $trackingNumber, $carrier, false);
+            } catch (\Exception $e) {
+                Log::error('❌ Failed to push tracking to PayPal', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'paypal_order_id' => $order->payment_id,
+                    'paypal_capture_id' => $order->paypal_capture_id,
+                    'error' => $e->getMessage()
+                ]);
+                // Không throw để không chặn cập nhật trong admin
+            }
+        }
+
+        // Stripe: bỏ xử lý push tracking (không dùng API tracking)
 
         return redirect()->back()->with('success', 'Order updated successfully!');
     }

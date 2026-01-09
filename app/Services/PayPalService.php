@@ -67,11 +67,29 @@ class PayPalService
     private function isPayPalSupportedCurrency(string $currency): bool
     {
         $supportedCurrencies = [
-            'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY', 
-            'HKD', 'SGD', 'NZD', 'CHF', 'DKK', 'PLN', 'NOK', 
-            'SEK', 'MXN', 'BRL', 'RUB', 'INR', 'KRW', 'THB'
+            'USD',
+            'EUR',
+            'GBP',
+            'CAD',
+            'AUD',
+            'JPY',
+            'CNY',
+            'HKD',
+            'SGD',
+            'NZD',
+            'CHF',
+            'DKK',
+            'PLN',
+            'NOK',
+            'SEK',
+            'MXN',
+            'BRL',
+            'RUB',
+            'INR',
+            'KRW',
+            'THB'
         ];
-        
+
         return in_array(strtoupper($currency), $supportedCurrencies);
     }
 
@@ -81,16 +99,16 @@ class PayPalService
     private function getPayPalCurrency(): string
     {
         $currency = CurrencyService::getCurrentCurrency();
-        
+
         if ($this->isPayPalSupportedCurrency($currency)) {
             return $currency;
         }
-        
+
         // Fallback to USD if currency not supported
         Log::warning('PayPal currency not supported, using USD', [
             'requested_currency' => $currency
         ]);
-        
+
         return 'USD';
     }
 
@@ -104,7 +122,7 @@ class PayPalService
         // Get PayPal currency (with fallback to USD if not supported)
         $paypalCurrency = $this->getPayPalCurrency();
         $isCurrencyUSD = ($paypalCurrency === 'USD');
-        
+
         // Build items first to calculate accurate subtotal
         $paypalItems = [];
         $itemsSubtotal = 0;
@@ -114,12 +132,12 @@ class PayPalService
             // Calculate unit price from total (total / quantity)
             // This ensures we use the actual cart price (with variants/customizations)
             $unitPriceUSD = (float)$item['total'] / (int)$item['quantity'];
-            
+
             // Convert to PayPal currency if needed
             if (!$isCurrencyUSD) {
                 $unitPriceUSD = CurrencyService::convertFromUSD($unitPriceUSD);
             }
-            
+
             // Format based on currency (some currencies don't use decimals)
             $decimals = in_array($paypalCurrency, ['JPY', 'KRW']) ? 0 : 2;
             $formattedUnitPrice = number_format($unitPriceUSD, $decimals, '.', '');
@@ -141,13 +159,13 @@ class PayPalService
         $subtotalUSD = $itemsSubtotal;
         $taxUSD = (float)$order->tax_amount;
         $shippingUSD = (float)$order->shipping_cost;
-        
+
         if (!$isCurrencyUSD) {
             $subtotalUSD = CurrencyService::convertFromUSD($itemsSubtotal);
             $taxUSD = CurrencyService::convertFromUSD($taxUSD);
             $shippingUSD = CurrencyService::convertFromUSD($shippingUSD);
         }
-        
+
         // Format amounts - use calculated subtotal to avoid rounding errors
         $decimals = in_array($paypalCurrency, ['JPY', 'KRW']) ? 0 : 2;
         $subtotal = number_format($subtotalUSD, $decimals, '.', '');
@@ -307,6 +325,40 @@ class PayPalService
             'id' => $order['id'] ?? $orderId,
             'data' => $order
         ];
+    }
+
+    /**
+     * Add tracking information to a PayPal order (requires capture_id)
+     */
+    public function addTracking(string $paypalOrderId, string $captureId, string $trackingNumber, string $carrier, bool $notifyPayer = false, array $items = []): array
+    {
+        $accessToken = $this->getAccessToken();
+
+        $payload = [
+            'capture_id' => $captureId,
+            'tracking_number' => $trackingNumber,
+            'carrier' => $carrier,
+            'notify_payer' => $notifyPayer,
+        ];
+
+        if (!empty($items)) {
+            $payload['items'] = $items;
+        }
+
+        $response = Http::withToken($accessToken)
+            ->post($this->baseUrl . "/v2/checkout/orders/{$paypalOrderId}/track", $payload);
+
+        if ($response->failed()) {
+            Log::error('PayPal Add Tracking Failed', [
+                'order_id' => $paypalOrderId,
+                'capture_id' => $captureId,
+                'tracking_number' => $trackingNumber,
+                'response' => $response->json()
+            ]);
+            throw new \Exception('Failed to add tracking to PayPal order');
+        }
+
+        return $response->json();
     }
 
     /**

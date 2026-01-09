@@ -30,6 +30,7 @@ class Order extends Model
         'payment_method',
         'payment_id',
         'payment_transaction_id',
+        'paypal_capture_id',
         'paid_at',
         'refund_amount',
         'refund_reason',
