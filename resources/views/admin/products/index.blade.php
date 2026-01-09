@@ -60,6 +60,17 @@
                            class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                 </div>
 
+                <!-- Per Page -->
+                <div class="w-28">
+                    <select name="per_page" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                        @foreach([12,25,50,100] as $size)
+                            <option value="{{ $size }}" {{ (int)request('per_page', $perPage ?? 12) === $size ? 'selected' : '' }}>
+                                {{ $size }}/page
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
                 <!-- Category -->
                 <div class="w-48">
                     <select name="category_id" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">

@@ -89,8 +89,15 @@ class ProductController extends Controller
         // Apply default sorting
         $productsQuery->orderBy('created_at', 'desc');
 
+        // Per-page selection
+        $perPage = (int) $request->input('per_page', 12);
+        $allowedPerPage = [12, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 12;
+        }
+
         // Paginate
-        $products = $productsQuery->paginate(12)->withQueryString();
+        $products = $productsQuery->paginate($perPage)->withQueryString();
 
         // Get GMC configs for current domain (to show only available markets in modal)
         $currentDomain = $request->getHost();
@@ -100,7 +107,7 @@ class ProductController extends Controller
             ->orderBy('target_country')
             ->get();
 
-        return view('admin.products.index', compact('products', 'categories', 'templates', 'shops', 'collections', 'availableGmcConfigs'));
+        return view('admin.products.index', compact('products', 'categories', 'templates', 'shops', 'collections', 'availableGmcConfigs', 'perPage'));
     }
 
     /**
