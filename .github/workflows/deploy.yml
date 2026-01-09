@@ -1,43 +1,68 @@
-- name: Deploy to EC2
-  run: |
-    ssh -i ~/.ssh/id_ed25519 ec2-user@3.107.252.204 << 'EOF'
-      set -e
-      PROJECT_PATH=/var/www/html
-      WEB_USER=nginx
-      cd $PROJECT_PATH
+name: Deploy to EC2
 
-      # 🔧 Fix dubious ownership (chạy dưới ec2-user là đủ)
-      git config --global --add safe.directory $PROJECT_PATH
+on:
+  push:
+    branches:
+      - main
 
-      # 🔑 Đảm bảo owner là ec2-user (deploy user), group là nginx
-      echo "🔑 Fixing ownership (ec2-user:nginx)..."
-      sudo chown -R ec2-user:$WEB_USER $PROJECT_PATH
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-      # 🔄 Git pull/reset - chạy dưới ec2-user (có quyền full)
-      echo "🔄 Pulling latest code..."
-      git fetch origin main
-      git reset --hard origin/main
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
 
-      # 📦 Composer install - chạy dưới ec2-user (composer thường nằm trong /usr/local/bin, ổn)
-      echo "📦 Installing dependencies..."
-      composer install --no-dev --optimize-autoloader --no-interaction
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 3.107.252.204 >> ~/.ssh/known_hosts
 
-      # 🗄 Laravel commands - có thể chạy dưới ec2-user vì storage đã group writable
-      echo "🗄 Running migrations..."
-      php artisan migrate --force
+      - name: Deploy to EC2
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ec2-user@3.107.252.204 << 'EOF'
+            set -e
 
-      echo "🧹 Clearing & optimizing cache..."
-      php artisan optimize:clear
-      php artisan optimize
+            PROJECT_PATH=/var/www/html
+            WEB_USER=nginx
 
-      # 🔐 Đảm bảo storage & cache directories group writable
-      echo "🔐 Fixing storage permissions..."
-      sudo chmod -R 775 $PROJECT_PATH/storage $PROJECT_PATH/bootstrap/cache
+            cd $PROJECT_PATH
 
-      # 🚀 Restart services
-      echo "🚀 Restarting PHP-FPM and Nginx..."
-      sudo systemctl restart php-fpm
-      sudo systemctl restart nginx
+            # 🔧 Fix dubious ownership
+            git config --global --add safe.directory $PROJECT_PATH
 
-      echo "✅ Deployment completed successfully!"
-    EOF
+            # 🔑 Fix ownership
+            echo "🔑 Fixing ownership (ec2-user:nginx)..."
+            sudo chown -R ec2-user:$WEB_USER $PROJECT_PATH
+
+            # 🔄 Pull latest code
+            echo "🔄 Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            # 📦 Composer install
+            echo "📦 Installing dependencies..."
+            composer install --no-dev --optimize-autoloader --no-interaction
+
+            # 🗄 Run migrations
+            echo "🗄 Running migrations..."
+            php artisan migrate --force
+
+            # 🧹 Optimize cache
+            echo "🧹 Clearing & optimizing cache..."
+            php artisan optimize:clear
+            php artisan optimize
+
+            # 🔐 Fix permissions
+            echo "🔐 Fixing storage permissions..."
+            sudo chmod -R 775 $PROJECT_PATH/storage $PROJECT_PATH/bootstrap/cache
+
+            # 🚀 Restart services
+            echo "🚀 Restarting services..."
+            sudo systemctl restart php-fpm
+            sudo systemctl restart nginx
+
+            echo "✅ Deployment completed successfully!"
+          EOF
