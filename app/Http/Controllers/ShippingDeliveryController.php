@@ -60,12 +60,10 @@ class ShippingDeliveryController extends Controller
 
             // Chuyển ShippingRate thành cấu trúc DomainShippingCost tương ứng
             $shippingCosts = $shippingRates->map(function ($rate) {
-                $productType = 'general';
-                if ($rate->category) {
-                    $productType = strtolower(str_replace(' ', '_', $rate->category->name));
-                } elseif ($rate->name) {
-                    $productType = strtolower(str_replace(' ', '_', $rate->name));
-                }
+                // Chỉ hiển thị tên danh mục; nếu không có danh mục => "general"
+                $productType = $rate->category
+                    ? strtolower(str_replace(' ', '_', $rate->category->name))
+                    : 'general';
 
                 // Xác định region từ shipping zone (nếu có)
                 $detectedRegion = null;
@@ -99,12 +97,13 @@ class ShippingDeliveryController extends Controller
             ->filter(fn($c) => !empty($c->region)) // đảm bảo có region
             ->groupBy('region')
             ->flatMap(function ($itemsByRegion) {
-                // Nếu có product_type khác 'general', bỏ hết 'general'
-                $hasSpecific = $itemsByRegion->contains(function ($c) {
-                    return $c->product_type !== 'general';
-                });
+                $hasSpecific = $itemsByRegion->contains(fn($c) => $c->product_type !== 'general');
                 if ($hasSpecific) {
+                    // Có category cụ thể → bỏ toàn bộ general
                     $itemsByRegion = $itemsByRegion->filter(fn($c) => $c->product_type !== 'general');
+                } else {
+                    // Chỉ có general → giữ nguyên (nhưng chỉ lấy 1 bản ghi ưu tiên)
+                    $itemsByRegion = $itemsByRegion->take(1);
                 }
 
                 // Mỗi product_type chọn 1 rate ưu tiên (cost thấp nhất)
