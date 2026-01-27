@@ -31,21 +31,23 @@
                 Feed to GMC (<span id="gmcSelectedCount">0</span>)
             </button>
             
-       
+            <!-- Export to Meta Button (Hidden by default) -->
+            <button id="exportToMetaBtn" onclick="exportToMeta()" 
+                    style="display: none;"
+                    class="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors shadow-md"
+                    title="Export selected products to Meta Commerce Catalog format (CSV)">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Export to Meta (<span id="metaSelectedCount">0</span>)
+            </button>
+            
             <a href="{{ route('admin.products.import') }}" 
                class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-md">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                 </svg>
                 Import Products
-            </a>
-            <a href="{{ route('admin.products.export.meta', request()->query()) }}" 
-               class="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors shadow-md"
-               title="Export products to Meta Commerce Catalog format (CSV)">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                Export to Meta
             </a>
             <a href="{{ route('admin.products.create') }}" 
                class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors shadow-md">
@@ -834,18 +836,23 @@ function updateBulkDeleteButton() {
     const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     const feedToGMCBtn = document.getElementById('feedToGMCBtn');
+    const exportToMetaBtn = document.getElementById('exportToMetaBtn');
     const selectedCount = document.getElementById('selectedCount');
     const gmcSelectedCount = document.getElementById('gmcSelectedCount');
+    const metaSelectedCount = document.getElementById('metaSelectedCount');
     const selectAllCheckbox = document.getElementById('selectAll');
     
     if (checkedBoxes.length > 0) {
         bulkDeleteBtn.style.display = 'inline-flex';
         feedToGMCBtn.style.display = 'inline-flex';
+        exportToMetaBtn.style.display = 'inline-flex';
         selectedCount.textContent = checkedBoxes.length;
         gmcSelectedCount.textContent = checkedBoxes.length;
+        metaSelectedCount.textContent = checkedBoxes.length;
     } else {
         bulkDeleteBtn.style.display = 'none';
         feedToGMCBtn.style.display = 'none';
+        exportToMetaBtn.style.display = 'none';
     }
     
     // Update "Select All" checkbox state
@@ -1271,6 +1278,27 @@ async function downloadGMCXML(productIds) {
     setTimeout(() => {
         document.body.removeChild(form);
     }, 1000);
+}
+
+// Export to Meta function
+function exportToMeta() {
+    const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+    const productIds = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    if (productIds.length === 0) {
+        alert('Vui lòng chọn ít nhất một sản phẩm để export.');
+        return;
+    }
+    
+    // Build URL with product_ids
+    const baseUrl = '{{ route("admin.products.export.meta") }}';
+    const params = new URLSearchParams();
+    productIds.forEach(id => {
+        params.append('product_ids[]', id);
+    });
+    
+    // Open in new window to download CSV
+    window.location.href = baseUrl + '?' + params.toString();
 }
 </script>
 @endsection

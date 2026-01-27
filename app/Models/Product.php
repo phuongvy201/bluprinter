@@ -244,7 +244,18 @@ class Product extends Model
         'quantity',
         'status',
         'created_by',
-        'api_token_id'
+        'api_token_id',
+        // Meta fields for export
+        'google_product_category',
+        'fb_product_category',
+        'gender',
+        'color',
+        'age_group',
+        'material',
+        'pattern',
+        'shipping',
+        'shipping_weight',
+        'quantity_to_sell_on_facebook'
     ];
 
     // Ensure ID is never set manually - let database auto-increment

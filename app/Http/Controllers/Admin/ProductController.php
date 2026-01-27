@@ -1842,51 +1842,68 @@ class ProductController extends Controller
     {
         $user = auth()->user();
 
-        // Build query similar to index method
-        $productsQuery = Product::with(['template.category', 'template.user', 'user', 'shop', 'variants', 'collections']);
+        // Nếu có product_ids từ request (selected products), chỉ export những sản phẩm đó
+        if ($request->filled('product_ids')) {
+            $productIds = is_array($request->product_ids)
+                ? $request->product_ids
+                : explode(',', $request->product_ids);
 
-        // Apply user filter
-        if (!$user->hasRole('admin')) {
-            $productsQuery->where('user_id', $user->id);
+            $productsQuery = Product::with(['template.category', 'template.user', 'user', 'shop', 'variants', 'collections'])
+                ->whereIn('id', $productIds);
+
+            // Apply user filter (chỉ export sản phẩm của user hoặc admin có thể export tất cả)
+            if (!$user->hasRole('admin')) {
+                $productsQuery->where('user_id', $user->id);
+            }
+
+            $products = $productsQuery->get();
+        } else {
+            // Nếu không có product_ids, export tất cả (giữ nguyên logic cũ để tương thích)
+            $productsQuery = Product::with(['template.category', 'template.user', 'user', 'shop', 'variants', 'collections']);
+
+            // Apply user filter
+            if (!$user->hasRole('admin')) {
+                $productsQuery->where('user_id', $user->id);
+            }
+
+            // Apply filters from request
+            if ($request->filled('category_id')) {
+                $productsQuery->whereHas('template', function ($q) use ($request) {
+                    $q->where('category_id', $request->category_id);
+                });
+            }
+
+            if ($request->filled('template_id')) {
+                $productsQuery->where('template_id', $request->template_id);
+            }
+
+            if ($request->filled('shop_id')) {
+                $productsQuery->where('shop_id', $request->shop_id);
+            }
+
+            if ($request->filled('collection_id')) {
+                $productsQuery->whereHas('collections', function ($q) use ($request) {
+                    $q->where('collections.id', $request->collection_id);
+                });
+            }
+
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $productsQuery->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('sku', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhereHas('template', function ($templateQuery) use ($search) {
+                            $templateQuery->where('name', 'like', "%{$search}%");
+                        });
+                });
+            }
+
+            // Only export active products
+            $productsQuery->where('status', 'active');
+
+            $products = $productsQuery->get();
         }
-
-        // Apply filters from request
-        if ($request->filled('category_id')) {
-            $productsQuery->whereHas('template', function ($q) use ($request) {
-                $q->where('category_id', $request->category_id);
-            });
-        }
-
-        if ($request->filled('template_id')) {
-            $productsQuery->where('template_id', $request->template_id);
-        }
-
-        if ($request->filled('shop_id')) {
-            $productsQuery->where('shop_id', $request->shop_id);
-        }
-
-        if ($request->filled('collection_id')) {
-            $productsQuery->whereHas('collections', function ($q) use ($request) {
-                $q->where('collections.id', $request->collection_id);
-            });
-        }
-
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $productsQuery->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('sku', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%")
-                    ->orWhereHas('template', function ($templateQuery) use ($search) {
-                        $templateQuery->where('name', 'like', "%{$search}%");
-                    });
-            });
-        }
-
-        // Only export active products
-        $productsQuery->where('status', 'active');
-
-        $products = $productsQuery->get();
 
         // Get base URL for product links
         $baseUrl = config('app.url');
@@ -1998,12 +2015,14 @@ class ProductController extends Controller
             // Get brand - Bắt buộc, giới hạn 100 ký tự
             $brand = $formatField($product->shop->shop_name ?? $product->template->name ?? 'Default Brand', 100);
 
-            // Get category IDs
-            $googleCategory = $this->mapToGoogleCategory($product->template->category->name ?? '');
-            $fbCategory = $googleCategory; // Use same for FB
+            // Get category IDs - mặc định theo yêu cầu nail box
+            $googleCategory = $product->google_product_category
+                ?? 'health & beauty > beauty > nail care > artificial nails & accessories > manicure tool sets';
+            $fbCategory = $product->fb_product_category
+                ?? 'health & beauty > beauty > nail care > artificial nails & accessories > manicure tool sets';
 
-            // Get quantity - quantity_to_sell_on_facebook phải >= 1
-            $quantity = max(1, (int)($product->quantity ?? 0));
+            // Get quantity - ưu tiên từ product, sau đó từ quantity
+            $quantity = max(1, (int)($product->quantity_to_sell_on_facebook ?? $product->quantity ?? 100));
 
             // Get video if exists
             $videoUrl = '';
@@ -2031,170 +2050,59 @@ class ProductController extends Controller
             $productTag0 = $formatField($productTags[0] ?? '', 110);
             $productTag1 = $formatField($productTags[1] ?? '', 110);
 
-            // Get style from template name or category
-            $style = [$formatField($product->template->name ?? '', 100)];
+            // Mỗi sản phẩm chỉ tạo 1 dòng, không quan tâm đến variants
+            // item_group_id để trống theo yêu cầu
 
-            // If product has variants, create a row for each variant
-            if ($product->variants->count() > 0) {
-                // item_group_id giới hạn 100 ký tự
-                $itemGroupId = $formatField('GROUP_' . $product->id, 100);
-
-                foreach ($product->variants as $variant) {
-                    $variantAttributes = $variant->attributes ?? [];
-
-                    // Extract color, size, gender, material, pattern, age_group from variant attributes
-                    $color = '';
-                    $size = '';
-                    $gender = '';
-                    $material = '';
-                    $pattern = '';
-                    $ageGroup = '';
-
-                    foreach ($variantAttributes as $attrName => $attrValue) {
-                        $attrNameLower = strtolower(trim($attrName));
-                        $attrValue = trim((string) $attrValue);
-
-                        if (in_array($attrNameLower, ['color', 'màu', 'colour'])) {
-                            $color = $formatField($attrValue, 200);
-                        } elseif (in_array($attrNameLower, ['size', 'kích thước'])) {
-                            $size = $formatField($attrValue, 200);
-                        } elseif (in_array($attrNameLower, ['gender', 'giới tính', 'sex'])) {
-                            $gender = $validateGender($attrValue);
-                        } elseif (in_array($attrNameLower, ['material', 'chất liệu', 'fabric'])) {
-                            $material = $formatField($attrValue, 200);
-                        } elseif (in_array($attrNameLower, ['pattern', 'họa tiết', 'design'])) {
-                            $pattern = $formatField($attrValue, 100);
-                        } elseif (in_array($attrNameLower, ['age_group', 'age', 'tuổi', 'nhóm tuổi'])) {
-                            $ageGroup = $validateAgeGroup($attrValue);
-                        }
-                    }
-
-                    // Use variant price if available
-                    $variantPrice = $variant->price ?? $basePrice;
-                    if ($variantPrice <= 0) continue; // Skip variants without price
-                    $variantPriceFormatted = number_format($variantPrice, 2, '.', '') . ' USD';
-
-                    // Use variant quantity if available - phải >= 1
-                    $variantQuantity = max(1, (int)($variant->quantity ?? $quantity));
-
-                    // Use variant image if available
-                    $variantImageLink = $imageLink;
-                    if (!empty($variant->media)) {
-                        $variantMedia = is_array($variant->media) ? $variant->media : [$variant->media];
-                        if (!empty($variantMedia[0])) {
-                            $variantMediaUrl = is_string($variantMedia[0]) ? $variantMedia[0] : ($variantMedia[0]['url'] ?? $variantMedia[0]['path'] ?? '');
-                            if ($variantMediaUrl) {
-                                if (!filter_var($variantMediaUrl, FILTER_VALIDATE_URL)) {
-                                    if (strpos($variantMediaUrl, '/storage/') === 0 || strpos($variantMediaUrl, '/') === 0) {
-                                        $variantImageLink = $baseUrl . $variantMediaUrl;
-                                    } else {
-                                        $variantImageLink = $baseUrl . '/storage/' . $variantMediaUrl;
-                                    }
-                                } else {
-                                    $variantImageLink = $variantMediaUrl;
-                                }
-                            }
-                        }
-                    }
-
-                    // Variant ID - Bắt buộc, giới hạn 100 ký tự, nên dùng SKU
-                    $variantId = '';
-                    if ($variant->sku) {
-                        $variantId = $formatField($variant->sku, 100);
-                    } elseif ($product->sku) {
-                        $variantId = $formatField($product->sku . '_' . $variant->id, 100);
-                    } else {
-                        $variantId = $formatField('PROD_' . $product->id . '_VAR_' . $variant->id, 100);
-                    }
-
-                    // Variant title - giới hạn 200 ký tự
-                    $variantTitle = $title;
-                    if ($variant->variant_name) {
-                        $variantTitle = $formatField($title . ' - ' . $variant->variant_name, 200);
-                    }
-
-                    // Create row for variant
-                    $row = [
-                        $variantId, // id (Bắt buộc, max 100)
-                        $variantTitle, // title (Bắt buộc, max 200)
-                        $description, // description (Bắt buộc, max 9999, chữ thường)
-                        $variantQuantity > 0 ? 'in stock' : 'out of stock', // availability (Bắt buộc)
-                        'new', // condition (Bắt buộc)
-                        $variantPriceFormatted, // price (Bắt buộc)
-                        $productLink, // link (Bắt buộc)
-                        $variantImageLink, // image_link (Bắt buộc)
-                        $brand, // brand (Bắt buộc, max 100)
-                        $googleCategory, // google_product_category
-                        $fbCategory, // fb_product_category
-                        $variantQuantity, // quantity_to_sell_on_facebook (phải >= 1)
-                        '', // sale_price
-                        '', // sale_price_effective_date
-                        $itemGroupId, // item_group_id (max 100)
-                        $gender, // gender (female, male, unisex)
-                        $color, // color (max 200)
-                        $size, // size (max 200)
-                        $ageGroup, // age_group (newborn, infant, toddler, kids, teen, adult, all ages)
-                        $material, // material (max 200)
-                        $pattern, // pattern (max 100)
-                        '', // shipping
-                        '', // shipping_weight
-                        $videoUrl, // video[0].url
-                        $videoTag, // video[0].tag[0]
-                        $formatField($variant->sku ?? $product->sku ?? '', 50), // gtin
-                        $productTag0, // product_tags[0] (max 110)
-                        $productTag1, // product_tags[1] (max 110)
-                        $style[0] ?? '' // style[0]
-                    ];
-
-                    $csvData[] = $row;
-                }
+            // Product ID - Bắt buộc, giới hạn 100 ký tự, nên dùng SKU
+            $productId = '';
+            if ($product->sku) {
+                $productId = $formatField($product->sku, 100);
             } else {
-                // Product without variants - single row
-                // item_group_id giới hạn 100 ký tự
-                $itemGroupId = $formatField('GROUP_' . $product->id, 100);
-
-                // Product ID - Bắt buộc, giới hạn 100 ký tự, nên dùng SKU
-                $productId = '';
-                if ($product->sku) {
-                    $productId = $formatField($product->sku, 100);
-                } else {
-                    $productId = $formatField('PROD_' . $product->id, 100);
-                }
-
-                $row = [
-                    $productId, // id (Bắt buộc, max 100)
-                    $title, // title (Bắt buộc, max 200)
-                    $description, // description (Bắt buộc, max 9999, chữ thường)
-                    $quantity > 0 ? 'in stock' : 'out of stock', // availability (Bắt buộc)
-                    'new', // condition (Bắt buộc)
-                    $price, // price (Bắt buộc)
-                    $productLink, // link (Bắt buộc)
-                    $imageLink, // image_link (Bắt buộc)
-                    $brand, // brand (Bắt buộc, max 100)
-                    $googleCategory, // google_product_category
-                    $fbCategory, // fb_product_category
-                    $quantity, // quantity_to_sell_on_facebook (phải >= 1)
-                    '', // sale_price
-                    '', // sale_price_effective_date
-                    $itemGroupId, // item_group_id (max 100)
-                    '', // gender
-                    '', // color
-                    '', // size
-                    '', // age_group
-                    '', // material
-                    '', // pattern
-                    '', // shipping
-                    '', // shipping_weight
-                    $videoUrl, // video[0].url
-                    $videoTag, // video[0].tag[0]
-                    $formatField($product->sku ?? '', 50), // gtin
-                    $productTag0, // product_tags[0] (max 110)
-                    $productTag1, // product_tags[1] (max 110)
-                    $style[0] ?? '' // style[0]
-                ];
-
-                $csvData[] = $row;
+                $productId = $formatField('PROD_' . $product->id, 100);
             }
+
+            // Set các giá trị mặc định
+            $gender = $product->gender ? $validateGender($product->gender) : 'female';
+            $color = ''; // Để trống theo yêu cầu
+            $size = 'S (15/11/12/11/9mm)'; // Mặc định theo yêu cầu
+            $ageGroup = $product->age_group ? $validateAgeGroup($product->age_group) : 'adult';
+            $material = $product->material ?? 'stainless steel';
+            $pattern = $product->pattern ?? 'graphic';
+
+            // Create single row for product
+            $row = [
+                $productId, // id (Bắt buộc, max 100)
+                $title, // title (Bắt buộc, max 200)
+                $description, // description (Bắt buộc, max 9999, chữ thường)
+                $quantity > 0 ? 'in stock' : 'out of stock', // availability (Bắt buộc)
+                'new', // condition (Bắt buộc)
+                $price, // price (Bắt buộc)
+                $productLink, // link (Bắt buộc)
+                $imageLink, // image_link (Bắt buộc)
+                $brand, // brand (Bắt buộc, max 100)
+                $googleCategory, // google_product_category
+                $fbCategory, // fb_product_category
+                max(1, (int)($product->quantity_to_sell_on_facebook ?? $quantity)), // quantity_to_sell_on_facebook (ưu tiên từ product, mặc định 100)
+                '', // sale_price
+                '', // sale_price_effective_date
+                '', // item_group_id (để trống theo yêu cầu)
+                $gender, // gender (mặc định female)
+                $color, // color (để trống theo yêu cầu)
+                $size, // size (mặc định theo yêu cầu)
+                $ageGroup, // age_group (mặc định adult)
+                $material, // material (mặc định stainless steel)
+                $pattern, // pattern (mặc định graphic)
+                $formatField($product->shipping ?? 'US::USPS:5.99 USD', 200), // shipping (mặc định US::USPS:5.99 USD)
+                $formatField($product->shipping_weight ?? '200g', 50), // shipping_weight (mặc định 200g)
+                $videoUrl, // video[0].url
+                '', // video[0].tag[0] (bỏ trống theo yêu cầu)
+                '', // gtin (bỏ trống theo yêu cầu)
+                '', // product_tags[0] (bỏ trống theo yêu cầu)
+                '', // product_tags[1] (bỏ trống theo yêu cầu)
+                '' // style[0] (bỏ trống theo yêu cầu)
+            ];
+
+            $csvData[] = $row;
         }
 
         // Generate filename
