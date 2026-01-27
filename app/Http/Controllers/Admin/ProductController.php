@@ -2013,7 +2013,7 @@ class ProductController extends Controller
             $title = $formatField($product->name, 200);
 
             // Get brand - Bắt buộc, giới hạn 100 ký tự
-            $brand = $formatField($product->shop->shop_name ?? $product->template->name ?? 'Default Brand', 100);
+            $brand = $formatField('Bluprinter', 100);
 
             // Get category IDs - mặc định theo yêu cầu nail box
             $googleCategory = $product->google_product_category
@@ -2024,23 +2024,102 @@ class ProductController extends Controller
             // Get quantity - ưu tiên từ product, sau đó từ quantity
             $quantity = max(1, (int)($product->quantity_to_sell_on_facebook ?? $product->quantity ?? 100));
 
-            // Get video if exists
+            // Get video if exists - chỉ lấy video file, không lấy video player URL
             $videoUrl = '';
             $videoTag = '';
+
+            // Danh sách các định dạng video được hỗ trợ bởi Meta
+            $supportedVideoFormats = [
+                '.3g2',
+                '.3gp',
+                '.3gpp',
+                '.asf',
+                '.avi',
+                '.dat',
+                '.divx',
+                '.dv',
+                '.f4v',
+                '.flv',
+                '.gif',
+                '.m2ts',
+                '.m4v',
+                '.mkv',
+                '.mod',
+                '.mov',
+                '.mp4',
+                '.mpe',
+                '.mpeg',
+                '.mpeg4',
+                '.mpg',
+                '.mts',
+                '.nsv',
+                '.ogm',
+                '.ogv',
+                '.qt',
+                '.tod',
+                '.ts',
+                '.vob',
+                '.wmv'
+            ];
+
+            // Danh sách các domain video player cần loại bỏ (YouTube, Vimeo, etc.)
+            $videoPlayerDomains = [
+                'youtube.com',
+                'youtu.be',
+                'vimeo.com',
+                'dailymotion.com',
+                'facebook.com',
+                'instagram.com',
+                'tiktok.com',
+                'twitch.tv'
+            ];
+
             if (!empty($media)) {
                 foreach ($media as $mediaItem) {
                     $mediaUrl = is_string($mediaItem) ? $mediaItem : ($mediaItem['url'] ?? $mediaItem['path'] ?? '');
-                    if ($mediaUrl && (str_contains($mediaUrl, '.mp4') || str_contains($mediaUrl, '.mov') || str_contains($mediaUrl, '.avi'))) {
+
+                    if (empty($mediaUrl)) {
+                        continue;
+                    }
+
+                    // Kiểm tra xem URL có phải là video player không
+                    $isVideoPlayer = false;
+                    foreach ($videoPlayerDomains as $domain) {
+                        if (str_contains(strtolower($mediaUrl), $domain)) {
+                            $isVideoPlayer = true;
+                            break;
+                        }
+                    }
+
+                    // Bỏ qua nếu là video player URL
+                    if ($isVideoPlayer) {
+                        continue;
+                    }
+
+                    // Kiểm tra định dạng video được hỗ trợ
+                    $hasSupportedFormat = false;
+                    $lowerUrl = strtolower($mediaUrl);
+                    foreach ($supportedVideoFormats as $format) {
+                        if (str_ends_with($lowerUrl, $format)) {
+                            $hasSupportedFormat = true;
+                            break;
+                        }
+                    }
+
+                    // Nếu có định dạng được hỗ trợ, xử lý URL
+                    if ($hasSupportedFormat) {
                         if (!filter_var($mediaUrl, FILTER_VALIDATE_URL)) {
+                            // Relative URL - cần thêm base URL
                             if (strpos($mediaUrl, '/storage/') === 0 || strpos($mediaUrl, '/') === 0) {
                                 $videoUrl = $baseUrl . $mediaUrl;
                             } else {
                                 $videoUrl = $baseUrl . '/storage/' . $mediaUrl;
                             }
                         } else {
+                            // Absolute URL - sử dụng trực tiếp
                             $videoUrl = $mediaUrl;
                         }
-                        break;
+                        break; // Chỉ lấy video đầu tiên tìm thấy
                     }
                 }
             }
