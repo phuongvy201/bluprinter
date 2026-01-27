@@ -414,9 +414,24 @@ class ProductsImport implements
             'errors' => count($this->errors),
             'percentage' => $estimatedTotal > 0 ? min(100, round(($this->processedRows / $estimatedTotal) * 100, 2)) : 0,
             'status' => 'processing',
+            'updated_at' => now()->toIso8601String(), // Add timestamp for debugging
         ];
 
+        // Always update cache (no throttling) to ensure progress bar is accurate
         Cache::put($this->progressKey, $progress, 3600); // Store for 1 hour
+
+        // Log progress update for debugging (every row for small imports, every 5 rows for large imports)
+        $logInterval = $estimatedTotal > 50 ? 5 : 1; // Log every row if total <= 50, every 5 rows if > 50
+        if ($this->processedRows % $logInterval == 0 || $this->processedRows == 1) {
+            Log::debug("Progress updated", [
+                'progress_key' => $this->progressKey,
+                'processed' => $this->processedRows,
+                'total' => $estimatedTotal,
+                'success' => $this->successCount,
+                'errors' => count($this->errors),
+                'percentage' => $progress['percentage']
+            ]);
+        }
     }
 
     /**

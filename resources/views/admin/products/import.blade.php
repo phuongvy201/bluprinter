@@ -478,10 +478,28 @@ document.getElementById('import-form').addEventListener('submit', function(e) {
         body: formData,
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}'
         }
     })
-    .then(response => response.json())
+    .then(async response => {
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            // Response is not JSON, likely an HTML error page
+            const text = await response.text();
+            console.error('Non-JSON response received:', text.substring(0, 500));
+            throw new Error('Server returned HTML instead of JSON. This usually means there was a server error. Check the console for details.');
+        }
+        
+        // Check if response is ok
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
+            throw new Error(errorData.error || `Server error: ${response.status} ${response.statusText}`);
+        }
+        
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             currentProgressKey = data.progress_key;
@@ -515,7 +533,7 @@ document.getElementById('import-form').addEventListener('submit', function(e) {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        console.error('Import error:', error);
         showError('Import failed: ' + error.message);
         submitBtn.disabled = false;
         submitText.textContent = 'Import Products';
@@ -541,24 +559,78 @@ function hideProgress() {
 function startProgressTracking(progressKey) {
     currentProgressKey = progressKey;
     
-    // Poll every 500ms
+    console.log('Starting progress tracking for key:', progressKey);
+    
+    // Poll every 1 second (increased from 500ms to reduce server load)
     progressInterval = setInterval(() => {
-        fetch('{{ route("admin.products.import.progress") }}?progress_key=' + progressKey, {
+        // Add timestamp to prevent caching
+        const url = '{{ route("admin.products.import.progress") }}?progress_key=' + encodeURIComponent(progressKey) + '&_=' + Date.now();
+        
+        fetch(url, {
+            method: 'GET',
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            },
+            cache: 'no-store'
         })
-        .then(response => response.json())
+        .then(async response => {
+            // Check content type first
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('Non-JSON response received:', text.substring(0, 200));
+                throw new Error('Server returned non-JSON response');
+            }
+            
+            if (!response.ok) {
+                throw new Error('Network response was not ok: ' + response.status);
+            }
+            return response.json();
+        })
         .then(data => {
+            // Check if data has error property
+            if (data.error) {
+                console.error('Progress error:', data.error);
+                stopProgressTracking();
+                showError(data.error);
+                return;
+            }
+            
+            // Check if data is valid
+            if (!data || typeof data !== 'object') {
+                console.error('Invalid progress data:', data);
+                return;
+            }
+            
+            // Debug logging (only occasionally to avoid console spam)
+            if (Math.random() < 0.1) {
+                console.log('Progress fetched:', {
+                    processed: data.processed,
+                    total: data.total,
+                    success: data.success,
+                    errors: data.errors,
+                    percentage: data.percentage,
+                    status: data.status
+                });
+            }
+            
             updateProgressDisplay(data);
             
             if (data.status === 'completed' || data.status === 'failed') {
                 stopProgressTracking();
                 
                 if (data.status === 'completed') {
+                    console.log('Import completed! Success:', data.success);
+                    // Show completion message
+                    document.getElementById('progress-status').textContent = 'Completed!';
+                    document.getElementById('progress-status').classList.remove('text-gray-600');
+                    document.getElementById('progress-status').classList.add('text-green-600');
+                    
                     setTimeout(() => {
-                        window.location.href = '{{ route("admin.products.index") }}?imported=' + data.success;
+                        window.location.href = '{{ route("admin.products.index") }}?imported=' + (data.success || 0);
                     }, 2000);
                 } else if (data.status === 'failed') {
                     showError(data.error || 'Import failed');
@@ -569,8 +641,9 @@ function startProgressTracking(progressKey) {
         })
         .catch(error => {
             console.error('Progress polling error:', error);
+            // Don't stop polling on error, just log it
         });
-    }, 500);
+    }, 1000); // Poll every 1 second
 }
 
 function stopProgressTracking() {
@@ -591,9 +664,28 @@ function updateProgressDisplay(data) {
     document.getElementById('progress-bar').style.width = percentage + '%';
     document.getElementById('progress-percentage').textContent = percentage.toFixed(1) + '%';
     
-    // Update text
-    document.getElementById('progress-text').textContent = processed + '/' + total;
+    // Update text - show "X/Y" or "X/?" if total is unknown
+    if (total > 0) {
+        document.getElementById('progress-text').textContent = processed + '/' + total;
+    } else if (processed > 0) {
+        document.getElementById('progress-text').textContent = processed + '/?';
+    } else {
+        document.getElementById('progress-text').textContent = '0/0';
+    }
+    
     document.getElementById('success-count').textContent = success;
+    
+    // Debug logging (only occasionally to avoid console spam)
+    if (Math.random() < 0.1) {
+        console.log('Progress update:', {
+            processed: processed,
+            total: total,
+            success: success,
+            errors: errors,
+            percentage: percentage,
+            status: data.status
+        });
+    }
     
     // Update status
     if (data.status === 'completed') {

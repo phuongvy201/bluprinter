@@ -113,9 +113,23 @@ class ProductImportController extends Controller
      */
     public function import(Request $request)
     {
-        $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
-        ]);
+        // For AJAX requests, always return JSON even on validation errors
+        $isAjax = $request->ajax() || $request->wantsJson();
+
+        try {
+            $request->validate([
+                'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($isAjax) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Validation failed: ' . implode(', ', $e->errors()['file'] ?? ['Invalid file']),
+                    'errors' => $e->errors(),
+                ], 422);
+            }
+            throw $e;
+        }
 
         try {
             // Generate unique progress key
@@ -143,25 +157,60 @@ class ProductImportController extends Controller
 
             // If AJAX request, return progress key immediately
             if ($request->ajax() || $request->wantsJson()) {
-                // Run import in background (for now, we'll do it synchronously but return immediately)
-                // In production, you might want to use queues
-                Excel::import($import, $file);
-
-                $errors = $import->getErrors();
-                $successCount = $import->getSuccessCount();
-
-                // Mark as completed
-                $import->markCompleted();
-
-                return response()->json([
+                // Return progress key immediately so frontend can start polling
+                // Import will run synchronously but progress will be updated via cache
+                $response = response()->json([
                     'success' => true,
                     'progress_key' => $progressKey,
-                    'completed' => true,
-                    'success_count' => $successCount,
-                    'error_count' => count($errors),
-                    'errors' => array_slice($errors, 0, 10), // Return first 10 errors
-                    'message' => "Successfully imported {$successCount} products!" . (count($errors) > 0 ? " (" . count($errors) . " errors)" : ''),
+                    'completed' => false, // Will be updated via polling
+                    'message' => 'Import started. Please wait...',
                 ]);
+
+                // If FastCGI is available, finish request and continue processing
+                if (function_exists('fastcgi_finish_request')) {
+                    $response->sendHeaders();
+                    $response->sendContent();
+                    fastcgi_finish_request();
+
+                    // Continue import in background
+                    try {
+                        Excel::import($import, $file);
+                        $errors = $import->getErrors();
+                        $successCount = $import->getSuccessCount();
+                        $import->markCompleted();
+                    } catch (\Exception $e) {
+                        $import->markFailed($e->getMessage());
+                        Log::error("Import failed: " . $e->getMessage());
+                    }
+                    return $response;
+                } else {
+                    // For non-FastCGI, run import synchronously but return response first
+                    // Start import in a way that allows progress updates
+                    try {
+                        Excel::import($import, $file);
+                        $errors = $import->getErrors();
+                        $successCount = $import->getSuccessCount();
+                        $import->markCompleted();
+
+                        // Update response with final results
+                        return response()->json([
+                            'success' => true,
+                            'progress_key' => $progressKey,
+                            'completed' => true,
+                            'success_count' => $successCount,
+                            'error_count' => count($errors),
+                            'errors' => array_slice($errors, 0, 10),
+                            'message' => "Successfully imported {$successCount} products!" . (count($errors) > 0 ? " (" . count($errors) . " errors)" : ''),
+                        ]);
+                    } catch (\Exception $e) {
+                        $import->markFailed($e->getMessage());
+                        return response()->json([
+                            'success' => false,
+                            'progress_key' => $progressKey,
+                            'error' => 'Import failed: ' . $e->getMessage(),
+                        ], 500);
+                    }
+                }
             }
 
             // Regular form submission (non-AJAX)
@@ -186,10 +235,17 @@ class ProductImportController extends Controller
             return redirect()->route('admin.products.index')
                 ->with('success', "Successfully imported {$successCount} products!");
         } catch (\Exception $e) {
+            Log::error("Import exception: " . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
                     'error' => 'Import failed: ' . $e->getMessage(),
+                    'message' => 'An error occurred during import. Please check the logs for details.',
                 ], 500);
             }
 
@@ -219,6 +275,9 @@ class ProductImportController extends Controller
             'percentage' => 0,
             'status' => 'unknown',
         ]);
+
+        // Add timestamp to help debug
+        $progress['fetched_at'] = now()->toIso8601String();
 
         return response()->json($progress);
     }
