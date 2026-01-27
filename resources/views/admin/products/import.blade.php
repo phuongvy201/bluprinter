@@ -33,7 +33,7 @@
                     <p class="text-sm text-gray-600 mt-1">Supports: Excel (.xlsx, .xls) and CSV (.csv) files</p>
                 </div>
                 
-                <form method="POST" action="{{ route('admin.products.import.process') }}" enctype="multipart/form-data">
+                <form method="POST" action="{{ route('admin.products.import.process') }}" enctype="multipart/form-data" id="import-form">
                     @csrf
                     <div class="p-6">
                         <!-- File Upload Area -->
@@ -92,6 +92,48 @@
                             <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                         @enderror
                         
+                        <!-- Progress Bar (Hidden by default) -->
+                        <div id="progress-container" class="mt-6 hidden">
+                            <div class="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="text-sm font-semibold text-gray-900">Import Progress</h4>
+                                    <span id="progress-status" class="text-xs font-medium text-gray-600">Processing...</span>
+                                </div>
+                                
+                                <!-- Progress Bar -->
+                                <div class="w-full bg-gray-200 rounded-full h-4 mb-3 overflow-hidden">
+                                    <div id="progress-bar" 
+                                         class="bg-gradient-to-r from-green-500 to-green-600 h-4 rounded-full transition-all duration-300 ease-out"
+                                         style="width: 0%">
+                                    </div>
+                                </div>
+                                
+                                <!-- Progress Info -->
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center space-x-4">
+                                        <span class="text-gray-700">
+                                            <span id="progress-text">0/0</span> items processed
+                                        </span>
+                                        <span class="text-green-600 font-semibold">
+                                            <span id="success-count">0</span> successful
+                                        </span>
+                                        <span id="error-count-container" class="text-red-600 font-semibold hidden">
+                                            <span id="error-count">0</span> errors
+                                        </span>
+                                    </div>
+                                    <span id="progress-percentage" class="text-gray-600 font-semibold">0%</span>
+                                </div>
+                                
+                                <!-- Error Messages (if any) -->
+                                <div id="error-messages" class="mt-4 hidden">
+                                    <div class="bg-red-50 border border-red-200 rounded-lg p-3 max-h-32 overflow-y-auto">
+                                        <p class="text-xs font-semibold text-red-800 mb-2">Errors:</p>
+                                        <ul id="error-list" class="text-xs text-red-700 space-y-1"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Submit Button -->
                         <div class="mt-6 flex justify-end">
                             <button type="submit" 
@@ -101,7 +143,7 @@
                                 <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                                 </svg>
-                                Import Products
+                                <span id="submit-text">Import Products</span>
                             </button>
                         </div>
                     </div>
@@ -358,6 +400,9 @@
 </div>
 
 <script>
+let progressInterval = null;
+let currentProgressKey = null;
+
 function handleDragOver(event) {
     event.preventDefault();
     event.currentTarget.classList.add('border-blue-500', 'bg-blue-100');
@@ -398,6 +443,10 @@ function clearFile() {
     document.getElementById('upload-prompt').classList.remove('hidden');
     document.getElementById('file-info').classList.add('hidden');
     document.getElementById('submit-btn').disabled = true;
+    
+    // Reset progress
+    stopProgressTracking();
+    hideProgress();
 }
 
 function formatFileSize(bytes) {
@@ -407,6 +456,201 @@ function formatFileSize(bytes) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
+
+// Form submission with AJAX
+document.getElementById('import-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const submitBtn = document.getElementById('submit-btn');
+    const submitText = document.getElementById('submit-text');
+    
+    // Disable submit button
+    submitBtn.disabled = true;
+    submitText.textContent = 'Importing...';
+    
+    // Show progress container
+    showProgress();
+    
+    // Submit form via AJAX
+    fetch(this.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            currentProgressKey = data.progress_key;
+            
+            if (data.completed) {
+                // Import completed immediately
+                updateProgressDisplay({
+                    processed: data.success_count,
+                    total: data.success_count,
+                    success: data.success_count,
+                    errors: data.error_count,
+                    percentage: 100,
+                    status: 'completed'
+                });
+                
+                if (data.error_count > 0 && data.errors) {
+                    showErrors(data.errors);
+                }
+                
+                setTimeout(() => {
+                    window.location.href = '{{ route("admin.products.index") }}?imported=' + data.success_count;
+                }, 2000);
+            } else {
+                // Start polling for progress
+                startProgressTracking(data.progress_key);
+            }
+        } else {
+            showError(data.error || 'Import failed');
+            submitBtn.disabled = false;
+            submitText.textContent = 'Import Products';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Import failed: ' + error.message);
+        submitBtn.disabled = false;
+        submitText.textContent = 'Import Products';
+    });
+});
+
+function showProgress() {
+    document.getElementById('progress-container').classList.remove('hidden');
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-text').textContent = '0/0';
+    document.getElementById('success-count').textContent = '0';
+    document.getElementById('error-count').textContent = '0';
+    document.getElementById('progress-percentage').textContent = '0%';
+    document.getElementById('progress-status').textContent = 'Processing...';
+    document.getElementById('error-count-container').classList.add('hidden');
+    document.getElementById('error-messages').classList.add('hidden');
+}
+
+function hideProgress() {
+    document.getElementById('progress-container').classList.add('hidden');
+}
+
+function startProgressTracking(progressKey) {
+    currentProgressKey = progressKey;
+    
+    // Poll every 500ms
+    progressInterval = setInterval(() => {
+        fetch('{{ route("admin.products.import.progress") }}?progress_key=' + progressKey, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            updateProgressDisplay(data);
+            
+            if (data.status === 'completed' || data.status === 'failed') {
+                stopProgressTracking();
+                
+                if (data.status === 'completed') {
+                    setTimeout(() => {
+                        window.location.href = '{{ route("admin.products.index") }}?imported=' + data.success;
+                    }, 2000);
+                } else if (data.status === 'failed') {
+                    showError(data.error || 'Import failed');
+                    document.getElementById('submit-btn').disabled = false;
+                    document.getElementById('submit-text').textContent = 'Import Products';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Progress polling error:', error);
+        });
+    }, 500);
+}
+
+function stopProgressTracking() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+}
+
+function updateProgressDisplay(data) {
+    const percentage = Math.min(100, Math.max(0, data.percentage || 0));
+    const processed = data.processed || 0;
+    const total = data.total || 0;
+    const success = data.success || 0;
+    const errors = data.errors || 0;
+    
+    // Update progress bar
+    document.getElementById('progress-bar').style.width = percentage + '%';
+    document.getElementById('progress-percentage').textContent = percentage.toFixed(1) + '%';
+    
+    // Update text
+    document.getElementById('progress-text').textContent = processed + '/' + total;
+    document.getElementById('success-count').textContent = success;
+    
+    // Update status
+    if (data.status === 'completed') {
+        document.getElementById('progress-status').textContent = 'Completed!';
+        document.getElementById('progress-status').classList.remove('text-gray-600');
+        document.getElementById('progress-status').classList.add('text-green-600');
+    } else if (data.status === 'failed') {
+        document.getElementById('progress-status').textContent = 'Failed';
+        document.getElementById('progress-status').classList.remove('text-gray-600');
+        document.getElementById('progress-status').classList.add('text-red-600');
+    } else {
+        document.getElementById('progress-status').textContent = 'Processing...';
+        document.getElementById('progress-status').classList.remove('text-green-600', 'text-red-600');
+        document.getElementById('progress-status').classList.add('text-gray-600');
+    }
+    
+    // Show error count if there are errors
+    if (errors > 0) {
+        document.getElementById('error-count').textContent = errors;
+        document.getElementById('error-count-container').classList.remove('hidden');
+    } else {
+        document.getElementById('error-count-container').classList.add('hidden');
+    }
+}
+
+function showErrors(errors) {
+    if (!errors || errors.length === 0) return;
+    
+    const errorList = document.getElementById('error-list');
+    errorList.innerHTML = '';
+    
+    errors.slice(0, 10).forEach(error => {
+        const li = document.createElement('li');
+        li.textContent = error;
+        errorList.appendChild(li);
+    });
+    
+    if (errors.length > 10) {
+        const li = document.createElement('li');
+        li.textContent = '... and ' + (errors.length - 10) + ' more errors';
+        li.classList.add('font-semibold');
+        errorList.appendChild(li);
+    }
+    
+    document.getElementById('error-messages').classList.remove('hidden');
+}
+
+function showError(message) {
+    document.getElementById('progress-status').textContent = 'Error: ' + message;
+    document.getElementById('progress-status').classList.remove('text-gray-600');
+    document.getElementById('progress-status').classList.add('text-red-600');
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    stopProgressTracking();
+});
 </script>
 @endsection
 

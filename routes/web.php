@@ -626,6 +626,7 @@ Route::middleware('auth')->group(function () {
         Route::get('products/import', [ProductImportController::class, 'showImportForm'])->name('products.import');
         Route::post('products/import', [ProductImportController::class, 'import'])->name('products.import.process');
         Route::get('products/import/template', [ProductImportController::class, 'downloadTemplate'])->name('products.import.template');
+        Route::get('products/import/progress', [ProductImportController::class, 'getProgress'])->name('products.import.progress');
 
         // Products - Custom routes must be defined BEFORE resource route to avoid conflicts
         Route::get('products/delete-from-gmc', [AdminProductController::class, 'showDeleteFromGMCForm'])->name('products.show-delete-from-gmc');

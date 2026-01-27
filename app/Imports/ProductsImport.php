@@ -12,13 +12,14 @@ use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Concerns\SkipsOnError;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
-use Maatwebsite\Excel\Concerns\WithBatchInserts;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Events\AfterSheet;
+use Maatwebsite\Excel\Events\AfterChunk;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\File;
 
@@ -29,7 +30,6 @@ class ProductsImport implements
     SkipsOnError,
     SkipsOnFailure,
     SkipsEmptyRows,
-    WithBatchInserts,
     WithChunkReading,
     WithEvents
 {
@@ -38,13 +38,17 @@ class ProductsImport implements
     protected $user;
     protected $importedProducts = []; // Store products that need variants created
     protected $variantsCreated = false; // Flag to ensure variants are only created once
+    protected $progressKey = null; // Cache key for progress tracking
+    protected $totalRows = 0; // Total rows to process
+    protected $processedRows = 0; // Rows processed so far
 
     /**
      * Constructor
      */
-    public function __construct($user = null)
+    public function __construct($user = null, $progressKey = null)
     {
         $this->user = $user ?? auth()->user();
+        $this->progressKey = $progressKey ?? 'import_progress_' . uniqid();
     }
 
     /**
@@ -54,23 +58,37 @@ class ProductsImport implements
     public function model(array $row)
     {
         try {
+            // Update total rows dynamically if not set yet (fallback for when countRows fails)
+            // This ensures progress bar works even if initial count failed
+            if ($this->totalRows == 0 && $this->processedRows > 0) {
+                // Estimate will be done in updateProgress() method
+                // Just trigger update here
+                $this->updateProgress();
+            }
+
             // Skip empty rows - check if required fields are empty
             $templateId = isset($row['template_id']) ? trim((string)$row['template_id']) : '';
             $productName = isset($row['product_name']) ? trim((string)$row['product_name']) : '';
 
             // If both template_id and product_name are empty, skip this row (empty row)
             if (empty($templateId) && empty($productName)) {
+                $this->processedRows++;
+                $this->updateProgress();
                 return null;
             }
 
             // Validate required fields - if one is empty but the other is not, it's an error
             if (empty($templateId)) {
                 $this->errors[] = "Row " . ($productName ?: 'Unknown') . ": template_id is required";
+                $this->processedRows++;
+                $this->updateProgress();
                 return null;
             }
 
             if (empty($productName)) {
                 $this->errors[] = "Row with template_id {$templateId}: product_name is required";
+                $this->processedRows++;
+                $this->updateProgress();
                 return null;
             }
 
@@ -78,12 +96,16 @@ class ProductsImport implements
             $template = ProductTemplate::with('variants')->find($templateId);
             if (!$template) {
                 $this->errors[] = "Row " . ($productName ?: 'Unknown') . ": Template ID {$templateId} not found";
+                $this->processedRows++;
+                $this->updateProgress();
                 return null;
             }
 
             // Check ownership: Only admin can use any template, seller can only use their own
             if (!$this->user->hasRole('admin') && $template->user_id !== $this->user->id) {
                 $this->errors[] = "Row " . ($productName ?: 'Unknown') . ": You don't have permission to use Template ID {$templateId}";
+                $this->processedRows++;
+                $this->updateProgress();
                 return null;
             }
 
@@ -99,7 +121,7 @@ class ProductsImport implements
             // Collect and upload media to S3 (up to 8 images + 1 video)
             $mediaUrls = [];
 
-            // Process images (image_1 to image_8)
+            // Process images (image_1 to image_8) - one at a time with delay to avoid rate limiting
             for ($i = 1; $i <= 8; $i++) {
                 $imageKey = 'image_' . $i;
                 if (!empty($row[$imageKey])) {
@@ -110,31 +132,80 @@ class ProductsImport implements
                         continue;
                     }
 
-                    $s3Url = $this->downloadAndUploadToS3($imageUrl);
+                    // Add delay between image downloads to avoid rate limiting (except for first image)
+                    // Use random delay (1-2 seconds) to avoid pattern detection by CDN
+                    if ($i > 1) {
+                        $delay = rand(1000000, 2000000); // Random 1-2 seconds in microseconds
+                        usleep($delay);
+                    }
+
+                    // Retry image download up to 5 times with exponential backoff
+                    $s3Url = null;
+                    $maxImageRetries = 5;
+                    for ($retry = 1; $retry <= $maxImageRetries; $retry++) {
+                        $s3Url = $this->downloadAndUploadToS3($imageUrl, 'products', $retry, $maxImageRetries);
+                        if ($s3Url) {
+                            break; // Success, exit retry loop
+                        }
+
+                        // If not last retry, wait before retrying with exponential backoff + random jitter
+                        if ($retry < $maxImageRetries) {
+                            $baseDelay = pow(2, $retry) * 1000000; // Exponential backoff: 2s, 4s, 8s, 16s
+                            $jitter = rand(500000, 1500000); // Random 0.5-1.5s jitter to avoid pattern
+                            $delay = $baseDelay + $jitter;
+                            Log::info("Retrying image download ({$retry}/{$maxImageRetries}) for: {$productName}, image_{$i}, waiting " . round($delay / 1000000, 2) . "s");
+                            usleep($delay);
+                        }
+                    }
+
                     if ($s3Url) {
                         $mediaUrls[] = $s3Url;
+                        Log::info("Successfully uploaded image_{$i} to S3 for product: {$productName}");
                     } else {
                         // Log warning but don't fail the entire import - will use template media as fallback
-                        Log::warning("Failed to upload image_{$i} to S3 for product: {$productName}, URL: {$imageUrl}");
-                        $this->errors[] = "Row " . ($productName ?: 'Unknown') . ": Failed to upload image_{$i} to S3 (URL: " . Str::limit($imageUrl, 50) . ")";
+                        Log::warning("Failed to upload image_{$i} to S3 after {$maxImageRetries} attempts for product: {$productName}, URL: " . Str::limit($imageUrl, 100));
+                        $this->errors[] = "Row " . ($productName ?: 'Unknown') . ": Failed to upload image_{$i} to S3 after {$maxImageRetries} attempts (URL: " . Str::limit($imageUrl, 50) . ")";
                     }
                 }
             }
 
-            // Process video
+            // Process video - with retry mechanism
             if (!empty($row['video_url'])) {
                 $videoUrl = trim($row['video_url']);
                 // Validate URL format
                 if (!filter_var($videoUrl, FILTER_VALIDATE_URL)) {
                     $this->errors[] = "Row " . ($productName ?: 'Unknown') . ": Invalid URL for video: {$videoUrl}";
                 } else {
-                    $s3Url = $this->downloadAndUploadToS3($videoUrl);
+                    // Add delay before video download with random jitter
+                    $delay = rand(1000000, 2000000); // Random 1-2 seconds
+                    usleep($delay);
+
+                    // Retry video download up to 5 times with exponential backoff
+                    $s3Url = null;
+                    $maxVideoRetries = 5;
+                    for ($retry = 1; $retry <= $maxVideoRetries; $retry++) {
+                        $s3Url = $this->downloadAndUploadToS3($videoUrl, 'products', $retry, $maxVideoRetries);
+                        if ($s3Url) {
+                            break; // Success, exit retry loop
+                        }
+
+                        // If not last retry, wait before retrying with exponential backoff + random jitter
+                        if ($retry < $maxVideoRetries) {
+                            $baseDelay = pow(2, $retry) * 1000000; // Exponential backoff: 2s, 4s, 8s, 16s
+                            $jitter = rand(500000, 1500000); // Random 0.5-1.5s jitter
+                            $delay = $baseDelay + $jitter;
+                            Log::info("Retrying video download ({$retry}/{$maxVideoRetries}) for: {$productName}, waiting " . round($delay / 1000000, 2) . "s");
+                            usleep($delay);
+                        }
+                    }
+
                     if ($s3Url) {
                         $mediaUrls[] = $s3Url;
+                        Log::info("Successfully uploaded video to S3 for product: {$productName}");
                     } else {
                         // Log warning but don't fail the entire import
-                        Log::warning("Failed to upload video to S3 for product: {$productName}, URL: {$videoUrl}");
-                        $this->errors[] = "Row " . ($productName ?: 'Unknown') . ": Failed to upload video to S3 (URL: " . Str::limit($videoUrl, 50) . ")";
+                        Log::warning("Failed to upload video to S3 after {$maxVideoRetries} attempts for product: {$productName}, URL: " . Str::limit($videoUrl, 100));
+                        $this->errors[] = "Row " . ($productName ?: 'Unknown') . ": Failed to upload video to S3 after {$maxVideoRetries} attempts (URL: " . Str::limit($videoUrl, 50) . ")";
                     }
                 }
             }
@@ -153,6 +224,8 @@ class ProductsImport implements
             if ($existingProduct) {
                 $this->errors[] = "Row {$productName}: Product with this name and template already exists (ID: {$existingProduct->id})";
                 Log::warning("Skipping duplicate product: {$productName}, Template ID: {$templateId}, Existing ID: {$existingProduct->id}");
+                $this->processedRows++;
+                $this->updateProgress();
                 return null;
             }
 
@@ -200,6 +273,8 @@ class ProductsImport implements
                 }
 
                 $this->successCount++;
+                $this->processedRows++;
+                $this->updateProgress();
                 return $product;
             } catch (QueryException $e) {
                 // Handle duplicate entry or other database errors
@@ -212,6 +287,8 @@ class ProductsImport implements
                         $this->errors[] = "Row {$productName}: Database error - " . $errorMessage;
                         Log::error("Database error for product: {$productName}, Error: " . $errorMessage);
                     }
+                    $this->processedRows++;
+                    $this->updateProgress();
                     return null;
                 }
                 throw $e; // Re-throw if it's a different error
@@ -220,6 +297,8 @@ class ProductsImport implements
             $productName = isset($row['product_name']) ? trim((string)$row['product_name']) : 'Unknown';
             $this->errors[] = "Row " . ($productName ?: 'Unknown') . ": {$e->getMessage()}";
             Log::error("Import error: " . $e->getMessage());
+            $this->processedRows++;
+            $this->updateProgress();
             return null;
         }
     }
@@ -269,20 +348,13 @@ class ProductsImport implements
     }
 
     /**
-     * Batch insert size
-     * Note: Using smaller batch size to avoid ID conflicts
-     */
-    public function batchSize(): int
-    {
-        return 50; // Reduced from 100 to avoid potential ID conflicts
-    }
-
-    /**
      * Chunk size for reading
+     * Note: Process one product at a time (no batch) to ensure images are downloaded sequentially
+     * This prevents rate limiting and ensures all images are processed properly
      */
     public function chunkSize(): int
     {
-        return 50; // Reduced from 100 to match batch size
+        return 1; // Process one product at a time to avoid rate limiting and ensure image downloads succeed
     }
 
     /**
@@ -302,18 +374,115 @@ class ProductsImport implements
     }
 
     /**
+     * Get progress key
+     */
+    public function getProgressKey(): string
+    {
+        return $this->progressKey;
+    }
+
+    /**
+     * Set total rows (called before import starts)
+     */
+    public function setTotalRows(int $total): void
+    {
+        $this->totalRows = $total;
+        $this->updateProgress();
+    }
+
+    /**
+     * Update progress in cache
+     * Updates more frequently to ensure progress bar is accurate
+     */
+    protected function updateProgress(): void
+    {
+        // If total rows is 0, estimate based on processed rows
+        $estimatedTotal = $this->totalRows;
+        if ($estimatedTotal == 0 && $this->processedRows > 0) {
+            // Estimate: assume we're at least 5% done, so total is at least 20x processed
+            // This will be updated as we process more rows
+            $estimatedTotal = max($this->processedRows * 20, 50);
+        } elseif ($estimatedTotal == 0) {
+            // If no rows processed yet, set a default estimate
+            $estimatedTotal = 100;
+        }
+
+        $progress = [
+            'processed' => $this->processedRows,
+            'total' => $estimatedTotal,
+            'success' => $this->successCount,
+            'errors' => count($this->errors),
+            'percentage' => $estimatedTotal > 0 ? min(100, round(($this->processedRows / $estimatedTotal) * 100, 2)) : 0,
+            'status' => 'processing',
+        ];
+
+        Cache::put($this->progressKey, $progress, 3600); // Store for 1 hour
+    }
+
+    /**
+     * Mark import as completed
+     */
+    public function markCompleted(): void
+    {
+        $progress = [
+            'processed' => $this->processedRows,
+            'total' => $this->totalRows,
+            'success' => $this->successCount,
+            'errors' => count($this->errors),
+            'percentage' => 100,
+            'status' => 'completed',
+        ];
+
+        Cache::put($this->progressKey, $progress, 3600);
+    }
+
+    /**
+     * Mark import as failed
+     */
+    public function markFailed(string $error): void
+    {
+        $progress = [
+            'processed' => $this->processedRows,
+            'total' => $this->totalRows,
+            'success' => $this->successCount,
+            'errors' => count($this->errors),
+            'percentage' => $this->totalRows > 0 ? round(($this->processedRows / $this->totalRows) * 100, 2) : 0,
+            'status' => 'failed',
+            'error' => $error,
+        ];
+
+        Cache::put($this->progressKey, $progress, 3600);
+    }
+
+    /**
      * Register events
      */
     public function registerEvents(): array
     {
         return [
+            AfterChunk::class => function (AfterChunk $event) {
+                // Force progress update after each chunk
+                $this->updateProgress();
+
+                // Memory cleanup after each chunk to reduce RAM usage
+                if (function_exists('gc_collect_cycles')) {
+                    gc_collect_cycles();
+                }
+            },
             AfterSheet::class => function (AfterSheet $event) {
                 // After all products are imported, create variants for them
                 // This is needed because batch insert doesn't trigger created event
                 // Only create variants once (AfterSheet can be called multiple times for multiple sheets)
                 if (!$this->variantsCreated) {
+                    // Update total rows to actual processed count if it was estimated
+                    if ($this->totalRows == 0 || $this->totalRows < $this->processedRows) {
+                        $this->totalRows = $this->processedRows;
+                    }
+
                     $this->createVariantsForImportedProducts();
                     $this->variantsCreated = true;
+                    // Mark import as completed after variants are created
+                    $this->markCompleted();
                 }
             },
         ];
@@ -465,9 +634,11 @@ class ProductsImport implements
      * 
      * @param string $url
      * @param string $folder
+     * @param int $retryAttempt Current retry attempt (for logging)
+     * @param int $maxRetries Maximum retries (for logging)
      * @return string|null S3 URL or null on failure
      */
-    protected function downloadAndUploadToS3(string $url, string $folder = 'products'): ?string
+    protected function downloadAndUploadToS3(string $url, string $folder = 'products', int $retryAttempt = 1, int $maxRetries = 3): ?string
     {
         try {
             // Validate URL
@@ -479,13 +650,15 @@ class ProductsImport implements
             // Download file from URL with timeout, retry, and proper headers
             // Some sites like Etsy block requests without User-Agent
             // Use manual retry with exponential backoff for connection reset errors
-            $maxRetries = 3;
+            $internalMaxRetries = 3; // Internal retries for HTTP requests
             $response = null;
             $lastError = null;
 
-            for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            Log::info("Downloading media (attempt {$retryAttempt}/{$maxRetries}): {$url}");
+
+            for ($attempt = 1; $attempt <= $internalMaxRetries; $attempt++) {
                 try {
-                    $response = Http::timeout(60) // Increased timeout to 60 seconds
+                    $response = Http::timeout(90) // Increased timeout to 90 seconds for large files
                         ->withHeaders([
                             'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                             'Accept' => 'image/webp,image/apng,image/*,*/*;q=0.8',
@@ -493,6 +666,7 @@ class ProductsImport implements
                             'Referer' => parse_url($url, PHP_URL_SCHEME) . '://' . parse_url($url, PHP_URL_HOST),
                             'Connection' => 'keep-alive',
                             'Accept-Encoding' => 'gzip, deflate, br',
+                            'Cache-Control' => 'no-cache',
                         ])
                         ->withOptions([
                             'allow_redirects' => true,
@@ -502,6 +676,13 @@ class ProductsImport implements
                                 CURLOPT_TCP_KEEPALIVE => 1,
                                 CURLOPT_TCP_KEEPIDLE => 30,
                                 CURLOPT_TCP_KEEPINTVL => 10,
+                                CURLOPT_FRESH_CONNECT => true, // Use fresh connection for each request
+                                CURLOPT_FORBID_REUSE => true, // Don't reuse connections (helps with connection reset)
+                                CURLOPT_CONNECTTIMEOUT => 30, // Connection timeout 30 seconds
+                                CURLOPT_TIMEOUT => 90, // Total timeout 90 seconds
+                                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1, // Use HTTP/1.1
+                                CURLOPT_SSL_VERIFYPEER => false, // Disable SSL verification
+                                CURLOPT_SSL_VERIFYHOST => false, // Disable SSL host verification
                             ],
                         ])
                         ->get($url);
@@ -510,30 +691,37 @@ class ProductsImport implements
                         break; // Success, exit retry loop
                     } else {
                         $lastError = "HTTP {$response->status()}";
-                        if ($attempt < $maxRetries) {
-                            $delay = pow(2, $attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
-                            Log::warning("Download attempt {$attempt} failed for: {$url}, Status: {$response->status()}, Retrying in {$delay}ms");
-                            usleep($delay * 1000); // Convert to microseconds
+                        if ($attempt < $internalMaxRetries) {
+                            $baseDelay = pow(2, $attempt) * 1000000; // Exponential backoff: 2s, 4s, 8s
+                            $jitter = rand(500000, 1000000); // Random 0.5-1s jitter
+                            $delay = $baseDelay + $jitter;
+                            Log::warning("Download attempt {$attempt} failed for: {$url}, Status: {$response->status()}, Retrying in " . round($delay / 1000000, 2) . "s");
+                            usleep($delay);
                         }
                     }
                 } catch (\Illuminate\Http\Client\ConnectionException $e) {
                     $lastError = $e->getMessage();
-                    if ($attempt < $maxRetries) {
-                        $delay = pow(2, $attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
-                        Log::warning("Connection error on attempt {$attempt} for: {$url}, Error: {$lastError}, Retrying in {$delay}ms");
-                        usleep($delay * 1000); // Convert to microseconds
+                    if ($attempt < $internalMaxRetries) {
+                        $baseDelay = pow(2, $attempt) * 1000000; // Exponential backoff: 2s, 4s, 8s
+                        $jitter = rand(500000, 1000000); // Random 0.5-1s jitter
+                        $delay = $baseDelay + $jitter;
+                        Log::warning("Connection error on attempt {$attempt} for: {$url}, Error: {$lastError}, Retrying in " . round($delay / 1000000, 2) . "s");
+                        usleep($delay);
                     } else {
-                        Log::error("Connection error after {$maxRetries} attempts: {$url}, Error: {$lastError}");
+                        Log::error("Connection error after {$internalMaxRetries} attempts: {$url}, Error: {$lastError}");
                     }
                 } catch (\Exception $e) {
                     $lastError = $e->getMessage();
                     Log::error("Unexpected error downloading: {$url}, Error: {$lastError}");
-                    return null; // Don't retry for unexpected errors
+                    // Don't return null immediately - let outer retry loop handle it
+                    if ($attempt >= $internalMaxRetries) {
+                        return null;
+                    }
                 }
             }
 
             if (!$response || !$response->successful()) {
-                Log::warning("Failed to download file from URL after {$maxRetries} attempts: {$url}, Last error: {$lastError}");
+                Log::warning("Failed to download file from URL after {$internalMaxRetries} internal attempts: {$url}, Last error: {$lastError}");
                 return null;
             }
 
