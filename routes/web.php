@@ -51,6 +51,7 @@ use App\Http\Controllers\PromoCodeController;
 use App\Http\Controllers\NewsletterController;
 use App\Http\Controllers\SellerApplicationController;
 use App\Http\Controllers\Admin\SellerApplicationAdminController;
+use App\Http\Controllers\Admin\ReturnRequestController as AdminReturnRequestController;
 
 // Public routes
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -588,6 +589,11 @@ Route::middleware('auth')->group(function () {
             'update' => 'settings.gmc-config.update',
             'destroy' => 'settings.gmc-config.destroy',
         ]);
+
+        // Return Requests (Refund/Exchange)
+        Route::get('returns', [AdminReturnRequestController::class, 'index'])->name('returns.index');
+        Route::get('returns/{returnRequest}', [AdminReturnRequestController::class, 'show'])->name('returns.show');
+        Route::put('returns/{returnRequest}', [AdminReturnRequestController::class, 'update'])->name('returns.update');
 
         // Analytics Dashboard
         Route::get('analytics', [App\Http\Controllers\Admin\AnalyticsController::class, 'index'])->name('analytics.index');

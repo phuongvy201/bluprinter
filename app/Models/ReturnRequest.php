@@ -15,6 +15,7 @@ class ReturnRequest extends Model
         'description',
         'evidence_paths',
         'status',
+        'admin_note',
     ];
 
     protected $casts = [

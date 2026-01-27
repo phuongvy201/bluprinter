@@ -226,6 +226,74 @@
             </div>
         </div>
 
+        @php
+            $latestReturn = ($order->returnRequests ?? collect())->first();
+        @endphp
+
+        @if($latestReturn)
+        <!-- Return / Refund Status -->
+        <div class="mt-6 bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">Return / Refund Status</h2>
+                    <p class="text-sm text-gray-600 mt-1">Latest request status for this order.</p>
+                </div>
+                <span class="px-3 py-1 text-xs font-semibold rounded-full
+                    @if($latestReturn->status === 'pending') bg-yellow-100 text-yellow-800
+                    @elseif($latestReturn->status === 'processing') bg-blue-100 text-blue-800
+                    @elseif($latestReturn->status === 'approved') bg-green-100 text-green-800
+                    @elseif($latestReturn->status === 'completed') bg-emerald-100 text-emerald-800
+                    @else bg-red-100 text-red-800 @endif">
+                    {{ ucfirst($latestReturn->status) }}
+                </span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+                <div>
+                    <p class="font-semibold text-gray-900">Resolution</p>
+                    <p class="mt-1">{{ ucfirst(str_replace('_',' ', $latestReturn->resolution ?? '')) }}</p>
+                </div>
+                <div>
+                    <p class="font-semibold text-gray-900">Reason</p>
+                    <p class="mt-1">{{ ucfirst(str_replace('_',' ', $latestReturn->reason ?? '')) }}</p>
+                </div>
+                <div>
+                    <p class="font-semibold text-gray-900">Submitted at</p>
+                    <p class="mt-1">{{ $latestReturn->created_at?->format('M d, Y H:i') }}</p>
+                </div>
+                @if($latestReturn->admin_note)
+                <div>
+                    <p class="font-semibold text-gray-900">Store note</p>
+                    <p class="mt-1 whitespace-pre-line">{{ $latestReturn->admin_note }}</p>
+                </div>
+                @endif
+            </div>
+
+            @if($latestReturn->description)
+                <div class="mt-4">
+                    <p class="font-semibold text-gray-900">Your message</p>
+                    <p class="mt-1 text-gray-700 whitespace-pre-line">{{ $latestReturn->description }}</p>
+                </div>
+            @endif
+
+            @if($latestReturn->evidence_paths && count($latestReturn->evidence_paths) > 0)
+                <div class="mt-4">
+                    <p class="font-semibold text-gray-900 mb-2">Evidence</p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        @foreach($latestReturn->evidence_paths as $path)
+                            <a href="{{ Storage::url($path) }}" target="_blank" class="block">
+                                <div class="aspect-video rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                                    <img src="{{ Storage::url($path) }}" alt="Evidence" class="w-full h-full object-cover">
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1 truncate">{{ basename($path) }}</p>
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+        </div>
+        @endif
+
         <!-- Return / Exchange Request -->
         <div class="mt-10 bg-white rounded-xl shadow-sm p-6">
             @php

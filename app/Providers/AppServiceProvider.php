@@ -3,11 +3,15 @@
 namespace App\Providers;
 
 use App\Services\CurrencyService;
+use App\Models\Order;
+use App\Models\ReturnRequest;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -39,11 +43,28 @@ class AppServiceProvider extends ServiceProvider
             $currency = CurrencyService::getCurrentCurrency();
             $currencyRate = CurrencyService::getCurrentCurrencyRate();
             $currencySymbol = CurrencyService::getCurrencySymbol();
+
+            // Sidebar badges for admin/ad-partner: new orders (pending) + return requests (pending)
+            $sidebarPendingOrders = 0;
+            $sidebarPendingReturns = 0;
+            $returnsSeenAt = Session::get('returns_seen_at');
+
+            $user = Auth::user();
+            if ($user && ($user->hasRole('admin') || $user->hasRole('ad-partner'))) {
+                $sidebarPendingOrders = Order::where('status', 'pending')->count();
+                $sidebarPendingReturns = ReturnRequest::where('status', 'pending')
+                    ->when($returnsSeenAt, function ($q) use ($returnsSeenAt) {
+                        $q->where('updated_at', '>', $returnsSeenAt);
+                    })
+                    ->count();
+            }
             
             $view->with([
                 'currentCurrency' => $currency,
                 'currentCurrencyRate' => $currencyRate,
                 'currentCurrencySymbol' => $currencySymbol,
+                'sidebarPendingOrders' => $sidebarPendingOrders,
+                'sidebarPendingReturns' => $sidebarPendingReturns,
             ]);
         });
     }

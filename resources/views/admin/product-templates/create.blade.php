@@ -73,10 +73,13 @@
                                min="0"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('base_price') border-red-500 @enderror"
                                placeholder="0.00"
+                               onchange="applyBasePriceToAllVariants()"
+                               oninput="applyBasePriceToAllVariants()"
                                required>
                     @error('base_price')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
+                    <p class="mt-1 text-xs text-gray-500">Giá này sẽ tự động được áp dụng cho tất cả variants</p>
                 </div>
 
                 <!-- Description -->
@@ -883,6 +886,10 @@ function displayVariants(combinations) {
                     <tbody class="bg-white divide-y divide-gray-200">
     `;
     
+    // Get base price value
+    const basePriceInput = document.getElementById('base_price');
+    const basePrice = basePriceInput ? basePriceInput.value : '';
+    
     combinations.forEach((combination, index) => {
         const variantName = combination.map(c => c.value).join('/');
         const variantKey = combination.map(c => `${c.name}:${c.value}`).join(',');
@@ -919,6 +926,7 @@ function displayVariants(combinations) {
                                name="variants[${index}][price]" 
                                step="0.01" 
                                min="0" 
+                               value="${basePrice}"
                                class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors font-medium"
                                placeholder="0.00"
                                onchange="highlightVariant(this)">
@@ -927,6 +935,7 @@ function displayVariants(combinations) {
                     <input type="number" 
                            name="variants[${index}][quantity]" 
                            min="0" 
+                           value="100"
                            class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors font-medium"
                            placeholder="0"
                            onchange="highlightVariant(this)">
@@ -976,6 +985,27 @@ function showEmptyVariants() {
             <p class="mt-2">Add attributes above to generate variants</p>
         </div>
     `;
+}
+
+function applyBasePriceToAllVariants() {
+    const basePriceInput = document.getElementById('base_price');
+    if (!basePriceInput) return;
+    
+    const basePrice = basePriceInput.value;
+    
+    // Find all variant price inputs
+    const variantPriceInputs = document.querySelectorAll('input[name*="variants"][name*="[price]"]');
+    
+    if (variantPriceInputs.length === 0) return;
+    
+    // Update all variant prices
+    variantPriceInputs.forEach(input => {
+        input.value = basePrice;
+        // Highlight the variant row to show it was updated
+        highlightVariant(input);
+    });
+    
+    console.log(`Đã áp dụng giá base_price (${basePrice}) cho ${variantPriceInputs.length} variants`);
 }
 
 function removeVariant(button) {

@@ -63,7 +63,12 @@ class OrderController extends Controller
         // Find order by order number and ensure it belongs to the current user
         $order = Order::where('order_number', $orderNumber)
             ->where('user_id', $user->id)
-            ->with(['items.product'])
+            ->with([
+                'items.product',
+                'returnRequests' => function ($q) {
+                    $q->orderBy('created_at', 'desc');
+                },
+            ])
             ->firstOrFail();
 
         return view('customer.orders.show', compact('order'));
