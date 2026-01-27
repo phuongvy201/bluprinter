@@ -9,6 +9,151 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
+    /**
+     * The "booted" method of the model.
+     */
+    protected static function booted()
+    {
+        static::created(function ($product) {
+            \Illuminate\Support\Facades\Log::info("Product created event triggered", [
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'template_id' => $product->template_id
+            ]);
+
+            // Auto-create variants from template when product is created
+            // Load template with variants relationship
+            $template = \App\Models\ProductTemplate::with('variants')->find($product->template_id);
+            
+            \Illuminate\Support\Facades\Log::info("Template loaded for product", [
+                'product_id' => $product->id,
+                'template_id' => $product->template_id,
+                'template_exists' => $template ? true : false,
+                'variants_count' => $template && $template->variants ? $template->variants->count() : 0
+            ]);
+
+            if ($template && $template->variants && $template->variants->count() > 0) {
+                // Check existing variants count
+                $existingVariantsCount = $product->variants()->count();
+                \Illuminate\Support\Facades\Log::info("Checking existing variants", [
+                    'product_id' => $product->id,
+                    'existing_variants_count' => $existingVariantsCount
+                ]);
+
+                // Only create variants if product doesn't already have variants (to avoid duplicates)
+                if ($existingVariantsCount === 0) {
+                    \Illuminate\Support\Facades\Log::info("Creating variants for product", [
+                        'product_id' => $product->id,
+                        'template_variants_count' => $template->variants->count()
+                    ]);
+
+                    foreach ($template->variants as $templateVariant) {
+                        $variantName = $templateVariant->variant_name;
+                        
+                        // Get attributes from template variant (preferred)
+                        $attributes = $templateVariant->attributes ?? [];
+                        
+                        // If no attributes from template, try to parse from variant_name
+                        if (empty($attributes)) {
+                            $attributes = static::parseAttributesFromVariantName($variantName);
+                        }
+
+                        // If still no attributes, create a generic one
+                        if (empty($attributes)) {
+                            $attributes = ['Variant' => $variantName];
+                        }
+
+                        try {
+                            $variant = \App\Models\ProductVariant::create([
+                                'product_id' => $product->id,
+                                'template_id' => $product->template_id,
+                                'variant_name' => $variantName,
+                                'attributes' => $attributes,
+                                'price' => $templateVariant->price ?? null,
+                                'sku' => 'SKU-' . strtoupper(\Illuminate\Support\Str::random(8)),
+                                'quantity' => $templateVariant->quantity ?? 0,
+                                'media' => null,
+                            ]);
+
+                            \Illuminate\Support\Facades\Log::info("Variant created successfully", [
+                                'product_id' => $product->id,
+                                'variant_id' => $variant->id,
+                                'variant_name' => $variantName,
+                                'attributes' => $attributes
+                            ]);
+                        } catch (\Exception $e) {
+                            \Illuminate\Support\Facades\Log::error("Failed to create variant", [
+                                'product_id' => $product->id,
+                                'variant_name' => $variantName,
+                                'error' => $e->getMessage(),
+                                'trace' => $e->getTraceAsString()
+                            ]);
+                        }
+                    }
+                } else {
+                    \Illuminate\Support\Facades\Log::info("Skipping variant creation - product already has variants", [
+                        'product_id' => $product->id,
+                        'existing_variants_count' => $existingVariantsCount
+                    ]);
+                }
+            } else {
+                \Illuminate\Support\Facades\Log::info("No variants to create", [
+                    'product_id' => $product->id,
+                    'template_id' => $product->template_id,
+                    'template_exists' => $template ? true : false,
+                    'has_variants' => $template && $template->variants ? true : false,
+                    'variants_count' => $template && $template->variants ? $template->variants->count() : 0
+                ]);
+            }
+
+            // Increment shop products count if product has a shop
+            if ($product->shop) {
+                try {
+                    $product->shop->incrementProducts();
+                } catch (\Exception $e) {
+                    // Log error but don't fail product creation
+                    \Illuminate\Support\Facades\Log::warning("Failed to increment products count for shop ID {$product->shop_id}: " . $e->getMessage());
+                }
+            }
+        });
+    }
+
+    /**
+     * Parse attributes from variant name (fallback method)
+     * 
+     * @param string $variantName
+     * @return array
+     */
+    protected static function parseAttributesFromVariantName(string $variantName): array
+    {
+        $attributes = [];
+        
+        // Common size patterns
+        $sizePatterns = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Small', 'Medium', 'Large', '11oz', '12oz', '15oz'];
+        $colorPatterns = ['Black', 'White', 'Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Pink', 'Gray', 'Grey', 'Brown', 'Orange', 'Navy', 'Maroon', 'Teal'];
+
+        // Handle format like "Black/S" or "Black S" or "Black-S" or "S/Black"
+        $variantName = str_replace(['/', '-'], ' ', $variantName);
+        $nameParts = array_filter(explode(' ', trim($variantName)));
+
+        foreach ($nameParts as $part) {
+            $part = trim($part);
+            if (in_array($part, $sizePatterns)) {
+                $attributes['Size'] = $part;
+            } elseif (in_array($part, $colorPatterns)) {
+                $attributes['Color'] = $part;
+            } else {
+                // If it's not a common size/color, treat as additional attribute
+                if (!isset($attributes['Material'])) {
+                    $attributes['Material'] = $part;
+                } elseif (!isset($attributes['Style'])) {
+                    $attributes['Style'] = $part;
+                }
+            }
+        }
+
+        return $attributes;
+    }
     protected $fillable = [
         'template_id',
         'user_id',
@@ -24,6 +169,9 @@ class Product extends Model
         'created_by',
         'api_token_id'
     ];
+
+    // Ensure ID is never set manually - let database auto-increment
+    protected $guarded = ['id'];
 
     protected $casts = [
         'price' => 'decimal:2',

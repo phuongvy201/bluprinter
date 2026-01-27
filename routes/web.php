@@ -635,6 +635,7 @@ Route::middleware('auth')->group(function () {
         Route::post('products/feed-to-gmc', [AdminProductController::class, 'feedToGMC'])->name('products.feed-to-gmc');
         Route::post('products/bulk-delete', [AdminProductController::class, 'bulkDelete'])->name('products.bulk-delete');
         Route::post('products/{product}/duplicate', [AdminProductController::class, 'duplicate'])->name('products.duplicate');
+        Route::get('products/export/meta', [AdminProductController::class, 'exportToMeta'])->name('products.export.meta');
 
         // Products Resource Route (must be last to avoid conflicts)
         Route::resource('products', AdminProductController::class);

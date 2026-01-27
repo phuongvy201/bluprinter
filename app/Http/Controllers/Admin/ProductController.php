@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Response;
 
 class ProductController extends Controller
 {
@@ -284,10 +285,7 @@ class ProductController extends Controller
 
             $product = Product::create($data);
 
-            // Increment shop products count
-            if (auth()->user()->hasShop()) {
-                auth()->user()->shop->incrementProducts();
-            }
+            // Note: Variants and shop products count are automatically handled by Product model's created event
 
             // Create product variants from template variants
             if ($request->has('variants')) {
@@ -447,10 +445,7 @@ class ProductController extends Controller
                 }
             }
 
-            // Increment shop products count if user has shop
-            if ($user->hasShop()) {
-                $user->shop->incrementProducts();
-            }
+            // Note: Shop products count is automatically incremented by Product model's created event
 
             Log::info('Product duplicated', [
                 'original_product_id' => $product->id,
@@ -1838,5 +1833,401 @@ class ProductController extends Controller
 
         // Default category: Other
         return '783';
+    }
+
+    /**
+     * Export products to Meta Commerce Catalog format (CSV/Excel)
+     */
+    public function exportToMeta(Request $request)
+    {
+        $user = auth()->user();
+
+        // Build query similar to index method
+        $productsQuery = Product::with(['template.category', 'template.user', 'user', 'shop', 'variants', 'collections']);
+
+        // Apply user filter
+        if (!$user->hasRole('admin')) {
+            $productsQuery->where('user_id', $user->id);
+        }
+
+        // Apply filters from request
+        if ($request->filled('category_id')) {
+            $productsQuery->whereHas('template', function ($q) use ($request) {
+                $q->where('category_id', $request->category_id);
+            });
+        }
+
+        if ($request->filled('template_id')) {
+            $productsQuery->where('template_id', $request->template_id);
+        }
+
+        if ($request->filled('shop_id')) {
+            $productsQuery->where('shop_id', $request->shop_id);
+        }
+
+        if ($request->filled('collection_id')) {
+            $productsQuery->whereHas('collections', function ($q) use ($request) {
+                $q->where('collections.id', $request->collection_id);
+            });
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $productsQuery->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('template', function ($templateQuery) use ($search) {
+                        $templateQuery->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Only export active products
+        $productsQuery->where('status', 'active');
+
+        $products = $productsQuery->get();
+
+        // Get base URL for product links
+        $baseUrl = config('app.url');
+
+        // Prepare CSV data
+        $csvData = [];
+
+        // Header - PHẢI CHÍNH XÁC 100% về chữ hoa/thường, dấu gạch dưới, dấu ngoặc vuông
+        $header = [
+            'id',
+            'title',
+            'description',
+            'availability',
+            'condition',
+            'price',
+            'link',
+            'image_link',
+            'brand',
+            'google_product_category',
+            'fb_product_category',
+            'quantity_to_sell_on_facebook',
+            'sale_price',
+            'sale_price_effective_date',
+            'item_group_id',
+            'gender',
+            'color',
+            'size',
+            'age_group',
+            'material',
+            'pattern',
+            'shipping',
+            'shipping_weight',
+            'video[0].url',
+            'video[0].tag[0]',
+            'gtin',
+            'product_tags[0]',
+            'product_tags[1]',
+            'style[0]'
+        ];
+
+        $csvData[] = $header;
+
+        // Helper function to validate and format fields
+        $formatField = function ($value, $maxLength = null) {
+            if (empty($value)) return '';
+            $value = trim((string) $value);
+            if ($maxLength) {
+                $value = mb_substr($value, 0, $maxLength);
+            }
+            return $value;
+        };
+
+        // Helper function to validate gender
+        $validateGender = function ($gender) {
+            $gender = strtolower(trim($gender));
+            $validGenders = ['female', 'male', 'unisex'];
+            return in_array($gender, $validGenders) ? $gender : '';
+        };
+
+        // Helper function to validate age_group
+        $validateAgeGroup = function ($ageGroup) {
+            $ageGroup = strtolower(trim($ageGroup));
+            $validAgeGroups = ['newborn', 'infant', 'toddler', 'kids', 'teen', 'adult', 'all ages'];
+            return in_array($ageGroup, $validAgeGroups) ? $ageGroup : '';
+        };
+
+        // Process each product
+        foreach ($products as $product) {
+            // Get product media
+            $media = $product->getEffectiveMedia();
+            $imageLink = !empty($media) ? (is_string($media[0]) ? $media[0] : ($media[0]['url'] ?? $media[0]['path'] ?? '')) : '';
+
+            // Convert relative URL to absolute URL
+            if ($imageLink && !filter_var($imageLink, FILTER_VALIDATE_URL)) {
+                if (strpos($imageLink, '/storage/') === 0 || strpos($imageLink, '/') === 0) {
+                    $imageLink = $baseUrl . $imageLink;
+                } else {
+                    $imageLink = $baseUrl . '/storage/' . $imageLink;
+                }
+            }
+
+            // Validate image_link is required
+            if (empty($imageLink)) {
+                continue; // Skip products without images
+            }
+
+            // Get product link
+            $productLink = $baseUrl . '/products/' . ($product->slug ?? $product->id);
+
+            // Get price (in USD format for Meta) - Bắt buộc
+            $basePrice = $product->price ?? $product->template->base_price ?? 0;
+            if ($basePrice <= 0) {
+                continue; // Skip products without price
+            }
+            $price = number_format($basePrice, 2, '.', '') . ' USD';
+
+            // Get description (strip HTML tags) - Bắt buộc, giới hạn 9999 ký tự, chỉ chữ thường
+            $description = strip_tags($product->description ?? $product->template->description ?? '');
+            if (empty($description)) {
+                $description = $product->name; // Fallback to name if no description
+            }
+            $description = str_replace(["\r\n", "\r", "\n"], ' ', $description);
+            $description = mb_strtolower($description, 'UTF-8'); // Chỉ dùng chữ thường
+            $description = $formatField($description, 9999);
+
+            // Get title - Bắt buộc, giới hạn 200 ký tự
+            $title = $formatField($product->name, 200);
+
+            // Get brand - Bắt buộc, giới hạn 100 ký tự
+            $brand = $formatField($product->shop->shop_name ?? $product->template->name ?? 'Default Brand', 100);
+
+            // Get category IDs
+            $googleCategory = $this->mapToGoogleCategory($product->template->category->name ?? '');
+            $fbCategory = $googleCategory; // Use same for FB
+
+            // Get quantity - quantity_to_sell_on_facebook phải >= 1
+            $quantity = max(1, (int)($product->quantity ?? 0));
+
+            // Get video if exists
+            $videoUrl = '';
+            $videoTag = '';
+            if (!empty($media)) {
+                foreach ($media as $mediaItem) {
+                    $mediaUrl = is_string($mediaItem) ? $mediaItem : ($mediaItem['url'] ?? $mediaItem['path'] ?? '');
+                    if ($mediaUrl && (str_contains($mediaUrl, '.mp4') || str_contains($mediaUrl, '.mov') || str_contains($mediaUrl, '.avi'))) {
+                        if (!filter_var($mediaUrl, FILTER_VALIDATE_URL)) {
+                            if (strpos($mediaUrl, '/storage/') === 0 || strpos($mediaUrl, '/') === 0) {
+                                $videoUrl = $baseUrl . $mediaUrl;
+                            } else {
+                                $videoUrl = $baseUrl . '/storage/' . $mediaUrl;
+                            }
+                        } else {
+                            $videoUrl = $mediaUrl;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Get product tags/collections - giới hạn 110 ký tự mỗi tag
+            $productTags = $product->collections->pluck('name')->take(2)->toArray();
+            $productTag0 = $formatField($productTags[0] ?? '', 110);
+            $productTag1 = $formatField($productTags[1] ?? '', 110);
+
+            // Get style from template name or category
+            $style = [$formatField($product->template->name ?? '', 100)];
+
+            // If product has variants, create a row for each variant
+            if ($product->variants->count() > 0) {
+                // item_group_id giới hạn 100 ký tự
+                $itemGroupId = $formatField('GROUP_' . $product->id, 100);
+
+                foreach ($product->variants as $variant) {
+                    $variantAttributes = $variant->attributes ?? [];
+
+                    // Extract color, size, gender, material, pattern, age_group from variant attributes
+                    $color = '';
+                    $size = '';
+                    $gender = '';
+                    $material = '';
+                    $pattern = '';
+                    $ageGroup = '';
+
+                    foreach ($variantAttributes as $attrName => $attrValue) {
+                        $attrNameLower = strtolower(trim($attrName));
+                        $attrValue = trim((string) $attrValue);
+
+                        if (in_array($attrNameLower, ['color', 'màu', 'colour'])) {
+                            $color = $formatField($attrValue, 200);
+                        } elseif (in_array($attrNameLower, ['size', 'kích thước'])) {
+                            $size = $formatField($attrValue, 200);
+                        } elseif (in_array($attrNameLower, ['gender', 'giới tính', 'sex'])) {
+                            $gender = $validateGender($attrValue);
+                        } elseif (in_array($attrNameLower, ['material', 'chất liệu', 'fabric'])) {
+                            $material = $formatField($attrValue, 200);
+                        } elseif (in_array($attrNameLower, ['pattern', 'họa tiết', 'design'])) {
+                            $pattern = $formatField($attrValue, 100);
+                        } elseif (in_array($attrNameLower, ['age_group', 'age', 'tuổi', 'nhóm tuổi'])) {
+                            $ageGroup = $validateAgeGroup($attrValue);
+                        }
+                    }
+
+                    // Use variant price if available
+                    $variantPrice = $variant->price ?? $basePrice;
+                    if ($variantPrice <= 0) continue; // Skip variants without price
+                    $variantPriceFormatted = number_format($variantPrice, 2, '.', '') . ' USD';
+
+                    // Use variant quantity if available - phải >= 1
+                    $variantQuantity = max(1, (int)($variant->quantity ?? $quantity));
+
+                    // Use variant image if available
+                    $variantImageLink = $imageLink;
+                    if (!empty($variant->media)) {
+                        $variantMedia = is_array($variant->media) ? $variant->media : [$variant->media];
+                        if (!empty($variantMedia[0])) {
+                            $variantMediaUrl = is_string($variantMedia[0]) ? $variantMedia[0] : ($variantMedia[0]['url'] ?? $variantMedia[0]['path'] ?? '');
+                            if ($variantMediaUrl) {
+                                if (!filter_var($variantMediaUrl, FILTER_VALIDATE_URL)) {
+                                    if (strpos($variantMediaUrl, '/storage/') === 0 || strpos($variantMediaUrl, '/') === 0) {
+                                        $variantImageLink = $baseUrl . $variantMediaUrl;
+                                    } else {
+                                        $variantImageLink = $baseUrl . '/storage/' . $variantMediaUrl;
+                                    }
+                                } else {
+                                    $variantImageLink = $variantMediaUrl;
+                                }
+                            }
+                        }
+                    }
+
+                    // Variant ID - Bắt buộc, giới hạn 100 ký tự, nên dùng SKU
+                    $variantId = '';
+                    if ($variant->sku) {
+                        $variantId = $formatField($variant->sku, 100);
+                    } elseif ($product->sku) {
+                        $variantId = $formatField($product->sku . '_' . $variant->id, 100);
+                    } else {
+                        $variantId = $formatField('PROD_' . $product->id . '_VAR_' . $variant->id, 100);
+                    }
+
+                    // Variant title - giới hạn 200 ký tự
+                    $variantTitle = $title;
+                    if ($variant->variant_name) {
+                        $variantTitle = $formatField($title . ' - ' . $variant->variant_name, 200);
+                    }
+
+                    // Create row for variant
+                    $row = [
+                        $variantId, // id (Bắt buộc, max 100)
+                        $variantTitle, // title (Bắt buộc, max 200)
+                        $description, // description (Bắt buộc, max 9999, chữ thường)
+                        $variantQuantity > 0 ? 'in stock' : 'out of stock', // availability (Bắt buộc)
+                        'new', // condition (Bắt buộc)
+                        $variantPriceFormatted, // price (Bắt buộc)
+                        $productLink, // link (Bắt buộc)
+                        $variantImageLink, // image_link (Bắt buộc)
+                        $brand, // brand (Bắt buộc, max 100)
+                        $googleCategory, // google_product_category
+                        $fbCategory, // fb_product_category
+                        $variantQuantity, // quantity_to_sell_on_facebook (phải >= 1)
+                        '', // sale_price
+                        '', // sale_price_effective_date
+                        $itemGroupId, // item_group_id (max 100)
+                        $gender, // gender (female, male, unisex)
+                        $color, // color (max 200)
+                        $size, // size (max 200)
+                        $ageGroup, // age_group (newborn, infant, toddler, kids, teen, adult, all ages)
+                        $material, // material (max 200)
+                        $pattern, // pattern (max 100)
+                        '', // shipping
+                        '', // shipping_weight
+                        $videoUrl, // video[0].url
+                        $videoTag, // video[0].tag[0]
+                        $formatField($variant->sku ?? $product->sku ?? '', 50), // gtin
+                        $productTag0, // product_tags[0] (max 110)
+                        $productTag1, // product_tags[1] (max 110)
+                        $style[0] ?? '' // style[0]
+                    ];
+
+                    $csvData[] = $row;
+                }
+            } else {
+                // Product without variants - single row
+                // item_group_id giới hạn 100 ký tự
+                $itemGroupId = $formatField('GROUP_' . $product->id, 100);
+
+                // Product ID - Bắt buộc, giới hạn 100 ký tự, nên dùng SKU
+                $productId = '';
+                if ($product->sku) {
+                    $productId = $formatField($product->sku, 100);
+                } else {
+                    $productId = $formatField('PROD_' . $product->id, 100);
+                }
+
+                $row = [
+                    $productId, // id (Bắt buộc, max 100)
+                    $title, // title (Bắt buộc, max 200)
+                    $description, // description (Bắt buộc, max 9999, chữ thường)
+                    $quantity > 0 ? 'in stock' : 'out of stock', // availability (Bắt buộc)
+                    'new', // condition (Bắt buộc)
+                    $price, // price (Bắt buộc)
+                    $productLink, // link (Bắt buộc)
+                    $imageLink, // image_link (Bắt buộc)
+                    $brand, // brand (Bắt buộc, max 100)
+                    $googleCategory, // google_product_category
+                    $fbCategory, // fb_product_category
+                    $quantity, // quantity_to_sell_on_facebook (phải >= 1)
+                    '', // sale_price
+                    '', // sale_price_effective_date
+                    $itemGroupId, // item_group_id (max 100)
+                    '', // gender
+                    '', // color
+                    '', // size
+                    '', // age_group
+                    '', // material
+                    '', // pattern
+                    '', // shipping
+                    '', // shipping_weight
+                    $videoUrl, // video[0].url
+                    $videoTag, // video[0].tag[0]
+                    $formatField($product->sku ?? '', 50), // gtin
+                    $productTag0, // product_tags[0] (max 110)
+                    $productTag1, // product_tags[1] (max 110)
+                    $style[0] ?? '' // style[0]
+                ];
+
+                $csvData[] = $row;
+            }
+        }
+
+        // Generate filename
+        $filename = 'meta_products_export_' . date('Y-m-d_His') . '.csv';
+
+        // Build CSV content
+        $csvContent = '';
+
+        // Add BOM for UTF-8 (Excel compatibility)
+        $csvContent .= "\xEF\xBB\xBF";
+
+        // Write CSV data
+        foreach ($csvData as $row) {
+            // Escape fields that contain commas, quotes, or newlines
+            $escapedRow = array_map(function ($field) {
+                // Convert to string and handle null/empty
+                $field = (string) $field;
+
+                if (strpos($field, ',') !== false || strpos($field, '"') !== false || strpos($field, "\n") !== false || strpos($field, "\r") !== false) {
+                    return '"' . str_replace('"', '""', $field) . '"';
+                }
+                return $field;
+            }, $row);
+
+            $csvContent .= implode(',', $escapedRow) . "\n";
+        }
+
+        // Return CSV file download
+        return Response::make($csvContent, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ]);
     }
 }
