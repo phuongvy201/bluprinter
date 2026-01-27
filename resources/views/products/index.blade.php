@@ -198,10 +198,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             <x-wishlist-button :product="$product" size="sm" />
                         </div>
 
+                        @php
+                            // Current selling price (USD stored) – always prefer product price, fallback to template base_price
+                            $currentPriceUsd = (float) ($product->price ?? ($product->template->base_price ?? 0));
+                            $originalPriceUsd = (float) ($product->template->base_price ?? 0);
+                        @endphp
+
                         <!-- Discount Badge -->
-                        @if($product->template && $product->template->base_price > $product->price)
+                        @if($product->template && $originalPriceUsd > 0 && $originalPriceUsd > $currentPriceUsd)
                             @php
-                                $discount = round((($product->template->base_price - $product->price) / $product->template->base_price) * 100);
+                                $discount = round((($originalPriceUsd - $currentPriceUsd) / $originalPriceUsd) * 100);
                             @endphp
                             <div class="absolute top-2 right-2 sm:top-3 sm:right-3 bg-red-500 text-white px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">
                                 {{ $discount }}% off
@@ -221,17 +227,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         <div class="flex items-center justify-between">
                             <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
-                                @if($product->template && $product->template->base_price > $product->price)
-                                    <span class="text-xs sm:text-sm text-gray-500 line-through">{{ format_price_usd((float) $product->template->base_price) }}</span>
-                                    <span class="text-base sm:text-lg font-bold text-[#E2150C]">{{ format_price_usd((float) $product->price) }}</span>
+                                @if($product->template && $originalPriceUsd > 0 && $originalPriceUsd > $currentPriceUsd)
+                                    <span class="text-xs sm:text-sm text-gray-500 line-through">{{ format_price_usd($originalPriceUsd) }}</span>
+                                    <span class="text-base sm:text-lg font-bold text-[#E2150C]">{{ format_price_usd($currentPriceUsd) }}</span>
                                 @else
-                                    <span class="text-base sm:text-lg font-bold text-[#E2150C]">{{ format_price_usd((float) $product->base_price) }}</span>
+                                    <span class="text-base sm:text-lg font-bold text-[#E2150C]">{{ format_price_usd($currentPriceUsd) }}</span>
                                 @endif
                             </div>
                         </div>
 
                         <!-- Sale End Date -->
-                        @if($product->template && $product->template->base_price > $product->price)
+                        @if($product->template && $originalPriceUsd > 0 && $originalPriceUsd > $currentPriceUsd)
                             <div class="mt-1 sm:mt-2 text-[10px] sm:text-xs text-red-600 font-medium">
                                 Sale ends at {{ now()->addDays(7)->format('F d') }}
                             </div>
