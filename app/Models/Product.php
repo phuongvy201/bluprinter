@@ -24,7 +24,7 @@ class Product extends Model
             // Auto-create variants from template when product is created
             // Load template with variants relationship
             $template = \App\Models\ProductTemplate::with('variants')->find($product->template_id);
-            
+
             \Illuminate\Support\Facades\Log::info("Template loaded for product", [
                 'product_id' => $product->id,
                 'template_id' => $product->template_id,
@@ -49,10 +49,48 @@ class Product extends Model
 
                     foreach ($template->variants as $templateVariant) {
                         $variantName = $templateVariant->variant_name;
-                        
-                        // Get attributes from template variant (preferred)
-                        $attributes = $templateVariant->attributes ?? [];
-                        
+
+                        // Get attributes from template variant (same as ProductController)
+                        // Use getAttribute() to ensure we get the 'attributes' column, not model attributes
+                        $attributes = [];
+
+                        // Query fresh from database to get clean attributes (same as ProductController)
+                        $freshTemplateVariant = \App\Models\TemplateVariant::where('template_id', $product->template_id)
+                            ->where('variant_name', $variantName)
+                            ->first();
+
+                        if ($freshTemplateVariant) {
+                            // IMPORTANT: Use getRawOriginal('attributes') to get the raw value from database
+                            // $freshTemplateVariant->attributes returns getAttributes() (all model attributes) due to name conflict
+                            // getRawOriginal() returns the raw value before casting
+                            $rawAttributes = $freshTemplateVariant->getRawOriginal('attributes');
+
+                            // Log for debugging
+                            \Illuminate\Support\Facades\Log::info("DEBUG Product Model: Getting attributes from TemplateVariant", [
+                                'variant_name' => $variantName,
+                                'getRawOriginal_attributes' => $rawAttributes,
+                                'getRawOriginal_attributes_type' => gettype($rawAttributes),
+                                'getAttribute_attributes' => $freshTemplateVariant->getAttribute('attributes'),
+                                'getAttribute_attributes_type' => gettype($freshTemplateVariant->getAttribute('attributes')),
+                            ]);
+
+                            if (!empty($rawAttributes)) {
+                                // getRawOriginal returns raw value from database (JSON string)
+                                if (is_string($rawAttributes)) {
+                                    $decoded = json_decode($rawAttributes, true);
+                                    $attributes = is_array($decoded) ? $decoded : [];
+                                }
+                                // If already an array (shouldn't happen with getRawOriginal, but just in case)
+                                elseif (is_array($rawAttributes)) {
+                                    $attributes = $rawAttributes;
+                                } else {
+                                    $attributes = [];
+                                }
+                            } else {
+                                $attributes = [];
+                            }
+                        }
+
                         // If no attributes from template, try to parse from variant_name
                         if (empty($attributes)) {
                             $attributes = static::parseAttributesFromVariantName($variantName);
@@ -63,23 +101,62 @@ class Product extends Model
                             $attributes = ['Variant' => $variantName];
                         }
 
+                        // Log for debugging
+                        \Illuminate\Support\Facades\Log::info("DEBUG Product Model: Attributes before saving", [
+                            'variant_name' => $variantName,
+                            'attributes' => $attributes,
+                            'attributes_type' => gettype($attributes),
+                            'attributes_is_array' => is_array($attributes),
+                        ]);
+
                         try {
+                            // Generate unique SKU (required field)
+                            $sku = 'SKU-' . strtoupper(\Illuminate\Support\Str::random(8));
+                            // Ensure SKU is unique
+                            while (\App\Models\ProductVariant::where('sku', $sku)->exists()) {
+                                $sku = 'SKU-' . strtoupper(\Illuminate\Support\Str::random(8));
+                            }
+
+                            // Get price, quantity, media from TemplateVariant if available
+                            $variantPrice = null;
+                            $variantQuantity = 0;
+                            $variantMedia = null;
+
+                            if ($freshTemplateVariant) {
+                                $variantPrice = $freshTemplateVariant->price;
+                                $variantQuantity = $freshTemplateVariant->quantity ?? 0;
+                                $variantMedia = $freshTemplateVariant->media;
+                            }
+
+                            // Create variant with all fields from TemplateVariant
                             $variant = \App\Models\ProductVariant::create([
                                 'product_id' => $product->id,
                                 'template_id' => $product->template_id,
                                 'variant_name' => $variantName,
                                 'attributes' => $attributes,
-                                'price' => $templateVariant->price ?? null,
-                                'sku' => 'SKU-' . strtoupper(\Illuminate\Support\Str::random(8)),
-                                'quantity' => $templateVariant->quantity ?? 0,
-                                'media' => null,
+                                'sku' => $sku, // SKU is required by database
+                                'price' => $variantPrice, // From TemplateVariant
+                                'quantity' => $variantQuantity, // From TemplateVariant
+                                'media' => $variantMedia, // From TemplateVariant
+                            ]);
+
+                            // Log what was actually saved
+                            \Illuminate\Support\Facades\Log::info("DEBUG Product Model: ProductVariant created - checking what was saved", [
+                                'variant_id' => $variant->id,
+                                'saved_attributes' => $variant->attributes,
+                                'saved_attributes_type' => gettype($variant->attributes),
+                                'saved_attributes_raw' => $variant->getRawOriginal('attributes'),
+                                'saved_attributes_original' => $variant->getOriginal('attributes'),
                             ]);
 
                             \Illuminate\Support\Facades\Log::info("Variant created successfully", [
                                 'product_id' => $product->id,
                                 'variant_id' => $variant->id,
                                 'variant_name' => $variantName,
-                                'attributes' => $attributes
+                                'attributes' => $attributes,
+                                'saved_attributes' => $variant->attributes,
+                                'saved_attributes_type' => gettype($variant->attributes),
+                                'note' => 'Only attributes saved, other fields use defaults'
                             ]);
                         } catch (\Exception $e) {
                             \Illuminate\Support\Facades\Log::error("Failed to create variant", [
@@ -127,7 +204,7 @@ class Product extends Model
     protected static function parseAttributesFromVariantName(string $variantName): array
     {
         $attributes = [];
-        
+
         // Common size patterns
         $sizePatterns = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Small', 'Medium', 'Large', '11oz', '12oz', '15oz'];
         $colorPatterns = ['Black', 'White', 'Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Pink', 'Gray', 'Grey', 'Brown', 'Orange', 'Navy', 'Maroon', 'Teal'];
