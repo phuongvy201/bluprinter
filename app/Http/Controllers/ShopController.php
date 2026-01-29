@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class ShopController extends Controller
 {
@@ -66,40 +67,61 @@ class ShopController extends Controller
 
     public function follow(Request $request, Shop $shop)
     {
-        $request->validate([
-            'action' => 'required|in:follow,unfollow'
-        ]);
+        try {
+            // Check if shop exists
+            if (!$shop || !$shop->exists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Shop not found'
+                ], 404);
+            }
 
-        if (!Auth::check()) {
+            $request->validate([
+                'action' => 'required|in:follow,unfollow'
+            ]);
+
+            if (!Auth::check()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You need to login to follow this shop'
+                ], 401);
+            }
+
+            $user = Auth::user();
+            $action = $request->input('action');
+
+            if ($action === 'follow') {
+                if (!$shop->followers()->where('user_id', $user->id)->exists()) {
+                    $shop->followers()->attach($user->id);
+                    $message = 'Successfully followed this shop!';
+                } else {
+                    $message = 'You are already following this shop!';
+                }
+            } else {
+                $shop->followers()->detach($user->id);
+                $message = 'Successfully unfollowed this shop!';
+            }
+
+            $followersCount = $shop->followers()->count();
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'followers_count' => $followersCount,
+                'is_following' => $action === 'follow'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Follow shop error: ' . $e->getMessage(), [
+                'shop_id' => $shop->id ?? null,
+                'user_id' => Auth::id(),
+                'action' => $request->input('action')
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn cần đăng nhập để follow shop'
-            ], 401);
+                'message' => 'An error occurred. Please try again later.'
+            ], 500);
         }
-
-        $user = Auth::user();
-        $action = $request->input('action');
-
-        if ($action === 'follow') {
-            if (!$shop->followers()->where('user_id', $user->id)->exists()) {
-                $shop->followers()->attach($user->id);
-                $message = 'Đã follow shop thành công!';
-            } else {
-                $message = 'Bạn đã follow shop này rồi!';
-            }
-        } else {
-            $shop->followers()->detach($user->id);
-            $message = 'Đã unfollow shop thành công!';
-        }
-
-        $followersCount = $shop->followers()->count();
-
-        return response()->json([
-            'success' => true,
-            'message' => $message,
-            'followers_count' => $followersCount,
-            'is_following' => $action === 'follow'
-        ]);
     }
 
     public function contact(Request $request, Shop $shop)
@@ -114,7 +136,7 @@ class ShopController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Tin nhắn đã được gửi đến shop thành công!'
+            'message' => 'Message has been sent to the shop successfully!'
         ]);
     }
 }

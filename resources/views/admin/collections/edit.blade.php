@@ -116,31 +116,411 @@
                 Select Products
             </h3>
             
-            @if($products->count() > 0)
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-4">
-                    @foreach($products as $product)
-                    <label class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-purple-50 cursor-pointer transition">
-                        <input type="checkbox" name="products[]" value="{{ $product->id }}" 
-                               {{ in_array($product->id, old('products', $collection->products->pluck('id')->toArray())) ? 'checked' : '' }}
-                               class="mr-3 text-purple-600 focus:ring-purple-500 rounded">
-                        <div class="flex items-center space-x-3 flex-1">
-                            <div class="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center text-lg">
-                                📦
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-gray-900 truncate">{{ $product->name }}</p>
-                                <p class="text-xs text-gray-500">${{ number_format($product->getEffectivePrice(), 2) }}</p>
-                            </div>
-                        </div>
-                    </label>
-                    @endforeach
+            <div class="space-y-4">
+                <!-- Selected Products Display -->
+                <div id="selected-products-display" class="min-h-[60px] border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <p class="text-sm text-gray-500" id="selected-count">No products selected</p>
+                    <div id="selected-products-list" class="flex flex-wrap gap-2 mt-2"></div>
                 </div>
-            @else
-                <div class="text-center py-8 text-gray-500">
-                    <p>No products available. Create products first to add them to collections.</p>
-                </div>
-            @endif
+
+                <!-- Open Modal Button -->
+                <button type="button" onclick="openProductModal()" 
+                        class="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    Select Products
+                </button>
+            </div>
+
+            <!-- Hidden inputs for selected products -->
+            <div id="selected-products-inputs"></div>
         </div>
+
+        <!-- Product Selection Modal -->
+        <div id="product-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] flex flex-col">
+                <!-- Modal Header -->
+                <div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-t-xl p-6 text-white">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-bold">Select Products</h2>
+                            <p class="text-purple-100 mt-1">Choose products to add to this collection</p>
+                        </div>
+                        <button onclick="closeProductModal()" class="text-white hover:text-gray-200 transition">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filter Section -->
+                <div class="p-6 border-b border-gray-200 bg-gray-50">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <!-- Search -->
+                        <div class="lg:col-span-2">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Search</label>
+                            <input type="text" id="product-search" placeholder="Search by product name..." 
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                   onkeyup="filterProducts()">
+                        </div>
+                        <!-- Category Filter -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+                            <select id="category-filter" onchange="filterProducts()"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                <option value="">All Categories</option>
+                                @php
+                                    $categories = $products->pluck('template.category')->filter()->unique('id')->values();
+                                @endphp
+                                @foreach($categories as $category)
+                                    <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <!-- Template Filter -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Template</label>
+                            <select id="template-filter" onchange="filterProducts()"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                <option value="">All Templates</option>
+                                @php
+                                    $templates = $products->pluck('template')->filter()->unique('id')->values();
+                                @endphp
+                                @foreach($templates as $template)
+                                    <option value="{{ $template->id }}">{{ $template->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <!-- Shop Filter -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Shop</label>
+                            <select id="shop-filter" onchange="filterProducts()"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                <option value="">All Shops</option>
+                                @php
+                                    $shops = $products->pluck('shop')->filter()->unique('id')->values();
+                                @endphp
+                                @foreach($shops as $shop)
+                                    <option value="{{ $shop->id }}">{{ $shop->shop_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <!-- Price Filter -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Price Range</label>
+                            <select id="price-filter" onchange="filterProducts()"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                <option value="">All Prices</option>
+                                <option value="0-50">$0 - $50</option>
+                                <option value="50-100">$50 - $100</option>
+                                <option value="100-200">$100 - $200</option>
+                                <option value="200+">Above $200</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-auto p-6">
+                    @if($products->count() > 0)
+                        <div class="mb-4 flex items-center justify-between">
+                            <div class="flex items-center">
+                                <input type="checkbox" id="select-all-products" onchange="toggleSelectAll()"
+                                       class="mr-2 w-4 h-4 text-purple-600 focus:ring-purple-500 rounded">
+                                <label for="select-all-products" class="text-sm font-semibold text-gray-700 cursor-pointer">
+                                    Select All
+                                </label>
+                            </div>
+                            <p class="text-sm text-gray-600">
+                                <span id="filtered-count">{{ $products->count() }}</span> products
+                            </p>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                                            <input type="checkbox" id="select-all-header" onchange="toggleSelectAll()"
+                                                   class="w-4 h-4 text-purple-600 focus:ring-purple-500 rounded">
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="products-table-body" class="bg-white divide-y divide-gray-200">
+                                    @foreach($products as $product)
+                                    <tr class="product-row hover:bg-purple-50 transition" 
+                                        data-name="{{ strtolower($product->name) }}" 
+                                        data-price="{{ $product->getEffectivePrice() }}"
+                                        data-category-id="{{ $product->template->category_id ?? '' }}"
+                                        data-template-id="{{ $product->template_id ?? '' }}"
+                                        data-shop-id="{{ $product->shop_id ?? '' }}">
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <input type="checkbox" class="product-checkbox w-4 h-4 text-purple-600 focus:ring-purple-500 rounded" 
+                                                   value="{{ $product->id }}" 
+                                                   data-name="{{ $product->name }}"
+                                                   data-price="{{ number_format($product->getEffectivePrice(), 2) }}"
+                                                   {{ in_array($product->id, old('products', $collection->products->pluck('id')->toArray())) ? 'checked' : '' }}
+                                                   onchange="updateSelectedProducts()">
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="flex items-center">
+                                                <div class="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center text-lg mr-3">
+                                                    📦
+                                                </div>
+                                                <div>
+                                                    <div class="text-sm font-medium text-gray-900">{{ $product->name }}</div>
+                                                    <div class="text-xs text-gray-500">ID: {{ $product->id }}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <div class="text-sm font-semibold text-gray-900">${{ number_format($product->getEffectivePrice(), 2) }}</div>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="text-sm text-gray-500 truncate max-w-xs">
+                                                {{ $product->description ?? 'No description' }}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <div class="text-center py-12 text-gray-500">
+                            <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                            </svg>
+                            <p class="text-lg">No products available. Please create products first.</p>
+                        </div>
+                    @endif
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="border-t border-gray-200 p-6 bg-gray-50 rounded-b-xl">
+                    <div class="flex justify-between items-center">
+                        <p class="text-sm text-gray-600">
+                            Selected: <span id="modal-selected-count" class="font-semibold text-purple-600">0</span> products
+                        </p>
+                        <div class="flex space-x-3">
+                            <button type="button" onclick="closeProductModal()" 
+                                    class="px-6 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition">
+                                Cancel
+                            </button>
+                            <button type="button" onclick="saveSelectedProducts()" 
+                                    class="px-6 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition">
+                                Save Selection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let selectedProducts = new Set(@json(old('products', $collection->products->pluck('id')->toArray())));
+
+            function openProductModal() {
+                document.getElementById('product-modal').classList.remove('hidden');
+                document.getElementById('product-modal').classList.add('flex');
+                updateModalSelectedCount();
+            }
+
+            function closeProductModal() {
+                document.getElementById('product-modal').classList.add('hidden');
+                document.getElementById('product-modal').classList.remove('flex');
+            }
+
+            function filterProducts() {
+                const searchTerm = document.getElementById('product-search').value.toLowerCase();
+                const priceFilter = document.getElementById('price-filter').value;
+                const categoryFilter = document.getElementById('category-filter').value;
+                const templateFilter = document.getElementById('template-filter').value;
+                const shopFilter = document.getElementById('shop-filter').value;
+                const rows = document.querySelectorAll('.product-row');
+                let visibleCount = 0;
+
+                rows.forEach(row => {
+                    const name = row.getAttribute('data-name');
+                    const price = parseFloat(row.getAttribute('data-price'));
+                    const categoryId = row.getAttribute('data-category-id');
+                    const templateId = row.getAttribute('data-template-id');
+                    const shopId = row.getAttribute('data-shop-id');
+                    let visible = true;
+
+                    // Filter by name
+                    if (searchTerm && !name.includes(searchTerm)) {
+                        visible = false;
+                    }
+
+                    // Filter by price
+                    if (priceFilter) {
+                        const [min, max] = priceFilter === '200+' ? [200, Infinity] : priceFilter.split('-').map(Number);
+                        if (price < min || (max !== Infinity && price > max)) {
+                            visible = false;
+                        }
+                    }
+
+                    // Filter by category
+                    if (categoryFilter && categoryId !== categoryFilter) {
+                        visible = false;
+                    }
+
+                    // Filter by template
+                    if (templateFilter && templateId !== templateFilter) {
+                        visible = false;
+                    }
+
+                    // Filter by shop
+                    if (shopFilter && shopId !== shopFilter) {
+                        visible = false;
+                    }
+
+                    row.style.display = visible ? '' : 'none';
+                    if (visible) visibleCount++;
+                });
+
+                document.getElementById('filtered-count').textContent = visibleCount;
+            }
+
+            function toggleSelectAll() {
+                const selectAll = document.getElementById('select-all-products').checked;
+                const headerSelectAll = document.getElementById('select-all-header');
+                headerSelectAll.checked = selectAll;
+                
+                const checkboxes = document.querySelectorAll('.product-checkbox');
+                const visibleRows = Array.from(document.querySelectorAll('.product-row')).filter(row => row.style.display !== 'none');
+                
+                visibleRows.forEach(row => {
+                    const checkbox = row.querySelector('.product-checkbox');
+                    if (checkbox) {
+                        checkbox.checked = selectAll;
+                        if (selectAll) {
+                            selectedProducts.add(parseInt(checkbox.value));
+                        } else {
+                            selectedProducts.delete(parseInt(checkbox.value));
+                        }
+                    }
+                });
+
+                updateModalSelectedCount();
+            }
+
+            function updateSelectedProducts() {
+                const checkboxes = document.querySelectorAll('.product-checkbox');
+                checkboxes.forEach(checkbox => {
+                    if (checkbox.checked) {
+                        selectedProducts.add(parseInt(checkbox.value));
+                    } else {
+                        selectedProducts.delete(parseInt(checkbox.value));
+                    }
+                });
+
+                // Update select all checkbox
+                const visibleCheckboxes = Array.from(document.querySelectorAll('.product-row'))
+                    .filter(row => row.style.display !== 'none')
+                    .map(row => row.querySelector('.product-checkbox'))
+                    .filter(cb => cb);
+                
+                const allChecked = visibleCheckboxes.length > 0 && visibleCheckboxes.every(cb => cb.checked);
+                document.getElementById('select-all-products').checked = allChecked;
+                document.getElementById('select-all-header').checked = allChecked;
+
+                updateModalSelectedCount();
+            }
+
+            function updateModalSelectedCount() {
+                document.getElementById('modal-selected-count').textContent = selectedProducts.size;
+            }
+
+            function saveSelectedProducts() {
+                // Update hidden inputs
+                const container = document.getElementById('selected-products-inputs');
+                container.innerHTML = '';
+                selectedProducts.forEach(productId => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'products[]';
+                    input.value = productId;
+                    container.appendChild(input);
+                });
+
+                // Update checkboxes in modal
+                document.querySelectorAll('.product-checkbox').forEach(checkbox => {
+                    checkbox.checked = selectedProducts.has(parseInt(checkbox.value));
+                });
+
+                // Update display
+                updateSelectedProductsDisplay();
+                closeProductModal();
+            }
+
+            function updateSelectedProductsDisplay() {
+                const display = document.getElementById('selected-products-display');
+                const list = document.getElementById('selected-products-list');
+                const count = document.getElementById('selected-count');
+
+                if (selectedProducts.size === 0) {
+                    count.textContent = 'No products selected';
+                    list.innerHTML = '';
+                    return;
+                }
+
+                count.textContent = `${selectedProducts.size} product${selectedProducts.size > 1 ? 's' : ''} selected`;
+                list.innerHTML = '';
+
+                selectedProducts.forEach(productId => {
+                    const checkbox = document.querySelector(`.product-checkbox[value="${productId}"]`);
+                    if (checkbox) {
+                        const badge = document.createElement('div');
+                        badge.className = 'inline-flex items-center px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm';
+                        badge.innerHTML = `
+                            <span>${checkbox.getAttribute('data-name')} - $${checkbox.getAttribute('data-price')}</span>
+                            <button type="button" onclick="removeProduct(${productId})" class="ml-2 text-purple-600 hover:text-purple-800">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        `;
+                        list.appendChild(badge);
+                    }
+                });
+            }
+
+            function removeProduct(productId) {
+                selectedProducts.delete(productId);
+                document.querySelector(`.product-checkbox[value="${productId}"]`).checked = false;
+                updateSelectedProductsDisplay();
+                updateModalSelectedCount();
+                
+                // Remove from hidden inputs
+                const input = document.querySelector(`input[name="products[]"][value="${productId}"]`);
+                if (input) input.remove();
+            }
+
+            // Initialize on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                updateSelectedProductsDisplay();
+                // Sync checkboxes with selectedProducts
+                document.querySelectorAll('.product-checkbox').forEach(checkbox => {
+                    checkbox.checked = selectedProducts.has(parseInt(checkbox.value));
+                });
+            });
+
+            // Close modal when clicking outside
+            document.getElementById('product-modal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeProductModal();
+                }
+            });
+        </script>
 
         <!-- Advanced Settings -->
         <div class="border-b border-gray-200 pb-6">

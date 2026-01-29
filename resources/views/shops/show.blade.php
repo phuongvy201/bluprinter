@@ -7,6 +7,7 @@
     $currentCurrency = currency();
     $currencySymbol = currency_symbol();
 @endphp
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
 <script>
 // Track Facebook Pixel ViewContent for shop page
 document.addEventListener('DOMContentLoaded', function() {
@@ -18,217 +19,147 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-<!-- Shop Profile Banner -->
-<div class="bg-gradient-to-r from-red-50 to-red-100 border-b border-red-200">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div class="flex flex-col lg:flex-row items-center justify-between">
-            <!-- Left side - Shop Info -->
-            <div class="flex-1 text-center lg:text-left mb-8 lg:mb-0">
-                <div class="flex items-center justify-center lg:justify-start mb-4">
-                     <img src="{{ asset('images/logo nhỏ.png') }}" alt="Bluprinter" class="h-12 w-auto mr-4">
-                    <div>
-                        <h1 class="text-3xl lg:text-4xl font-bold text-gray-900">Bluprinter</h1>
-                        <p class="text-lg font-medium" style="color: #065264;">Print Your Imagination</p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Right side - Decorative Elements -->
-            <div class="flex-1 flex justify-center lg:justify-end">
-                <div class="relative">
-                    <!-- Shopping bags -->
-                    <div class="flex space-x-4">
-                        <div class="w-16 h-20 rounded-lg transform rotate-12 shadow-lg" style="background-color: #D8140B;"></div>
-                        <div class="w-16 h-20 rounded-lg transform -rotate-12 shadow-lg" style="background-color: #065264;"></div>
-                        <div class="w-16 h-20 bg-red-400 rounded-lg transform rotate-6 shadow-lg"></div>
-                    </div>
-                    
-                    <!-- Bee and flowers -->
-                    <div class="absolute -top-4 -right-4 w-8 h-8 bg-yellow-300 rounded-full flex items-center justify-center">
-                        <span class="text-yellow-800 text-sm">🐝</span>
-                    </div>
-                    <div class="absolute top-8 -left-2 w-6 h-6 bg-pink-300 rounded-full"></div>
-                    <div class="absolute bottom-2 -right-2 w-4 h-4 bg-purple-300 rounded-full"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Shop Profile Information -->
-<div class="bg-white py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="text-center">
-            <!-- Shop Avatar -->
-            <div class="relative inline-block mb-6">
-                <div class="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden mx-auto">
-                    @if($shop->shop_logo)
-                        <img src="{{ $shop->shop_logo }}" alt="{{ $shop->shop_name }}" class="w-full h-full object-cover">
-                    @else
-                        <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                        </svg>
+<main class="pb-20">
+    <!-- Shop Cover Banner -->
+    <div class="relative w-full h-[300px] overflow-hidden">
+        @if($shop->shop_banner)
+            <img alt="Shop Cover Banner" class="w-full h-full object-cover" src="{{ $shop->shop_banner }}">
+        @else
+            <div class="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200"></div>
+        @endif
+        <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+    </div>
+
+    <!-- Shop Profile Card -->
+    <div class="max-w-7xl mx-auto px-4 -mt-16 relative z-10">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 md:p-8">
+            <div class="flex flex-col md:flex-row items-center md:items-end gap-6">
+                <!-- Shop Avatar -->
+                <div class="relative">
+                    <div class="w-32 h-32 rounded-full border-4 border-white dark:border-slate-800 overflow-hidden shadow-lg bg-white">
+                        @if($shop->shop_logo)
+                            <img alt="{{ $shop->shop_name }} Profile" class="w-full h-full object-cover" src="{{ $shop->shop_logo }}">
+                        @else
+                            <div class="w-full h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                                <span class="text-4xl font-bold text-slate-400">{{ substr($shop->shop_name, 0, 1) }}</span>
+                            </div>
+                        @endif
+                    </div>
+                    @if($shop->verified)
+                        <div class="absolute -bottom-1 -right-1 w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center border-2 border-white">
+                            <span class="material-icons-outlined text-white text-sm">check</span>
+                        </div>
                     @endif
                 </div>
-                @if($shop->verified)
-                    <div class="absolute -bottom-1 -right-1 w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                        </svg>
+
+                <!-- Shop Info -->
+                <div class="flex-1 text-center md:text-left">
+                    <h2 class="text-3xl font-bold mb-2">{{ $shop->shop_name }}</h2>
+                    <div class="flex items-center justify-center md:justify-start gap-4 text-slate-500 dark:text-slate-400">
+                        <span class="flex items-center gap-1.5 text-sm">
+                            <span class="material-icons-outlined text-sm">people</span> 
+                            <span data-followers>{{ number_format($stats['followers']) }}</span> Followers
+                        </span>
+                        <span class="flex items-center gap-1.5 text-sm">
+                            <span class="material-icons-outlined text-sm">favorite</span> 
+                            {{ number_format($stats['favorited']) }} Favorited
+                        </span>
                     </div>
-                @endif
-            </div>
-            
-            <!-- Shop Name -->
-            <h2 class="text-3xl font-bold text-gray-900 mb-4">{{ $shop->shop_name }}</h2>
-            
-            <!-- Shop Stats -->
-            <div class="flex items-center justify-center space-x-8 mb-6">
-                <div class="flex items-center space-x-2">
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
-                    </svg>
-                    <span class="text-lg font-semibold text-gray-900">{{ number_format($stats['followers']) }} Followers</span>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                    </svg>
-                    <span class="text-lg font-semibold text-gray-900">{{ number_format($stats['favorited']) }} Favorited</span>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <button id="followBtn" 
+                            onclick="toggleFollow()"
+                            class="flex-1 md:flex-none bg-primary hover:bg-rose-700 text-white font-semibold py-3 px-8 rounded-full flex items-center justify-center gap-2 transition-all {{ $isFollowing ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : '' }}"
+                            style="{{ !$isFollowing ? 'background-color: #e11d48;' : '' }}">
+                        <span class="material-icons-outlined text-sm">favorite</span>
+                        <span id="followText">{{ $isFollowing ? 'Unfollow' : 'Follow' }}</span>
+                    </button>
+                    <button onclick="openContactModal()"
+                            class="flex-1 md:flex-none border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold py-3 px-8 rounded-full flex items-center justify-center gap-2 transition-all">
+                        <span class="material-icons-outlined text-sm">mail</span>
+                        <span>Contact</span>
+                    </button>
                 </div>
             </div>
-            
-             <!-- Action Buttons -->
-             <div class="flex items-center justify-center space-x-4 mb-8">
-                 <button id="followBtn" 
-                         onclick="toggleFollow()"
-                         class="flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200 {{ $isFollowing ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'text-white hover:opacity-90' }}"
-                         style="{{ !$isFollowing ? 'background-color: #D8140B;' : '' }}">
-                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                     </svg>
-                     <span id="followText">{{ $isFollowing ? 'Unfollow' : 'Follow' }}</span>
-                 </button>
-                 
-                 <button onclick="openContactModal()"
-                         class="flex items-center space-x-2 px-6 py-3 bg-white border-2 rounded-lg font-semibold hover:bg-gray-50 transition-all duration-200"
-                         style="border-color: #D8140B; color: #D8140B;">
-                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                     </svg>
-                     <span>Contact</span>
-                 </button>
-             </div>
-             
         </div>
     </div>
-</div>
 
-<!-- Shop All Items / Product Categories -->
-<div id="productsContent" class="bg-gray-50 py-12">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h3 class="text-2xl font-bold text-gray-900 mb-8">Shop all items</h3>
-        
-        <!-- Product Categories Carousel -->
+    <!-- Shop Categories Section -->
+    <section class="max-w-7xl mx-auto px-4 mt-12">
         @if($categories->count() > 0)
-        <div class="relative mb-12">
-            <!-- Navigation arrows -->
-            <button onclick="scrollCategories('left')" class="absolute left-0 top-1/2 transform -translate-y-1/2 z-10 w-10 h-10 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 nav-arrow">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                </svg>
-            </button>
-            
-            <button onclick="scrollCategories('right')" class="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 w-10 h-10 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 nav-arrow">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-            </button>
-            
-            <div class="group">
-                <div id="categoriesContainer" class="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth">
-                    @foreach($categories as $category)
-                    <div class="flex-shrink-0 text-center group cursor-pointer" onclick="filterByCategory('{{ $category->id }}')">
-                        <!-- Category Card -->
-                        <div class="relative w-32 h-32 bg-white rounded-2xl shadow-lg overflow-hidden category-card">
-                            <!-- Gradient overlay -->
-                            <div class="absolute inset-0 gradient-overlay opacity-0 group-hover:opacity-100"></div>
-                            
-                            <!-- Category Image Container -->
-                            <div class="relative w-full h-full flex items-center justify-center p-4">
-                                @php
-                                    $firstProduct = null;
-                                    if ($category->templates->isNotEmpty()) {
-                                        foreach ($category->templates as $template) {
-                                            if ($template->products->isNotEmpty()) {
-                                                $firstProduct = $template->products->first();
-                                                break;
-                                            }
-                                        }
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-bold flex items-center gap-2">
+                <span class="w-1.5 h-6 bg-primary rounded-full"></span>
+                Shop Categories
+            </h3>
+        </div>
+        <div class="flex gap-4 overflow-x-auto pb-4 hide-scrollbar">
+            @foreach($categories as $category)
+            <div class="flex-shrink-0 group cursor-pointer" onclick="filterByCategory('{{ $category->id }}')">
+                <div class="w-48 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 transition-all hover:shadow-md">
+                    <div class="relative h-32 w-full bg-slate-50 dark:bg-slate-900 rounded-xl overflow-hidden mb-3">
+                        @php
+                            $firstProduct = null;
+                            if ($category->templates->isNotEmpty()) {
+                                foreach ($category->templates as $template) {
+                                    if ($template->products->isNotEmpty()) {
+                                        $firstProduct = $template->products->first();
+                                        break;
                                     }
-                                @endphp
-                                
-                                @if($firstProduct && count($firstProduct->getEffectiveMedia()) > 0)
-                                     @php
-                                         $media = $firstProduct->getEffectiveMedia();
-                                         $imageUrl = is_array($media) && isset($media[0]) ? $media[0] : (is_string($media) ? $media : '');
-                                     @endphp
-                                     @if($imageUrl)
-                                     <img src="{{ $imageUrl }}" 
-                                          alt="{{ $category->name }}" 
-                                          class="w-16 h-16 object-cover rounded-xl shadow-md">
-                                     @else
-                                     <div class="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center">
-                                         <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                         </svg>
-                                     </div>
-                                     @endif
-                                 @else
-                                     <div class="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center">
-                                         <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                         </svg>
-                                     </div>
-                                 @endif
-                                 
-                                 <!-- Product count badge -->
-                                 <div class="absolute top-2 right-2 bg-white rounded-full px-2 py-1 shadow-sm">
-                                     <span class="text-xs font-semibold" style="color: #D8140B;">{{ $category->templates->count() }}</span>
-                                 </div>
+                                }
+                            }
+                            $imageUrl = null;
+                            if ($firstProduct && count($firstProduct->getEffectiveMedia()) > 0) {
+                                $media = $firstProduct->getEffectiveMedia();
+                                $imageUrl = is_array($media) && isset($media[0]) ? $media[0] : (is_string($media) ? $media : '');
+                            }
+                        @endphp
+                        @if($imageUrl)
+                            <img alt="{{ $category->name }}" class="w-full h-full object-contain p-4 group-hover:scale-110 transition-transform" src="{{ $imageUrl }}">
+                        @else
+                            <div class="w-full h-full flex items-center justify-center">
+                                <span class="material-icons-outlined text-slate-400 text-4xl">category</span>
                             </div>
-                            
-                            <!-- Hover effect overlay -->
-                            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-300 rounded-2xl"></div>
-                        </div>
-                        
-                        <!-- Category Name -->
-                        <div class="mt-3 px-2">
-                            <span class="text-sm font-semibold text-gray-700 group-hover:text-red-600 transition-colors duration-200 block category-name">
-                                {{ $category->name }}
-                            </span>
-                            <span class="text-xs text-gray-500 group-hover:text-gray-600 transition-colors duration-200">
-                                {{ $category->templates->count() }} items
-                            </span>
-                        </div>
+                        @endif
+                        <span class="absolute top-2 right-2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            {{ $category->templates->count() }}
+                        </span>
                     </div>
-                    @endforeach
+                    <p class="font-semibold text-center group-hover:text-primary transition-colors">{{ $category->name }}</p>
+                    <p class="text-xs text-slate-500 text-center">{{ $category->templates->count() }} Items</p>
                 </div>
             </div>
+            @endforeach
         </div>
         @endif
         
-        <!-- All Products Grid -->
-        @if($allProducts->count() > 0)
-        <div class="flex items-center mb-8">
-            <div class="w-1 h-8 mr-4" style="background-color: #D8140B;"></div>
-            <h4 class="text-xl font-bold text-gray-900">All Products</h4>
+    </section>
+
+    <!-- All Products Section -->
+    <section class="max-w-7xl mx-auto px-4 mt-12">
+        <div class="flex items-center justify-between mb-8">
+            <h3 class="text-xl font-bold flex items-center gap-2">
+                <span class="w-1.5 h-6 bg-primary rounded-full"></span>
+                All Products
+            </h3>
+            <div class="flex gap-2">
+                <select class="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-full px-4 py-2 text-sm focus:ring-primary focus:border-primary">
+                    <option>Newest first</option>
+                    <option>Price: Low to High</option>
+                    <option>Price: High to Low</option>
+                    <option>Popular</option>
+                </select>
+            </div>
         </div>
-        <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
+        @if($allProducts->count() > 0)
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             @foreach($allProducts as $product)
-            <div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 group overflow-hidden">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group">
                 <!-- Product Image -->
-                <div class="relative aspect-square overflow-hidden">
+                <div class="relative aspect-square bg-slate-50 dark:bg-slate-900 p-6">
                     @php
                         $media = $product->getEffectiveMedia();
                         $imageUrl = null;
@@ -241,217 +172,115 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     @endphp
                     @if($imageUrl)
-                        <img src="{{ $imageUrl }}" 
-                             alt="{{ $product->name }}" 
-                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                        <img alt="{{ $product->name }}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" src="{{ $imageUrl }}">
                     @else
-                        <div class="w-full h-full bg-gray-200 flex items-center justify-center">
-                            <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
+                        <div class="w-full h-full flex items-center justify-center">
+                            <span class="material-icons-outlined text-slate-400 text-6xl">image</span>
                         </div>
                     @endif
-                    
-                    <!-- Wishlist Button -->
-                    <button class="absolute top-2 left-2 sm:top-3 sm:left-3 p-1.5 sm:p-2 bg-white rounded-full shadow-md hover:shadow-lg transition-all duration-200 opacity-0 group-hover:opacity-100">
-                        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                        </svg>
+                    <button class="absolute top-3 right-3 w-8 h-8 bg-white/80 dark:bg-slate-700/80 backdrop-blur rounded-full flex items-center justify-center text-slate-400 hover:text-primary transition-colors">
+                        <span class="material-icons-outlined text-sm">favorite_border</span>
                     </button>
-
-                    <!-- Discount Badge -->
-                    @if($product->template && $product->template->base_price > $product->price)
-                        @php
-                            $discount = round((($product->template->base_price - $product->price) / $product->template->base_price) * 100);
-                        @endphp
-                        <div class="absolute top-2 right-2 sm:top-3 sm:right-3 text-white px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold" style="background-color: #D8140B;">
-                            {{ $discount }}% off
-                        </div>
-                    @endif
                 </div>
-
                 <!-- Product Info -->
-                <div class="p-2 sm:p-4">
-                    <h3 class="font-semibold text-gray-900 mb-1 sm:mb-2 line-clamp-2 transition-colors text-sm sm:text-base" style="group-hover:color: #005366;">
-                        <a href="{{ route('products.show', $product->slug) }}">
+                <div class="p-4">
+                    <h4 class="font-medium text-slate-800 dark:text-slate-200 truncate mb-2">
+                        <a href="{{ route('products.show', $product->slug) }}" class="hover:text-primary transition-colors">
                             {{ Str::limit($product->name, 50) }}
                         </a>
-                    </h3>
-                    
-                    <p class="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2 line-clamp-1">By {{ $product->shop->name ?? 'Unknown Shop' }}</p>
-                    
+                    </h4>
                     <div class="flex items-center justify-between">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
-                            @if($product->template && $product->template->base_price > $product->price)
-                                <span class="text-xs sm:text-sm text-gray-500 line-through">{{ format_price_usd((float) $product->template->base_price) }}</span>
-                                <span class="text-base sm:text-lg font-bold" style="color: #D8140B;">{{ format_price_usd((float) $product->price) }}</span>
+                        <p class="text-lg font-bold text-primary">
+                            {{ format_price_usd((float) $product->base_price) }}
+                        </p>
+                        <span class="text-[10px] text-slate-400 font-semibold uppercase">
+                            @if($product->template)
+                                {{ $product->template->name ?? 'Premium' }}
                             @else
-                                <span class="text-base sm:text-lg font-bold" style="color: #D8140B;">{{ format_price_usd((float) $product->base_price) }}</span>
+                                Premium
                             @endif
-                        </div>
+                        </span>
                     </div>
-
-                    <!-- Sale End Date -->
-                    @if($product->template && $product->template->base_price > $product->price)
-                        <div class="mt-1 sm:mt-2 text-[10px] sm:text-xs font-medium" style="color: #D8140B;">
-                            Sale ends at {{ now()->addDays(7)->format('F d') }}
-                        </div>
-                    @endif
                 </div>
             </div>
             @endforeach
         </div>
         
         <!-- Pagination -->
-        <div class="mt-8">
+        <div class="mt-12 text-center">
             {{ $allProducts->links() }}
         </div>
         @else
         <div class="text-center py-12">
-            <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-            </svg>
-            <p class="text-gray-500 text-lg">This shop has no products yet</p>
+            <span class="material-icons-outlined text-slate-300 text-6xl mb-4 block">inventory_2</span>
+            <p class="text-slate-500 text-lg">This shop has no products yet</p>
         </div>
         @endif
-    </div>
-</div>
+    </section>
+</main>
 
 <!-- Contact Modal -->
-<div id="contactModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
-    <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-white rounded-lg max-w-md w-full p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-900">Contact Shop</h3>
-                <button onclick="closeContactModal()" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
+<div id="contactModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-100">Contact Shop</h3>
+            <button onclick="closeContactModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300">
+                <span class="material-icons-outlined">close</span>
+            </button>
+        </div>
+        
+        <form id="contactForm">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Subject</label>
+                <input type="text" id="subject" name="subject" required 
+                       class="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
             </div>
             
-            <form id="contactForm">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Subject</label>
-                    <input type="text" id="subject" name="subject" required 
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500">
-                </div>
-                
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Message</label>
-                    <textarea id="message" name="message" rows="4" required 
-                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"></textarea>
-                </div>
-                
-                <div class="flex space-x-3">
-                    <button type="button" onclick="closeContactModal()" 
-                            class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50">
-                        Cancel
-                    </button>
-                     <button type="submit" 
-                             class="flex-1 px-4 py-2 text-white rounded-md hover:opacity-90"
-                             style="background-color: #D8140B;">
-                         Send Message
-                     </button>
-                </div>
-            </form>
-        </div>
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Message</label>
+                <textarea id="message" name="message" rows="4" required 
+                          class="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"></textarea>
+            </div>
+            
+            <div class="flex space-x-3">
+                <button type="button" onclick="closeContactModal()" 
+                        class="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        class="flex-1 px-4 py-2 bg-primary hover:bg-rose-700 text-white rounded-lg transition-colors">
+                    Send Message
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
 <style>
-.scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-.scrollbar-hide::-webkit-scrollbar {
-    display: none;
-}
-
-.line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-/* Category card animations */
-@keyframes pulse-glow {
-    0%, 100% {
-        box-shadow: 0 0 0 0 rgba(216, 20, 11, 0.4);
-    }
-    50% {
-        box-shadow: 0 0 0 10px rgba(216, 20, 11, 0);
-    }
-}
-
-.category-card {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.category-card:hover {
-    transform: translateY(-2px) scale(1.02);
-    animation: pulse-glow 2s infinite;
-}
-
-/* Smooth gradient transitions */
-.gradient-overlay {
-    background: linear-gradient(135deg, rgba(216, 20, 11, 0.1) 0%, rgba(6, 82, 100, 0.1) 100%);
-    transition: opacity 0.3s ease;
-}
-
-/* Custom scrollbar for categories */
-#categoriesContainer::-webkit-scrollbar {
-    height: 4px;
-}
-
-#categoriesContainer::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 10px;
-}
-
-#categoriesContainer::-webkit-scrollbar-thumb {
-    background: #D8140B;
-    border-radius: 10px;
-}
-
-#categoriesContainer::-webkit-scrollbar-thumb:hover {
-    background: #b0110a;
-}
-
-/* Navigation arrows styling */
-.nav-arrow {
-    backdrop-filter: blur(10px);
-    background: rgba(216, 20, 11, 0.9);
-    transition: all 0.3s ease;
-}
-
-.nav-arrow:hover {
-    background: rgba(216, 20, 11, 1);
-    transform: scale(1.1);
-}
-
-/* Category name styling */
-.category-name {
-    background: linear-gradient(135deg, #D8140B, #065264);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-weight: 600;
-}
-
-/* Responsive improvements */
-@media (max-width: 640px) {
-    .category-card {
-        width: 120px;
-        height: 120px;
+    :root {
+        --primary: #e11d48;
     }
     
-    .nav-arrow {
-        width: 8px;
-        height: 8px;
+    .bg-primary {
+        background-color: var(--primary);
     }
-}
+    
+    .text-primary {
+        color: var(--primary);
+    }
+    
+    .border-primary {
+        border-color: var(--primary);
+    }
+    
+    .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .hide-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
 </style>
 
 <script>
@@ -468,21 +297,36 @@ function toggleFollow() {
     
     const action = isCurrentlyFollowing ? 'unfollow' : 'follow';
     
-    fetch('{{ route("shops.follow", $shop) }}', {
+    // Use route helper with shop_slug (Shop model uses shop_slug for route binding)
+    const followUrl = '{{ route("shops.follow", $shop->shop_slug ?? $shop->id) }}';
+    
+    fetch(followUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            'Accept': 'application/json'
         },
         body: JSON.stringify({ action: action })
     })
-    .then(response => response.json())
+    .then(response => {
+        // Check if response is ok
+        if (!response.ok) {
+            // If not ok, try to parse error response
+            return response.json().then(err => {
+                throw new Error(err.message || 'Request failed');
+            }).catch(() => {
+                throw new Error(`Server error: ${response.status}`);
+            });
+        }
+        return response.json();
+    })
     .then(data => {
          if (data.success) {
              if (action === 'follow') {
                  followBtn.classList.remove('bg-gray-200', 'text-gray-700');
                  followBtn.classList.add('text-white');
-                 followBtn.style.backgroundColor = '#D8140B';
+                 followBtn.style.backgroundColor = '#e11d48';
                  followText.textContent = 'Unfollow';
              } else {
                  followBtn.classList.remove('text-white');
@@ -498,14 +342,27 @@ function toggleFollow() {
             }
             
             // Show success message
-            showNotification(data.message, 'success');
+            if (typeof showNotification === 'function') {
+                showNotification(data.message, 'success');
+            } else {
+                alert(data.message);
+            }
         } else {
-            showNotification(data.message, 'error');
+            if (typeof showNotification === 'function') {
+                showNotification(data.message, 'error');
+            } else {
+                alert(data.message);
+            }
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        showNotification('An error occurred. Please try again.', 'error');
+        console.error('Follow shop error:', error);
+        const errorMessage = error.message || 'An error occurred. Please try again.';
+        if (typeof showNotification === 'function') {
+            showNotification(errorMessage, 'error');
+        } else {
+            alert(errorMessage);
+        }
     });
 }
 
@@ -574,7 +431,7 @@ function filterByCategory(categoryId) {
     }
     
     // Show loading spinner
-    showNotification('Đang tải sản phẩm...', 'info');
+    showNotification('Loading products...', 'info');
     
     // Here you can add AJAX call to filter products by category
     // For now, we'll just scroll to products section

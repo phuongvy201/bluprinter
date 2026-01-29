@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 
 class CategoryController extends Controller
 {
-    public function show($slug)
+    public function show($slug, Request $request)
     {
         $category = Category::where('slug', $slug)
             ->whereNull('parent_id')
@@ -17,13 +17,46 @@ class CategoryController extends Controller
             }])
             ->firstOrFail();
 
-        // Get products in this category (chỉ lấy đủ điều kiện hiển thị)
-        $products = Product::whereHas('template', function ($query) use ($category) {
-            $query->where('category_id', $category->id);
+        // Get subcategory IDs
+        $subcategoryIds = Category::where('parent_id', $category->id)->pluck('id')->toArray();
+
+        // Combine category ID with subcategory IDs
+        $allCategoryIds = array_merge([$category->id], $subcategoryIds);
+
+        // Get products in this category AND its subcategories (chỉ lấy đủ điều kiện hiển thị)
+        $productsQuery = Product::whereHas('template', function ($query) use ($allCategoryIds) {
+            $query->whereIn('category_id', $allCategoryIds);
         })
             ->availableForDisplay()
-            ->with(['template', 'shop'])
-            ->paginate(12);
+            ->with(['template', 'shop']);
+
+        // Handle search
+        if ($request->has('search') && $request->search) {
+            $searchTerm = $request->search;
+            $productsQuery->where('name', 'like', '%' . $searchTerm . '%');
+        }
+
+        // Handle sort
+        $sort = $request->get('sort', 'default');
+        switch ($sort) {
+            case 'price_asc':
+                $productsQuery->orderBy('price', 'asc');
+                break;
+            case 'price_desc':
+                $productsQuery->orderBy('price', 'desc');
+                break;
+            case 'name':
+                $productsQuery->orderBy('name', 'asc');
+                break;
+            case 'newest':
+                $productsQuery->orderBy('created_at', 'desc');
+                break;
+            default:
+                $productsQuery->orderBy('created_at', 'desc');
+                break;
+        }
+
+        $products = $productsQuery->paginate(12)->withQueryString();
 
         // Get subcategories
         $subcategories = Category::where('parent_id', $category->id)
@@ -42,9 +75,9 @@ class CategoryController extends Controller
             ->limit(6)
             ->get();
 
-        // Get featured products from this category (chỉ lấy đủ điều kiện hiển thị)
-        $featuredProducts = Product::whereHas('template', function ($query) use ($category) {
-            $query->where('category_id', $category->id);
+        // Get featured products from this category AND its subcategories (chỉ lấy đủ điều kiện hiển thị)
+        $featuredProducts = Product::whereHas('template', function ($query) use ($allCategoryIds) {
+            $query->whereIn('category_id', $allCategoryIds);
         })
             ->availableForDisplay()
             ->with(['template', 'shop'])

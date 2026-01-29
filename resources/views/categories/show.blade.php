@@ -374,11 +374,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     @foreach($relatedCategories as $related)
                         <a href="{{ route('category.show', $related->slug) }}" class="group bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 scroll-reveal">
                             <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
-                                <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#005366] to-[#003d4d]">
-                                    <svg class="w-16 h-16 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                                    </svg>
-                                </div>
+                                @if($related->image)
+                                    <img src="{{ $related->image }}" 
+                                         alt="{{ $related->name }}"
+                                         class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
+                                @else
+                                    <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#005366] to-[#003d4d]">
+                                        <svg class="w-16 h-16 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                                        </svg>
+                                    </div>
+                                @endif
                                 <div class="absolute bottom-2 left-2">
                                     <span class="inline-block px-3 py-1 bg-white/90 backdrop-blur text-gray-900 text-sm font-semibold rounded-full">
                                         {{ $related->products_count }} products

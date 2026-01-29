@@ -549,11 +549,17 @@
                                 @endphp
                                 @foreach($productCategories as $index => $category)
                                     <a href="{{ route('category.show', $category->slug) }}" class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition group/item">
-                                        <div class="w-8 h-8 bg-gradient-to-br {{ $categoryColors[$index % 2] }} rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                                        </svg>
-                                    </div>
+                                        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden {{ $category->image ? '' : 'bg-gradient-to-br ' . $categoryColors[$index % 2] }}">
+                                            @if($category->image)
+                                                <img src="{{ $category->image }}" 
+                                                     alt="{{ $category->name }}"
+                                                     class="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-300">
+                                            @else
+                                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                                                </svg>
+                                            @endif
+                                        </div>
                                         <span class="text-sm text-gray-700 group-hover/item:text-[#005366] font-medium">{{ $category->name }}</span>
                                     </a>
                                 @endforeach
@@ -585,16 +591,34 @@
                         </a>
                         
                         <!-- Collections Dropdown -->
-                        <div class="absolute left-0 mt-2 w-96 bg-white rounded-xl shadow-xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                            <div class="p-4">
+                        <div class="absolute left-0 mt-2 w-96 bg-white rounded-xl shadow-xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 max-h-[70vh] flex flex-col">
+                            <style>
+                                .collections-scroll::-webkit-scrollbar {
+                                    width: 6px;
+                                }
+                                .collections-scroll::-webkit-scrollbar-track {
+                                    background: #f7fafc;
+                                    border-radius: 10px;
+                                }
+                                .collections-scroll::-webkit-scrollbar-thumb {
+                                    background: #cbd5e0;
+                                    border-radius: 10px;
+                                }
+                                .collections-scroll::-webkit-scrollbar-thumb:hover {
+                                    background: #a0aec0;
+                                }
+                            </style>
+                            <div class="p-4 flex-shrink-0">
                                 <h3 class="text-sm font-semibold text-gray-900 mb-3">Latest Collections</h3>
+                            </div>
+                            <div class="flex-1 overflow-y-auto px-4 pb-2 collections-scroll" style="scrollbar-width: thin; scrollbar-color: #cbd5e0 #f7fafc;">
                                 <div class="grid grid-cols-2 gap-3">
                                     @php
                                         $latestCollections = \App\Models\Collection::with('shop')
                                             ->active()
                                             ->approved()
                                             ->latest()
-                                            ->limit(6)
+                                            ->limit(20)
                                             ->get();
                                     @endphp
                                     @foreach($latestCollections as $collection)
@@ -623,14 +647,14 @@
                                         </a>
                                     @endforeach
                                 </div>
-                                <div class="border-t border-gray-100 mt-3 pt-3">
-                                    <a href="{{ route('collections.index') }}" class="flex items-center justify-center text-sm text-[#005366] hover:text-[#003d4d] font-semibold py-2 rounded-lg hover:bg-gray-50 transition">
-                                        View All Collections
-                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                                        </svg>
-                                    </a>
-                                </div>
+                            </div>
+                            <div class="border-t border-gray-100 p-4 flex-shrink-0">
+                                <a href="{{ route('collections.index') }}" class="flex items-center justify-center text-sm text-[#005366] hover:text-[#003d4d] font-semibold py-2 rounded-lg hover:bg-gray-50 transition">
+                                    View All Collections
+                                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                                    </svg>
+                                </a>
                             </div>
                         </div>
                     </div>

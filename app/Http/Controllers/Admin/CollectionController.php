@@ -57,9 +57,9 @@ class CollectionController extends Controller
 
         // Get products for selection
         if ($user->hasRole('admin')) {
-            $products = Product::with('template')->orderBy('name')->get();
+            $products = Product::with(['template.category', 'shop'])->orderBy('name')->get();
         } else {
-            $products = Product::with('template')->where('user_id', $user->id)->orderBy('name')->get();
+            $products = Product::with(['template.category', 'shop'])->where('user_id', $user->id)->orderBy('name')->get();
         }
 
         return view('admin.collections.create', compact('products'));
@@ -152,9 +152,9 @@ class CollectionController extends Controller
 
         // Get products for selection
         if ($user->hasRole('admin')) {
-            $products = Product::with('template')->orderBy('name')->get();
+            $products = Product::with(['template.category', 'shop'])->orderBy('name')->get();
         } else {
-            $products = Product::with('template')->where('user_id', $user->id)->orderBy('name')->get();
+            $products = Product::with(['template.category', 'shop'])->where('user_id', $user->id)->orderBy('name')->get();
         }
 
         $collection->load('products');
