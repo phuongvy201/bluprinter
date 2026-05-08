@@ -314,6 +314,32 @@ class CheckoutController extends Controller
 
     public function process(Request $request)
     {
+        $isAjaxRequest = $request->wantsJson() || $request->ajax() || $request->expectsJson();
+
+        $honeypotValue = trim((string) $request->input('website_url', ''));
+        $checkoutStartedAt = (int) $request->input('checkout_started_at', 0);
+        $secondsToSubmit = $checkoutStartedAt > 0 ? (now()->timestamp - $checkoutStartedAt) : null;
+
+        if ($honeypotValue !== '' || ($checkoutStartedAt > 0 && $secondsToSubmit !== null && $secondsToSubmit < 3)) {
+            Log::warning('🚫 Checkout blocked by anti-bot guard', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'honeypot_filled' => $honeypotValue !== '',
+                'seconds_to_submit' => $secondsToSubmit,
+                'payment_method' => $request->input('payment_method'),
+            ]);
+
+            if ($isAjaxRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unable to process checkout request.',
+                    'error' => 'bot_guard_blocked'
+                ], 422);
+            }
+
+            return redirect()->back()->with('error', 'Unable to process checkout request.');
+        }
+
         Log::info('🔍 CHECKOUT PROCESS STARTED', [
             'method' => $request->method(),
             'url' => $request->url(),
@@ -364,9 +390,6 @@ class CheckoutController extends Controller
         if ($request->has('payment_intent_id')) {
             $validationRules['payment_intent_id'] = 'required|string|max:255';
         }
-
-        // Check if this is an AJAX/JSON request
-        $isAjaxRequest = $request->wantsJson() || $request->ajax() || $request->expectsJson();
 
         try {
             $request->validate($validationRules);

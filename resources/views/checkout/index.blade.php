@@ -685,6 +685,8 @@ function buildCheckoutCustomizationInputs(customizations) {
                         <input type="hidden" id="currency" name="currency" value="{{ $currency ?? 'USD' }}">
                         <input type="hidden" id="shipping_cost" name="shipping_cost" value="0">
                         <input type="hidden" id="shipping_zone_id" name="shipping_zone_id" value="">
+                        <input type="text" name="website_url" id="website_url" autocomplete="off" tabindex="-1" class="hidden" aria-hidden="true">
+                        <input type="hidden" name="checkout_started_at" id="checkout_started_at" value="{{ now()->timestamp }}">
                         
                         <!-- Contact Information -->
                         <div class="space-y-5">
@@ -1615,6 +1617,11 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('❌ Checkout form not found!');
         return;
     }
+
+    const checkoutStartedAtInput = form.querySelector('[name="checkout_started_at"]');
+    if (checkoutStartedAtInput && !checkoutStartedAtInput.value) {
+        checkoutStartedAtInput.value = Math.floor(Date.now() / 1000).toString();
+    }
     
     console.log('✅ Checkout form found and ready');
     
@@ -1633,6 +1640,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     
     // Loading state function
+    const getBotGuardPayload = (checkoutForm) => ({
+        website_url: checkoutForm.querySelector('[name="website_url"]')?.value || '',
+        checkout_started_at: checkoutForm.querySelector('[name="checkout_started_at"]')?.value || ''
+    });
+
     const showLoading = (loading) => {
         if (loading) {
             submitBtn.disabled = true;
@@ -2034,6 +2046,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 postal_code: checkoutForm.querySelector('[name="postal_code"]')?.value?.trim() || '',
                 country: checkoutForm.querySelector('[name="country"]')?.value?.trim() || '',
                 notes: checkoutForm.querySelector('[name="notes"]')?.value?.trim() || '',
+                ...getBotGuardPayload(checkoutForm),
             };
             
             // Render PayPal buttons
@@ -2163,6 +2176,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             tip_amount: parseFloat(document.getElementById('tip_amount')?.value || 0),
                             shipping_cost: parseFloat(document.getElementById('shipping_cost')?.value || 0),
                             shipping_zone_id: document.getElementById('shipping_zone_id')?.value || '',
+                            ...getBotGuardPayload(checkoutForm),
                         };
                         
                         console.log('📋 Sending order data:', currentOrderData);
@@ -2708,7 +2722,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 tip_amount: parseFloat(document.getElementById('tip_amount')?.value || 0),
                 shipping_cost: parseFloat(document.getElementById('shipping_cost')?.value || 0),
                 shipping_zone_id: document.getElementById('shipping_zone_id')?.value || '',
-                payment_method: 'stripe'
+                payment_method: 'stripe',
+                ...getBotGuardPayload(checkoutForm),
             };
             
             // Use unified order processing
@@ -2842,6 +2857,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 tip_amount: parseFloat(document.getElementById('tip_amount')?.value || 0),
                 shipping_cost: parseFloat(document.getElementById('shipping_cost')?.value || 0),
                 shipping_zone_id: document.getElementById('shipping_zone_id')?.value || '',
+                ...getBotGuardPayload(checkoutForm),
             };
             
             // Validate order data

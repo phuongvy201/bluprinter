@@ -29,6 +29,8 @@
 
       <form action="{{ route('support.ticket.store') }}" method="POST" enctype="multipart/form-data" class="space-y-5">
         @csrf
+        <input type="text" name="website_url" autocomplete="off" tabindex="-1" class="hidden" aria-hidden="true">
+        <input type="hidden" name="form_started_at" value="{{ now()->timestamp }}">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Your Name</label>

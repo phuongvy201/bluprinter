@@ -190,7 +190,7 @@
                     </div>
                     <div class="ml-4">
                         <p class="text-sm text-gray-600">Revenue</p>
-                        <p class="text-2xl font-bold text-gray-900">${{ number_format($stats['total_revenue'], 2) }}</p>
+                        <p class="text-2xl font-bold text-gray-900">${{ number_format((float) $stats['total_revenue'], 2) }}</p>
                     </div>
                 </div>
             </div>
@@ -357,7 +357,7 @@
                                                 </div>
                                                 <div>
                                                     <p class="text-sm text-gray-500">Total Amount</p>
-                                                    <p class="text-lg font-bold text-gray-900">${{ number_format($order->total_amount, 2) }}</p>
+                                                    <p class="text-lg font-bold text-gray-900">${{ number_format((float) $order->total_amount, 2) }}</p>
                                                 </div>
                                             </div>
                                             
@@ -422,7 +422,7 @@
                                                             @endif
                                                             <div class="flex-1">
                                                                 <p class="font-medium text-gray-900">{{ $item->product->name ?? 'Product not found' }}</p>
-                                                                <p class="text-sm text-gray-500">Qty: {{ $item->quantity }} × ${{ number_format($item->price, 2) }}</p>
+                                                                <p class="text-sm text-gray-500">Qty: {{ $item->quantity }} × ${{ number_format((float) $item->price, 2) }}</p>
                                                                 
                                                                 <!-- Customizations -->
                                                                 @if($item->product_options)
@@ -443,7 +443,7 @@
                                                                                         <div class="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded inline-block mr-1 mb-1">
                                                                                             <span class="font-medium">{{ $key }}:</span> {{ $customization['value'] }}
                                                                                             @if(isset($customization['price']) && $customization['price'] > 0)
-                                                                                                <span class="text-green-600 font-medium">(+${{ number_format($customization['price'], 2) }})</span>
+                                                                                                <span class="text-green-600 font-medium">(+${{ number_format((float) $customization['price'], 2) }})</span>
                                                                                             @endif
                                                                                         </div>
                                                                                     @elseif(!is_array($customization))
@@ -516,7 +516,7 @@
                                                             </div>
                                                         </div>
                                                         <div class="text-right">
-                                                            <p class="font-semibold text-gray-900">${{ number_format($item->quantity * $item->price, 2) }}</p>
+                                                            <p class="font-semibold text-gray-900">${{ number_format((float) $item->quantity * (float) $item->price, 2) }}</p>
                                                             @if($item->product && $item->product->shop)
                                                                 <p class="text-xs text-gray-500">by {{ $item->product->shop->name }}</p>
                                                             @endif

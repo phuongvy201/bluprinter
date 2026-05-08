@@ -10,6 +10,19 @@ use App\Mail\SupportRequestMail;
 
 class SupportController extends Controller
 {
+    private function isBotSubmission(Request $request): bool
+    {
+        $honeypotValue = trim((string) $request->input('website_url', ''));
+        $formStartedAt = (int) $request->input('form_started_at', 0);
+        $secondsToSubmit = $formStartedAt > 0 ? (now()->timestamp - $formStartedAt) : null;
+
+        if ($honeypotValue !== '') {
+            return true;
+        }
+
+        return $formStartedAt > 0 && $secondsToSubmit !== null && $secondsToSubmit < 3;
+    }
+
     public function create()
     {
         $title = 'Submit Ticket';
@@ -18,6 +31,15 @@ class SupportController extends Controller
 
     public function store(Request $request)
     {
+        if ($this->isBotSubmission($request)) {
+            Log::warning('Support ticket blocked by anti-bot guard', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return back()->withInput()->with('error', 'Unable to submit your ticket right now. Please try again.');
+        }
+
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255',
@@ -47,6 +69,15 @@ class SupportController extends Controller
 
     public function requestStore(Request $request)
     {
+        if ($this->isBotSubmission($request)) {
+            Log::warning('Support request blocked by anti-bot guard', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return back()->withInput()->with('error', 'Unable to submit your request right now. Please try again.');
+        }
+
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255',

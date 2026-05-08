@@ -27,6 +27,8 @@
 
       <form action="{{ route('bulk.order.store') }}" method="POST" enctype="multipart/form-data">
         @csrf
+        <input type="text" name="website_url" autocomplete="off" tabindex="-1" class="hidden" aria-hidden="true">
+        <input type="hidden" name="form_started_at" value="{{ now()->timestamp }}">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <!-- Left: Your Products -->
           <div>
