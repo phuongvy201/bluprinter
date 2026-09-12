@@ -89,6 +89,7 @@ class PostController extends Controller
                 'status' => 'nullable|in:published,draft,scheduled',
                 'published_at' => 'nullable|date',
                 'type' => 'required|in:article,video,gallery,product_review',
+                'template' => 'nullable|string|in:' . implode(',', array_keys(Post::templateOptions())),
                 'featured' => 'boolean',
                 'allow_comments' => 'boolean',
                 'meta_title' => 'nullable|string|max:255',
@@ -116,6 +117,7 @@ class PostController extends Controller
 
             $validated['featured'] = $request->has('featured');
             $validated['allow_comments'] = $request->has('allow_comments');
+            $validated['template'] = $validated['template'] ?? 'default';
 
             // Set default status to published if not provided or empty
             if (!$request->has('status') || empty($validated['status'])) {
@@ -238,6 +240,7 @@ class PostController extends Controller
             'status' => 'required|in:published,draft,scheduled',
             'published_at' => 'nullable|date',
             'type' => 'required|in:article,video,gallery,product_review',
+            'template' => 'nullable|string|in:' . implode(',', array_keys(Post::templateOptions())),
             'featured' => 'boolean',
             'allow_comments' => 'boolean',
             'meta_title' => 'nullable|string|max:255',
@@ -251,6 +254,7 @@ class PostController extends Controller
 
         $validated['featured'] = $request->has('featured');
         $validated['allow_comments'] = $request->has('allow_comments');
+        $validated['template'] = $validated['template'] ?? ($post->template ?: 'default');
 
         // Set published_at to now if not provided and status is published
         if (!isset($validated['published_at']) && $validated['status'] === 'published') {

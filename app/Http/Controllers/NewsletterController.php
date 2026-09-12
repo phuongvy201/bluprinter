@@ -3,18 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\NewsletterSubscription;
-use App\Mail\NewsletterWelcomeMail;
+use App\Services\PromoCodeService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class NewsletterController extends Controller
 {
     /**
-     * Subscribe to newsletter
+     * Subscribe to newsletter and send welcome promo code.
      */
-    public function subscribe(Request $request)
+    public function subscribe(Request $request, PromoCodeService $promoCodeService)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email|max:255',
@@ -24,44 +23,62 @@ class NewsletterController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Please enter a valid email address.',
-                'errors' => $validator->errors()
+                'errors' => $validator->errors(),
             ], 422);
         }
 
-        $email = $request->email;
+        $email = strtolower(trim((string) $request->email));
         $ipAddress = $request->ip();
         $userAgent = $request->userAgent();
+        $alreadySubscribed = NewsletterSubscription::isSubscribed($email);
 
         try {
-            // Check if already subscribed
-            if (NewsletterSubscription::isSubscribed($email)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This email is already subscribed to our newsletter.',
-                ], 409);
+            if (! $alreadySubscribed) {
+                $subscription = NewsletterSubscription::subscribe($email, $ipAddress, $userAgent);
+
+                Log::info('Newsletter subscription successful', [
+                    'email' => $email,
+                    'ip_address' => $ipAddress,
+                    'subscription_id' => $subscription->id,
+                ]);
             }
 
-            // Subscribe the email
-            $subscription = NewsletterSubscription::subscribe($email, $ipAddress, $userAgent);
+            $promoResult = $promoCodeService->claimNewsletterPromo($email);
+            $demoCode = config('promo.fixed_codes.newsletter', 'NEWSLETTER10');
 
-            // Send welcome email
-            Mail::to($email)->send(new NewsletterWelcomeMail($email));
+            if ($promoResult['success']) {
+                $message = $alreadySubscribed
+                    ? 'You are already subscribed. ' . ($promoResult['message'] ?? 'Your promo code is on its way.')
+                    : 'Thank you for subscribing! Check your email for your exclusive promo code.';
 
-            Log::info('Newsletter subscription successful', [
+                if (! empty($promoResult['already_sent'])) {
+                    $message = 'You are already subscribed. We previously sent your promo code — please check your inbox.';
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => $message,
+                    'code' => $promoResult['code'] ?? $demoCode,
+                ]);
+            }
+
+            Log::warning('Newsletter promo email failed', [
                 'email' => $email,
-                'ip_address' => $ipAddress,
-                'subscription_id' => $subscription->id
+                'message' => $promoResult['message'] ?? 'unknown',
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Thank you for subscribing! Please check your email for a welcome message.',
+                'message' => $alreadySubscribed
+                    ? 'You are already subscribed. Email delivery failed — use code ' . $demoCode . ' at checkout.'
+                    : 'You are subscribed! Email delivery failed — use code ' . $demoCode . ' at checkout.',
+                'code' => $demoCode,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Newsletter subscription failed', [
                 'email' => $email,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([

@@ -66,11 +66,28 @@
                     @enderror
                 </div>
 
+                <div>
+                    <label for="category_id" class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                    <select id="category_id"
+                            name="category_id"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('category_id') border-red-500 @enderror">
+                        <option value="">Select a category</option>
+                        @foreach($categories as $category)
+                            <option value="{{ $category->id }}" {{ (string) old('category_id', $product->resolvedCategoryId()) === (string) $category->id ? 'selected' : '' }}>
+                                {{ $category->parent_id ? '├─ ' : '' }}{{ $category->name }}{{ $category->parent ? ' (Child of ' . $category->parent->name . ')' : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('category_id')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
                 <!-- Price & Quantity -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                         <label for="price" class="block text-sm font-medium text-gray-700 mb-2">
-                            Price (Template: ${{ number_format($product->template->base_price, 2) }})
+                            Base Price (Template: ${{ number_format($product->template->base_price, 2) }})
                         </label>
                         <input type="number" 
                                id="price" 
@@ -81,6 +98,22 @@
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('price') border-red-500 @enderror"
                                placeholder="{{ $product->template->base_price }}">
                         @error('price')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div>
+                        <label for="list_price" class="block text-sm font-medium text-gray-700 mb-2">
+                            List Price (Template: ${{ number_format($product->template->list_price ?? 0, 2) }})
+                        </label>
+                        <input type="number"
+                               id="list_price"
+                               name="list_price"
+                               value="{{ old('list_price', $product->list_price) }}"
+                               step="0.01"
+                               min="0"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('list_price') border-red-500 @enderror"
+                               placeholder="{{ $product->template->list_price }}">
+                        @error('list_price')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                         @enderror
                     </div>
@@ -172,9 +205,112 @@
                          class="w-full min-h-[100px] px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                          style="white-space: pre-wrap;"
                          oninput="updateDescriptionValue()">{{ old('description', $product->description) }}</div>
+
+                    <label for="keywords" class="block text-sm font-medium text-gray-700 mb-2 mt-4">Keywords (for collections)</label>
+                    <input type="text" id="keywords" name="keywords" value="{{ old('keywords', $product->keywords_text) }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('keywords') border-red-500 @enderror"
+                           placeholder="e.g: summer, beach, vacation">
+                    <p class="text-xs text-gray-500 mt-1">Comma-separated. Product also joins collections that Studio AI judges as a thematic fit.</p>
+                    @error('keywords')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
                 </div>
             </div>
         </div>
+
+        @php
+            $groupedAttributes = $product->template?->attributes
+                ? $product->template->attributes->groupBy('attribute_name')
+                : collect();
+            $productCustomizations = $product->getNormalizedCustomizations();
+            $allowCustomization = old('allow_customization', $product->allow_customization);
+        @endphp
+
+        @if($groupedAttributes->isNotEmpty())
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Template Attributes</h3>
+                <p class="text-sm text-gray-600">From the product template</p>
+            </div>
+            <div class="p-6 space-y-4">
+                @foreach($groupedAttributes as $attributeName => $attributeRows)
+                    <div class="attribute-row border border-gray-200 rounded-lg p-4">
+                        <div class="flex space-x-4">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Attribute Name</label>
+                                <input type="text" value="{{ $attributeName }}" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Attribute Values (comma separated)</label>
+                                <input type="text" value="{{ $attributeRows->pluck('attribute_value')->filter()->implode(', ') }}" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+        @endif
+
+        @if($allowCustomization || count($productCustomizations) > 0)
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Product Customization</h3>
+                <p class="text-sm text-gray-600">Copied onto this product from the template</p>
+            </div>
+            <div class="p-6 space-y-6">
+                <label class="flex items-center space-x-3">
+                    <input type="checkbox"
+                           id="allow_customization"
+                           {{ $allowCustomization ? 'checked' : '' }}
+                           disabled
+                           class="h-5 w-5 text-indigo-600 border-gray-300 rounded">
+                    <span class="text-lg font-semibold text-gray-900">Allow customers to customize products</span>
+                </label>
+                <div class="space-y-4">
+                    @foreach($productCustomizations as $item)
+                        @php
+                            $optionsText = collect($item['options'] ?? [])->map(function ($option) {
+                                if (is_array($option)) {
+                                    return $option['label'] ?? $option['value'] ?? '';
+                                }
+                                return (string) $option;
+                            })->filter()->implode("\n");
+                        @endphp
+                        <div class="customization-type-row border border-gray-200 rounded-lg p-4 bg-white">
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                                    <input type="text" value="{{ $item['type'] ?? 'text' }}" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Price (USD)</label>
+                                    <input type="text" value="{{ $item['price'] ?? '' }}" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Display Label</label>
+                                    <input type="text" value="{{ $item['label'] ?? $item['name'] ?? '' }}" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Placeholder</label>
+                                    <input type="text" value="{{ $item['placeholder'] ?? '' }}" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                                </div>
+                            </div>
+                            @if($optionsText !== '')
+                                <div class="mt-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Options</label>
+                                    <textarea readonly rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">{{ $optionsText }}</textarea>
+                                </div>
+                            @endif
+                            <label class="mt-3 inline-flex items-center space-x-2 text-sm text-gray-700">
+                                <input type="checkbox" disabled {{ !empty($item['required']) ? 'checked' : '' }} class="h-4 w-4 border-gray-300 rounded">
+                                <span>Required</span>
+                            </label>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+        @endif
 
         <!-- Product Variants -->
         @if($product->variants && $product->variants->count() > 0)
@@ -194,8 +330,8 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Variant</th>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Current Price</th>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">New Price</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">List Price *</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Base Price *</th>
                                 <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Quantity</th>
                             </tr>
                         </thead>
@@ -225,7 +361,13 @@
                                     <input type="hidden" name="variants[{{ $index }}][attributes]" value='{{ json_encode($variant->attributes ?? []) }}'>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="text-sm font-medium text-gray-900">${{ number_format($variant->price ?? 0, 2) }}</span>
+                                    <input type="number"
+                                           name="variants[{{ $index }}][list_price]"
+                                           value="{{ old("variants.{$index}.list_price", $variant->list_price) }}"
+                                           step="0.01"
+                                           min="0"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                           placeholder="{{ number_format($variant->list_price ?? 0, 2) }}">
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <input type="number" 
@@ -234,7 +376,8 @@
                                            step="0.01" 
                                            min="0"
                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                           placeholder="{{ number_format($variant->price ?? 0, 2) }}">
+                                           placeholder="{{ number_format($variant->price ?? 0, 2) }}"
+                                           required>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <input type="number" 

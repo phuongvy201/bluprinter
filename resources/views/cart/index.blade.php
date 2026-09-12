@@ -353,76 +353,79 @@
     // Calculate base subtotal in USD for shipping calculation
     $baseSubtotal = 0;
     foreach ($cartItems as $item) {
-        $itemPrice = (float) $item->price;
-        // Convert to USD if needed
-        $basePrice = $currentCurrency !== 'USD' && $currentCurrencyRate > 0 
-            ? $itemPrice / $currentCurrencyRate 
+        $itemPrice = (float) $item->getEffectiveUnitPrice();
+        $basePriceUsd = $currentCurrency !== 'USD' && $currentCurrencyRate > 0
+            ? $itemPrice / $currentCurrencyRate
             : $itemPrice;
-        
-        // Add customization prices
-        $customizationTotal = 0;
-        if ($item->customizations) {
-            foreach ($item->customizations as $customization) {
-                if (isset($customization['price']) && $customization['price'] > 0) {
-                    $customPrice = (float) $customization['price'];
-                    $baseCustomPrice = $currentCurrency !== 'USD' && $currentCurrencyRate > 0
-                        ? $customPrice / $currentCurrencyRate
-                        : $customPrice;
-                    $customizationTotal += $baseCustomPrice;
-                }
-            }
-        }
-        
-        $baseSubtotal += ($basePrice + $customizationTotal) * $item->quantity;
+
+        $baseSubtotal += $basePriceUsd * $item->quantity;
     }
+
+    $discountResult = app(\App\Services\CheckoutDiscountService::class)->resolve(
+        $cartItems,
+        auth()->user(),
+        auth()->user()?->email
+    );
+    $discountAmount = (float) $discountResult['discount_amount'];
+    $discountedSubtotal = (float) $discountResult['discounted_subtotal'];
+    $discountType = $discountResult['discount_type'];
+    $appliedPromoCode = $discountResult['promo_code'];
+    $volumeDiscountPercent = (int) ($discountResult['volume_discount_percent'] ?? 0);
+    $volumeEligible = (bool) ($discountResult['volume_eligible'] ?? false);
+    $totalCartQuantity = (int) $cartItems->sum('quantity');
+    $volumeTiers = app(\App\Services\VolumeDiscountService::class)->tiers();
+
+    $discountedBaseSubtotalUsd = $currentCurrency !== 'USD' && $currentCurrencyRate > 0
+        ? $discountedSubtotal / $currentCurrencyRate
+        : $discountedSubtotal;
 @endphp
-<div class="bg-gray-50 min-h-screen py-8">
+<section class="commerce-page" aria-labelledby="cart-heading">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <!-- Header -->
-        <div class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-900">Shopping Cart</h1>
-            <p class="text-gray-600 mt-2">Review your items and proceed to checkout</p>
-        </div>
+        <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+            <a href="{{ route('home') }}">Home</a>
+            <span class="catalog-breadcrumb__sep" aria-hidden="true">/</span>
+            <span class="catalog-breadcrumb__current">Shopping Cart</span>
+        </nav>
+
+        <header class="section-heading section-heading--catalog">
+            <p class="section-heading__eyebrow">Checkout</p>
+            <h1 id="cart-heading" class="section-heading__title">
+                Shopping <span class="gradient-text">Cart</span>
+            </h1>
+            <p class="section-heading__sub">Review your items and proceed to checkout</p>
+        </header>
 
         @if($cartItems->isEmpty())
-            <!-- Empty Cart -->
-            <div class="bg-white rounded-2xl shadow-sm p-12 text-center">
+            <div class="commerce-card commerce-empty">
                 <div class="max-w-md mx-auto">
-                    <svg class="w-32 h-32 mx-auto text-gray-300 mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-24 h-24 mx-auto text-gray-300 mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 11-4 0v-6m4 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01"></path>
                     </svg>
                     <h2 class="text-2xl font-bold text-gray-900 mb-2">Your cart is empty</h2>
                     <p class="text-gray-600 mb-8">Looks like you haven't added anything to your cart yet.</p>
-                    <a href="{{ route('products.index') }}" class="inline-flex items-center space-x-2 bg-[#005366] text-white px-8 py-3 rounded-xl hover:bg-[#003d4d] transition-colors">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <a href="{{ route('products.index') }}" class="btn-outline-petrol inline-flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                         </svg>
-                        <span>Continue Shopping</span>
+                        Continue Shopping
                     </a>
                 </div>
             </div>
         @else
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <!-- Cart Items -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                 <div class="lg:col-span-2 space-y-4">
                     @foreach($cartItems as $item)
-                        <div class="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow" data-cart-item-id="{{ $item->id }}">
+                        <div class="commerce-card" data-cart-item-id="{{ $item->id }}">
                             <div class="flex flex-col sm:flex-row gap-6">
                                 <!-- Product Image -->
                                 <div class="flex-shrink-0">
                                     @php
-                                        $media = $item->product->getEffectiveMedia();
-                                        $imageUrl = '/images/placeholder.jpg';
-                                        if ($media && count($media) > 0) {
-                                            if (is_string($media[0])) {
-                                                $imageUrl = $media[0];
-                                            } elseif (is_array($media[0])) {
-                                                $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? '/images/placeholder.jpg';
-                                            }
-                                        }
+                                        $imageUrl = $item->resolveDisplayImage();
+                                        $displayName = $item->resolveDisplayName();
+                                        $productUrl = $item->publicProductUrl();
                                     @endphp
-                                    <img src="{{ $imageUrl }}" 
-                                         alt="{{ $item->product->name }}" 
+                                    <img src="{{ $imageUrl }}"
+                                         alt="{{ $displayName }}"
                                          class="w-full sm:w-32 h-32 object-cover rounded-xl">
                                 </div>
 
@@ -431,22 +434,28 @@
                                     <div class="flex justify-between items-start mb-2">
                                         <div class="flex-1">
                                             <h3 class="text-lg font-semibold text-gray-900 mb-1">
-                                                <a href="{{ route('products.show', $item->product->slug) }}" class="hover:text-[#005366]">
-                                                    {{ $item->product->name }}
-                                                </a>
+                                                @if($productUrl)
+                                                    <a href="{{ $productUrl }}" class="hover:text-[#005366]">
+                                                        {{ $displayName }}
+                                                    </a>
+                                                @else
+                                                    {{ $displayName }}
+                                                @endif
                                             </h3>
-                                            @if($item->product->shop)
+                                            @if(!$item->isStudioCustom() && $item->product?->shop)
                                                 <p class="text-sm text-gray-500">
                                                     Sold by: <span class="text-[#005366] font-medium">{{ $item->product->shop->name }}</span>
                                                 </p>
                                             @endif
                                         </div>
                                         <div class="flex gap-2">
+                                            @if(!$item->isStudioCustom())
                                             <button onclick="openEditCartModal({{ $item->id }})" class="p-2 text-gray-400 hover:text-[#005366] transition-colors" title="Edit">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                                 </svg>
                                             </button>
+                                            @endif
                                             <button onclick="removeFromCart({{ $item->id }})" class="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Remove">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -459,7 +468,7 @@
                                     @if($item->selected_variant && isset($item->selected_variant['attributes']) && is_array($item->selected_variant['attributes']))
                                         <div class="flex flex-wrap gap-2 mb-3">
                                             @foreach($item->selected_variant['attributes'] as $key => $value)
-                                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                                <span class="commerce-badge">
                                                     {{ $key }}: {{ $value }}
                                                 </span>
                                             @endforeach
@@ -468,12 +477,12 @@
                                         {{-- Handle legacy data structure --}}
                                         <div class="flex flex-wrap gap-2 mb-3">
                                             @if(isset($item->selected_variant['colour']) && !empty($item->selected_variant['colour']))
-                                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                                <span class="commerce-badge">
                                                     Colour: {{ $item->selected_variant['colour'] }}
                                                 </span>
                                             @endif
                                             @if(isset($item->selected_variant['size']) && !empty($item->selected_variant['size']))
-                                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                                <span class="commerce-badge">
                                                     Size: {{ $item->selected_variant['size'] }}
                                                 </span>
                                             @endif
@@ -481,15 +490,23 @@
                                     @endif
 
                                     <!-- Customizations -->
-                                    @if($item->customizations && count($item->customizations) > 0)
+                                    @if($item->visibleCustomizations())
                                         <div class="mb-3">
                                             <p class="text-xs text-gray-500 mb-1">Customizations:</p>
-                                            @foreach($item->customizations as $key => $customization)
-                                                <p class="text-sm text-gray-700">
-                                                    <span class="font-medium">{{ $key }}:</span> {{ $customization['value'] }}
-                                                    @if(isset($customization['price']) && $customization['price'] > 0)
-                                                        <span class="text-[#005366]">(+{{ format_price((float) $customization['price']) }})</span>
+                                            @foreach($item->visibleCustomizations() as $key => $customization)
+                                                @if(!is_array($customization))
+                                                    @continue
+                                                @endif
+                                                <p class="text-sm text-gray-700 flex items-center gap-2">
+                                                    @if(!empty($customization['image']))
+                                                        <img src="{{ $customization['image'] }}" alt="" class="w-10 h-10 object-contain rounded border border-gray-200 bg-gray-50">
                                                     @endif
+                                                    <span>
+                                                        <span class="font-medium">{{ $key }}:</span> {{ $customization['value'] }}
+                                                        @if(isset($customization['price']) && $customization['price'] > 0)
+                                                            <span class="text-[#005366]">(+{{ format_price((float) $customization['price']) }})</span>
+                                                        @endif
+                                                    </span>
                                                 </p>
                                             @endforeach
                                         </div>
@@ -514,9 +531,9 @@
                                             </button>
                                         </div>
                                         <div class="text-right">
-                                            <p class="text-2xl font-bold text-[#005366]">{{ format_price((float) $item->getTotalPriceWithCustomizations()) }}</p>
+                                            <p class="text-2xl font-bold text-[#005366]">{{ format_price((float) $item->getTotalPrice()) }}</p>
                                             @if($item->quantity > 1)
-                                                <p class="text-sm text-gray-500">{{ format_price((float) ($item->getTotalPriceWithCustomizations() / $item->quantity)) }} each</p>
+                                                <p class="text-sm text-gray-500">{{ format_price((float) $item->getUnitPriceWithCustomizations()) }} each</p>
                                             @endif
                                         </div>
                                     </div>
@@ -528,13 +545,37 @@
 
                 <!-- Order Summary -->
                 <div class="lg:col-span-1">
-                    <div class="bg-white rounded-2xl shadow-sm p-6 sticky top-24">
+                    <div class="commerce-summary sticky top-24">
                         <h2 class="text-xl font-bold text-gray-900 mb-6">Order Summary</h2>
+
+                        @include('checkout.partials.discount-options', [
+                            'discountType' => $discountType,
+                            'discountAmount' => $discountAmount,
+                            'discountedSubtotal' => $discountedSubtotal,
+                            'volumeEligible' => $volumeEligible,
+                            'volumeDiscountPercent' => $volumeDiscountPercent,
+                            'volumePreview' => $discountResult['volume_preview'] ?? [],
+                            'totalCartQuantity' => $totalCartQuantity,
+                            'appliedPromoCode' => $appliedPromoCode,
+                            'volumeTiers' => $volumeTiers,
+                            'subtotal' => $subtotal,
+                        ])
                         
                         <div class="space-y-3 mb-6">
                             <div class="flex justify-between text-gray-600">
                                 <span>Subtotal ({{ $cartItems->sum('quantity') }} items)</span>
                                 <span class="font-semibold" id="cart-subtotal">{{ format_price((float) $subtotal) }}</span>
+                            </div>
+
+                            <div class="flex justify-between text-green-700 text-sm {{ $discountAmount > 0 ? '' : 'hidden' }}" id="cart-discount-line">
+                                <span id="cart-discount-label">
+                                    @if($discountType === 'volume')
+                                        Volume discount ({{ $volumeDiscountPercent }}%)
+                                    @else
+                                        Promo discount
+                                    @endif
+                                </span>
+                                <span class="font-semibold" id="cart-discount-amount">-{{ format_price($discountAmount) }}</span>
                             </div>
                             
                             <!-- Shipping Zone Selector -->
@@ -575,18 +616,22 @@
                             
                             <div class="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
                                 <span>Total</span>
-                                <span class="text-[#005366]" id="cart-total">{{ format_price((float) $subtotal) }}</span>
+                                <span class="text-[#005366]" id="cart-total">{{ format_price((float) $discountedSubtotal) }}</span>
                             </div>
+
+                            @include('checkout.partials.discount-expiry-bar', [
+                                'discountHoldRemaining' => (int) ($discountResult['hold_remaining_seconds'] ?? 0),
+                            ])
                         </div>
 
                         <!-- Main Checkout Button -->
                         <a href="{{ route('checkout.index') }}" 
                            onclick="trackInitiateCheckout(event)"
-                           class="block w-full bg-[#E2150C] hover:bg-[#c4120a] text-white font-bold py-4 rounded-xl transition-colors duration-200 mb-4 flex items-center justify-center space-x-2">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                           class="btn-cta btn-cta--block mb-4">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
                             </svg>
-                            <span>CHECKOUT</span>
+                            <span>Checkout</span>
                         </a>
 
                         <!-- Express Checkout Section -->
@@ -612,7 +657,7 @@
                         </div>
 
 
-                        <a href="{{ route('products.index') }}" class="block w-full text-center text-[#005366] hover:text-[#003d4d] font-medium py-3 border-2 border-[#005366] rounded-xl hover:bg-[#005366] hover:text-white transition-all duration-200 mb-6">
+                        <a href="{{ route('products.index') }}" class="btn-outline-petrol btn-outline-petrol--block mb-6">
                             Continue Shopping
                         </a>
 
@@ -671,61 +716,9 @@
         </div>
 
 
-        <!-- Recently Viewed Products -->
-        <div id="recentlyViewedSection" class="mt-12" style="display: none;">
-            <div class="mb-6 flex items-center justify-between">
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900">Recently Viewed Products</h2>
-                    <p class="text-gray-600 mt-1">Continue shopping from where you left off</p>
-                </div>
-                <!-- Mobile Navigation Buttons -->
-                <div class="flex gap-2 lg:hidden">
-                    <button id="recentlyViewedPrevBtnMobile" class="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                        </svg>
-                    </button>
-                    <button id="recentlyViewedNextBtnMobile" class="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Products Container -->
-            <div class="relative group">
-                <!-- Desktop Navigation Buttons -->
-                <button id="recentlyViewedPrevBtnDesktop" class="hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-12 h-12 bg-white rounded-full shadow-lg items-center justify-center hover:bg-gray-50 transition-all disabled:opacity-0 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100">
-                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                    </svg>
-                </button>
-                <button id="recentlyViewedNextBtnDesktop" class="hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-12 h-12 bg-white rounded-full shadow-lg items-center justify-center hover:bg-gray-50 transition-all disabled:opacity-0 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100">
-                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                    </svg>
-                </button>
-                
-                <div id="recentlyViewedContainer" class="overflow-x-auto hide-scrollbar" style="scroll-behavior: smooth;">
-                    <div id="recentlyViewedGrid" class="flex gap-4"></div>
-                </div>
-            </div>
-        </div>
+        @include('partials.recently-viewed-section', ['recentlyViewedId' => 'cart-recently-viewed'])
     </div>
-</div>
-
-<!-- Styles for Recently Viewed -->
-<style>
-.hide-scrollbar::-webkit-scrollbar {
-    display: none;
-}
-
-.hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-</style>
+</section>
 
 <!-- JavaScript for Cart Operations -->
 <script>
@@ -742,7 +735,10 @@ const SHIPPING_ZONES_WITH_COUNTRIES = @json($zonesWithCountries);
 const DEFAULT_SHIPPING_RATE = @json($defaultShippingRateData);
 const DEFAULT_SHIPPING_ZONE_ID = @json($defaultShippingRate ? $defaultShippingRate->shipping_zone_id : null);
 const SELECTED_ZONE_VALUE = @json($selectedZoneValue);
-const BASE_SUBTOTAL = {{ $baseSubtotal }};
+const BASE_SUBTOTAL = {{ $discountedBaseSubtotalUsd ?? $baseSubtotal }};
+const CART_RAW_SUBTOTAL = {{ (float) $subtotal }};
+const CART_DISCOUNTED_SUBTOTAL = {{ (float) $discountedSubtotal }};
+const CART_DISCOUNT_AMOUNT = {{ (float) $discountAmount }};
 
 
 function updateQuantity(cartItemId, newQuantity) {
@@ -1010,16 +1006,17 @@ function updateCartModalTotal(variants) {
 
     let unitPrice = (function getBaseUnitPrice() {
         if (selectedVariant && selectedVariant.price != null && selectedVariant.price !== '') {
-            const v = parseFloat(selectedVariant.price);
-            if (!isNaN(v)) return v;
+            return convertUsdToStorefrontCurrency(selectedVariant.price);
         }
         const p = cartItem.product || {};
-        const candidates = [p.price, p.base_price, (p.template || {}).base_price, cartItem.price];
+        const candidates = [p.price, p.base_price, (p.template || {}).base_price];
         for (const c of candidates) {
             const v = parseFloat(c);
-            if (!isNaN(v)) return v;
+            if (!isNaN(v)) {
+                return convertUsdToStorefrontCurrency(v);
+            }
         }
-        return 0;
+        return parseFloat(cartItem.price) || 0;
     })();
 
     const customizations = (function getSelectedCustomizationsPreservePrice() {
@@ -1077,16 +1074,17 @@ function saveCartChanges(cartItemId) {
 
     let unitPrice = (function () {
         if (selectedVariant && selectedVariant.price != null && selectedVariant.price !== '') {
-            const v = parseFloat(selectedVariant.price);
-            if (!isNaN(v)) return v;
+            return convertUsdToStorefrontCurrency(selectedVariant.price);
         }
         const p = cartItem.product || {};
-        const candidates = [p.price, p.base_price, (p.template || {}).base_price, cartItem.price];
+        const candidates = [p.price, p.base_price, (p.template || {}).base_price];
         for (const c of candidates) {
             const v = parseFloat(c);
-            if (!isNaN(v)) return v;
+            if (!isNaN(v)) {
+                return convertUsdToStorefrontCurrency(v);
+            }
         }
-        return 0;
+        return parseFloat(cartItem.price) || 0;
     })();
     Object.values(customizations).forEach(c => { unitPrice += parseFloat(c.price) || 0; });
 
@@ -1116,115 +1114,6 @@ function saveCartChanges(cartItemId) {
         alert('An error occurred');
     });
 }
-
-// Recently Viewed Products Functionality
-function loadRecentlyViewed() {
-    const recentlyViewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-    
-    if (recentlyViewed.length === 0) {
-        document.getElementById('recentlyViewedSection').style.display = 'none';
-        return;
-    }
-
-    // Show section
-    document.getElementById('recentlyViewedSection').style.display = 'block';
-
-    // Limit to 12 products
-    const productsToShow = recentlyViewed.slice(0, 12);
-    const container = document.getElementById('recentlyViewedGrid');
-    
-    container.innerHTML = productsToShow.map(product => `
-        <div class="flex-shrink-0 w-48 bg-white rounded-lg overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow group">
-            <a href="/products/${product.slug}" class="block">
-                <div class="relative aspect-square overflow-hidden bg-gray-100">
-                    <img src="${product.image}" 
-                         alt="${product.name}" 
-                         class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
-                </div>
-                <div class="p-3">
-                    <h3 class="text-sm font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-[#005366] transition-colors">${product.name}</h3>
-                    <div class="flex items-center gap-1 mb-2">
-                        <div class="flex">
-                            ${Array(5).fill(0).map((_, i) => `
-                                <svg class="w-3 h-3 ${i < 4 ? 'text-yellow-400' : 'text-gray-300'}" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                </svg>
-                            `).join('')}
-                        </div>
-                        <span class="text-xs text-gray-500">4.5</span>
-                    </div>
-                    <p class="text-base font-bold text-[#005366]">${CURRENCY_SYMBOL}${parseFloat(product.price).toFixed(2)}</p>
-                </div>
-            </a>
-        </div>
-    `).join('');
-
-    // Setup navigation
-    setupNavigation();
-}
-
-function setupNavigation() {
-    const container = document.getElementById('recentlyViewedContainer');
-    const prevBtnMobile = document.getElementById('recentlyViewedPrevBtnMobile');
-    const nextBtnMobile = document.getElementById('recentlyViewedNextBtnMobile');
-    const prevBtnDesktop = document.getElementById('recentlyViewedPrevBtnDesktop');
-    const nextBtnDesktop = document.getElementById('recentlyViewedNextBtnDesktop');
-    
-    if (!container) return;
-
-    // Update button states on scroll
-    function updateButtonStates() {
-        const scrollLeft = container.scrollLeft;
-        const maxScroll = container.scrollWidth - container.clientWidth;
-        
-        const isAtStart = scrollLeft <= 0;
-        const isAtEnd = scrollLeft >= maxScroll - 1;
-        
-        // Update mobile buttons
-        if (prevBtnMobile && nextBtnMobile) {
-            prevBtnMobile.disabled = isAtStart;
-            nextBtnMobile.disabled = isAtEnd;
-        }
-        
-        // Update desktop buttons
-        if (prevBtnDesktop && nextBtnDesktop) {
-            prevBtnDesktop.disabled = isAtStart;
-            nextBtnDesktop.disabled = isAtEnd;
-        }
-    }
-
-    // Scroll by one item width (192px + 16px gap)
-    const scrollAmount = 208;
-
-    function scrollPrev() {
-        container.scrollBy({
-            left: -scrollAmount,
-            behavior: 'smooth'
-        });
-        setTimeout(updateButtonStates, 300);
-    }
-
-    function scrollNext() {
-        container.scrollBy({
-            left: scrollAmount,
-            behavior: 'smooth'
-        });
-        setTimeout(updateButtonStates, 300);
-    }
-
-    // Attach event handlers
-    if (prevBtnMobile) prevBtnMobile.onclick = scrollPrev;
-    if (nextBtnMobile) nextBtnMobile.onclick = scrollNext;
-    if (prevBtnDesktop) prevBtnDesktop.onclick = scrollPrev;
-    if (nextBtnDesktop) nextBtnDesktop.onclick = scrollNext;
-
-    // Update on scroll
-    container.addEventListener('scroll', updateButtonStates);
-    
-    // Initial state
-    updateButtonStates();
-}
-
 
 // Track InitiateCheckout when clicking Proceed to Checkout
 function trackInitiateCheckout(event) {
@@ -1632,12 +1521,8 @@ function updateShippingZone(zoneId) {
     const shippingInfo = calculateShippingCost(cartItemsData, baseSubtotal, zoneId);
     const shippingCost = shippingInfo.costConverted;
     
-    // Get current subtotal
-    const subtotalText = document.getElementById('cart-subtotal').textContent;
-    const subtotal = parseFloat(subtotalText.replace(/[^0-9.-]/g, '')) || 0;
-    
-    // Calculate total
-    const total = subtotal + shippingCost;
+    // Get current subtotal (after discount)
+    const total = CART_DISCOUNTED_SUBTOTAL + shippingCost;
     
     // Update shipping cost display
     const shippingCostEl = document.getElementById('shipping-cost');
@@ -1682,31 +1567,26 @@ function formatPrice(amount) {
 /**
  * Calculate base subtotal from cart items
  */
+function convertUsdToStorefrontCurrency(usdAmount) {
+    const usd = parseFloat(usdAmount) || 0;
+    if (CURRENT_CURRENCY !== 'USD' && CURRENT_CURRENCY_RATE > 0) {
+        return usd * CURRENT_CURRENCY_RATE;
+    }
+    return usd;
+}
+
 function calculateBaseSubtotal(cartItems) {
     let baseSubtotal = 0;
     
     cartItems.forEach(item => {
-        const itemPrice = parseFloat(item.price) || 0;
-        // Convert to USD if needed
-        let basePrice = CURRENT_CURRENCY !== 'USD' && CURRENT_CURRENCY_RATE > 0 
-            ? itemPrice / CURRENT_CURRENCY_RATE 
+        const itemPrice = item.effective_unit_price !== undefined && item.effective_unit_price !== null
+            ? parseFloat(item.effective_unit_price) || 0
+            : parseFloat(item.price) || 0;
+        const basePriceUsd = CURRENT_CURRENCY !== 'USD' && CURRENT_CURRENCY_RATE > 0
+            ? itemPrice / CURRENT_CURRENCY_RATE
             : itemPrice;
-        
-        // Add customization prices
-        let customizationTotal = 0;
-        if (item.customizations) {
-            Object.values(item.customizations).forEach(customization => {
-                if (customization && customization.price) {
-                    const customPrice = parseFloat(customization.price) || 0;
-                    let baseCustomPrice = CURRENT_CURRENCY !== 'USD' && CURRENT_CURRENCY_RATE > 0
-                        ? customPrice / CURRENT_CURRENCY_RATE
-                        : customPrice;
-                    customizationTotal += baseCustomPrice;
-                }
-            });
-        }
-        
-        baseSubtotal += (basePrice + customizationTotal) * item.quantity;
+
+        baseSubtotal += basePriceUsd * (parseInt(item.quantity, 10) || 1);
     });
     
     return baseSubtotal;
@@ -1746,13 +1626,7 @@ function initializeShippingCost() {
     // Calculate and display shipping cost
     const shippingInfo = calculateShippingCost(cartItemsData, baseSubtotal, selectedZoneId);
     const shippingCost = shippingInfo.costConverted;
-    
-    // Get current subtotal
-    const subtotalText = document.getElementById('cart-subtotal').textContent;
-    const subtotal = parseFloat(subtotalText.replace(/[^0-9.-]/g, '')) || 0;
-    
-    // Calculate total
-    const total = subtotal + shippingCost;
+    const total = CART_DISCOUNTED_SUBTOTAL + shippingCost;
     
     // Update displays
     const shippingCostEl = document.getElementById('shipping-cost');
@@ -1772,9 +1646,119 @@ function initializeShippingCost() {
     }
 }
 
+function syncCartDiscountBaseSubtotal() {
+    if (CURRENT_CURRENCY !== 'USD' && CURRENT_CURRENCY_RATE > 0) {
+        return CART_DISCOUNTED_SUBTOTAL / CURRENT_CURRENCY_RATE;
+    }
+    return CART_DISCOUNTED_SUBTOTAL;
+}
+
+function applyCartDiscountResponse(data) {
+    if (!data || !data.discount) return;
+    const d = data.discount;
+
+    CART_DISCOUNTED_SUBTOTAL = parseFloat(d.discounted_subtotal) || 0;
+    CART_DISCOUNT_AMOUNT = parseFloat(d.discount_amount) || 0;
+    BASE_SUBTOTAL = syncCartDiscountBaseSubtotal();
+
+    const typeInput = document.getElementById('checkout-discount-type');
+    const codeInput = document.getElementById('checkout-promo-code-hidden');
+    if (typeInput) typeInput.value = d.discount_type || 'none';
+    if (codeInput) codeInput.value = d.promo_code || '';
+
+    document.querySelectorAll('input[name="checkout_discount_choice"]').forEach(radio => {
+        radio.checked = radio.value === (d.discount_type || 'none');
+    });
+
+    const volumePercentLabel = document.getElementById('checkout-volume-percent-label');
+    if (volumePercentLabel && d.volume_discount_percent != null) {
+        volumePercentLabel.textContent = String(d.volume_discount_percent || 0);
+    }
+
+    document.querySelectorAll('#checkout-discount-panel [data-discount-option]').forEach(option => {
+        const selected = option.getAttribute('data-discount-option') === (d.discount_type || 'none');
+        option.classList.toggle('border-[#005366]', selected);
+        option.classList.toggle('bg-[#005366]/5', selected);
+        option.classList.toggle('border-gray-200', !selected);
+    });
+
+    const discountLine = document.getElementById('cart-discount-line');
+    const discountLabel = document.getElementById('cart-discount-label');
+    const discountAmountEl = document.getElementById('cart-discount-amount');
+
+    if (CART_DISCOUNT_AMOUNT > 0 && discountLine) {
+        discountLine.classList.remove('hidden');
+        if (discountLabel) {
+            discountLabel.textContent = d.discount_type === 'volume'
+                ? 'Volume discount (' + (d.volume_discount_percent || 0) + '%)'
+                : 'Promo discount';
+        }
+        if (discountAmountEl) {
+            discountAmountEl.textContent = '-' + formatPrice(CART_DISCOUNT_AMOUNT);
+        }
+    } else if (discountLine) {
+        discountLine.classList.add('hidden');
+    }
+
+    if (typeof window.syncDiscountExpiryBar === 'function') {
+        window.syncDiscountExpiryBar(d.hold_remaining_seconds, d.hold_duration_seconds);
+    }
+
+    initializeShippingCost();
+}
+
+function setCheckoutDiscountType(type) {
+    fetch('{{ route('checkout.discount.set-type') }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify({ discount_type: type, email: '' }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            alert(data.message || 'Could not update discount.');
+            return;
+        }
+        applyCartDiscountResponse(data);
+        const msg = document.getElementById('checkout-promo-message');
+        if (msg && type !== 'promo') msg.textContent = '';
+    })
+    .catch(err => console.error(err));
+}
+
+function applyCheckoutPromoCode() {
+    const code = document.getElementById('checkout-promo-code-input')?.value?.trim();
+    if (!code) return;
+
+    fetch('{{ route('checkout.discount.apply-promo') }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify({ code: code, email: '' }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        const msg = document.getElementById('checkout-promo-message');
+        if (!data.success) {
+            if (msg) { msg.textContent = data.message || 'Invalid code'; msg.className = 'text-xs mt-2 text-red-600'; }
+            return;
+        }
+        document.querySelector('input[name="checkout_discount_choice"][value="promo"]')?.click();
+        if (msg) { msg.textContent = 'Applied: ' + (data.discount?.promo_code || code); msg.className = 'text-xs mt-2 text-green-700'; }
+        applyCartDiscountResponse(data);
+    })
+    .catch(err => console.error(err));
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    loadRecentlyViewed();
     initializeShippingCost();
 });
 </script>

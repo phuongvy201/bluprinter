@@ -8,12 +8,24 @@ use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Admin\ProductTemplateController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\StudioController;
+use App\Http\Controllers\Admin\StudioProductController;
+use App\Http\Controllers\Admin\StudioDesignController;
+use App\Http\Controllers\Admin\StudioAiGenerationController;
+use App\Http\Controllers\Admin\StudioAiSettingsController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\Admin\ProductImportController;
+use App\Http\Controllers\Admin\ReviewController;
+use App\Http\Controllers\Admin\ReviewImportController;
 use App\Http\Controllers\Admin\CollectionController as AdminCollectionController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Admin\AnalyticsSettingsController;
+use App\Http\Controllers\Admin\CheckoutSettingsController;
+use App\Http\Controllers\Admin\HeaderSettingsController;
+use App\Http\Controllers\Admin\HomeSettingsController;
+use App\Http\Controllers\Admin\FlashDealController;
+use App\Http\Controllers\Admin\PromoCodeController as AdminPromoCodeController;
 use App\Http\Controllers\Admin\DomainConfigController;
 use App\Http\Controllers\Admin\GmcConfigController;
 use App\Http\Controllers\Admin\ShopController as AdminShopController;
@@ -56,7 +68,19 @@ use App\Http\Controllers\Admin\ReturnRequestController as AdminReturnRequestCont
 // Public routes
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+Route::get('/products/recently-viewed/cards', [ProductController::class, 'recentlyViewedCards'])->name('products.recently-viewed-cards');
 Route::get('/products/{slug}', [ProductController::class, 'show'])->name('products.show');
+Route::get('/create-your-own', [StudioController::class, 'index'])->name('studio.index');
+Route::get('/explore-design', [StudioController::class, 'explore'])->name('studio.explore');
+Route::get('/ai-design', [StudioController::class, 'aiDesign'])->name('studio.ai');
+Route::get('/virtual-try-on', [StudioController::class, 'tryOn'])->name('studio.try-on');
+Route::get('/create-your-own/history', [StudioController::class, 'history'])->name('studio.history');
+Route::delete('/create-your-own/history/{generation}', [StudioController::class, 'destroyHistory'])->name('studio.history.destroy');
+Route::get('/create-your-own/media', [StudioController::class, 'media'])->middleware('throttle:120,1')->name('studio.media');
+Route::post('/create-your-own/upload', [StudioController::class, 'upload'])->name('studio.upload');
+Route::post('/create-your-own/ai/improve', [StudioController::class, 'improvePrompt'])->middleware('throttle:studio-ai-improve')->name('studio.ai.improve');
+Route::post('/create-your-own/ai/generate', [StudioController::class, 'generate'])->middleware('throttle:studio-ai-generate')->name('studio.ai.generate');
+Route::post('/virtual-try-on/generate', [StudioController::class, 'tryOnGenerate'])->middleware('throttle:studio-ai-try-on')->name('studio.try-on.generate');
 Route::post('/products/calculate-shipping', [ProductController::class, 'calculateShippingCost'])->name('products.calculate-shipping');
 Route::get('/shops/{shop}', [App\Http\Controllers\ShopController::class, 'show'])->name('shops.show');
 
@@ -77,6 +101,10 @@ Route::get('/category/{slug}', [CategoryController::class, 'show'])->name('categ
 // Checkout routes
 Route::get('/checkout', [App\Http\Controllers\CheckoutController::class, 'index'])->name('checkout.index');
 Route::post('/checkout/process', [App\Http\Controllers\CheckoutController::class, 'process'])->name('checkout.process');
+Route::post('/checkout/discount/apply-promo', [App\Http\Controllers\CheckoutDiscountController::class, 'applyPromo'])->name('checkout.discount.apply-promo');
+Route::post('/checkout/discount/set-type', [App\Http\Controllers\CheckoutDiscountController::class, 'setDiscountType'])->name('checkout.discount.set-type');
+Route::delete('/checkout/discount/remove', [App\Http\Controllers\CheckoutDiscountController::class, 'removePromo'])->name('checkout.discount.remove');
+Route::post('/checkout/discount/preview', [App\Http\Controllers\CheckoutDiscountController::class, 'preview'])->name('checkout.discount.preview');
 Route::post('/checkout/calculate-shipping', [App\Http\Controllers\CheckoutController::class, 'calculateShipping'])->name('checkout.calculate-shipping');
 Route::post('/checkout/get-shipping-rates', [App\Http\Controllers\CheckoutController::class, 'getShippingRates'])->name('checkout.get-shipping-rates');
 Route::get('/checkout/success/{orderNumber}', [App\Http\Controllers\CheckoutController::class, 'success'])->name('checkout.success');
@@ -150,11 +178,11 @@ Route::get('/page/{slug}', [PageController::class, 'show'])->name('page.show');
 
 // Support Ticket routes
 Route::get('/support/ticket', [SupportController::class, 'create'])->name('support.ticket.create');
-Route::post('/support/ticket', [SupportController::class, 'store'])->name('support.ticket.store');
+Route::post('/support/ticket', [SupportController::class, 'store'])->middleware('throttle:6,1')->name('support.ticket.store');
 
 // Support Request routes
 Route::get('/support/request', [SupportController::class, 'requestCreate'])->name('support.request.create');
-Route::post('/support/request', [SupportController::class, 'requestStore'])->name('support.request.store');
+Route::post('/support/request', [SupportController::class, 'requestStore'])->middleware('throttle:6,1')->name('support.request.store');
 
 // Bulk Order routes
 Route::get('/bulk-order', [BulkOrderController::class, 'create'])->name('bulk.order.create');
@@ -162,6 +190,7 @@ Route::post('/bulk-order', [BulkOrderController::class, 'store'])->name('bulk.or
 
 // Promo Code routes
 Route::get('/promo-code', [PromoCodeController::class, 'create'])->name('promo.code.create');
+Route::post('/promo-code/subscribe', [PromoCodeController::class, 'subscribe'])->name('promo.code.subscribe');
 Route::post('/promo-code', [PromoCodeController::class, 'store'])->name('promo.code.store');
 
 // Seller Application routes
@@ -464,6 +493,10 @@ Route::prefix('api/cart')->middleware('web')->group(function () {
     Route::post('/sync', [ApiCartController::class, 'sync'])->name('api.cart.sync');
 });
 
+Route::prefix('api/promo')->middleware('web')->group(function () {
+    Route::post('/claim-cart', [App\Http\Controllers\Api\PromoClaimController::class, 'claimCart'])->name('api.promo.claim-cart');
+});
+
 // Analytics API routes
 Route::prefix('api/analytics')->middleware('web')->name('api.analytics.')->group(function () {
     Route::get('/realtime', [AnalyticsController::class, 'realtime'])->name('realtime');
@@ -564,6 +597,40 @@ Route::middleware('auth')->group(function () {
         Route::get('settings/analytics', [AnalyticsSettingsController::class, 'edit'])->name('settings.analytics.edit');
         Route::put('settings/analytics', [AnalyticsSettingsController::class, 'update'])->name('settings.analytics.update');
 
+        // Header layout settings
+        Route::get('settings/header', [HeaderSettingsController::class, 'edit'])->name('settings.header.edit');
+        Route::put('settings/header', [HeaderSettingsController::class, 'update'])->name('settings.header.update');
+
+        // Homepage content settings
+        Route::get('settings/home', [HomeSettingsController::class, 'edit'])->name('settings.home.edit');
+        Route::put('settings/home', [HomeSettingsController::class, 'update'])->name('settings.home.update');
+
+        Route::get('settings/product-show', [\App\Http\Controllers\Admin\ProductShowSettingsController::class, 'edit'])->name('settings.product-show.edit');
+        Route::put('settings/product-show', [\App\Http\Controllers\Admin\ProductShowSettingsController::class, 'update'])->name('settings.product-show.update');
+
+        Route::get('settings/checkout', [CheckoutSettingsController::class, 'edit'])->name('settings.checkout.edit');
+        Route::put('settings/checkout', [CheckoutSettingsController::class, 'update'])->name('settings.checkout.update');
+
+        // Flash Deal automation
+        Route::get('flash-deals', [FlashDealController::class, 'index'])->name('flash-deals.index');
+        Route::post('flash-deals/settings', [FlashDealController::class, 'updateSettings'])->name('flash-deals.settings');
+        Route::post('flash-deals/rotate', [FlashDealController::class, 'rotate'])->name('flash-deals.rotate');
+        Route::post('flash-deals/manual', [FlashDealController::class, 'storeManual'])->name('flash-deals.manual.store');
+        Route::post('flash-deals/rules', [FlashDealController::class, 'storeRule'])->name('flash-deals.rules.store');
+        Route::delete('flash-deals/rules/{rule}', [FlashDealController::class, 'destroyRule'])->name('flash-deals.rules.destroy');
+        Route::post('flash-deals/templates', [FlashDealController::class, 'storeTemplate'])->name('flash-deals.templates.store');
+        Route::delete('flash-deals/templates/{template}', [FlashDealController::class, 'destroyTemplate'])->name('flash-deals.templates.destroy');
+        Route::delete('flash-deals/{flashDeal}', [FlashDealController::class, 'destroy'])->name('flash-deals.destroy');
+
+        Route::resource('promo-codes', AdminPromoCodeController::class)->except(['show']);
+        Route::resource('studio-products', StudioProductController::class)->except(['show']);
+        Route::get('studio-ai', [StudioAiGenerationController::class, 'index'])->name('studio-ai.index');
+        Route::get('studio-ai/settings', [StudioAiSettingsController::class, 'edit'])->name('studio-ai.settings');
+        Route::put('studio-ai/settings', [StudioAiSettingsController::class, 'update'])->name('studio-ai.settings.update');
+        Route::post('studio-ai/{studioAiGeneration}/hide', [StudioAiGenerationController::class, 'hide'])->name('studio-ai.hide');
+        Route::post('studio-ai/{studioAiGeneration}/promote', [StudioAiGenerationController::class, 'promote'])->name('studio-ai.promote');
+        Route::delete('studio-ai/{studioAiGeneration}', [StudioAiGenerationController::class, 'destroy'])->name('studio-ai.destroy');
+
         // Domain Configs (Currency + Analytics)
         Route::get('settings/domain-config', [DomainConfigController::class, 'index'])->name('settings.domain-config.index');
         Route::get('settings/domain-config/create', [DomainConfigController::class, 'create'])->name('settings.domain-config.create');
@@ -621,12 +688,19 @@ Route::middleware('auth')->group(function () {
         // Product Templates with clone route
         Route::post('product-templates/{product_template}/clone', [ProductTemplateController::class, 'clone'])->name('product-templates.clone');
         Route::resource('product-templates', ProductTemplateController::class);
+        Route::resource('studio-designs', StudioDesignController::class)->except(['show']);
 
         // Products Import
         Route::get('products/import', [ProductImportController::class, 'showImportForm'])->name('products.import');
         Route::post('products/import', [ProductImportController::class, 'import'])->name('products.import.process');
         Route::get('products/import/template', [ProductImportController::class, 'downloadTemplate'])->name('products.import.template');
         Route::get('products/import/progress', [ProductImportController::class, 'getProgress'])->name('products.import.progress');
+
+        // Reviews
+        Route::get('reviews/import', [ReviewImportController::class, 'showImportForm'])->name('reviews.import');
+        Route::post('reviews/import', [ReviewImportController::class, 'import'])->name('reviews.import.process');
+        Route::get('reviews/import/template', [ReviewImportController::class, 'downloadTemplate'])->name('reviews.import.template');
+        Route::resource('reviews', ReviewController::class)->except(['show']);
 
         // Products - Custom routes must be defined BEFORE resource route to avoid conflicts
         Route::get('products/delete-from-gmc', [AdminProductController::class, 'showDeleteFromGMCForm'])->name('products.show-delete-from-gmc');
@@ -636,7 +710,9 @@ Route::middleware('auth')->group(function () {
         Route::post('products/feed-to-gmc', [AdminProductController::class, 'feedToGMC'])->name('products.feed-to-gmc');
         Route::post('products/bulk-delete', [AdminProductController::class, 'bulkDelete'])->name('products.bulk-delete');
         Route::post('products/{product}/duplicate', [AdminProductController::class, 'duplicate'])->name('products.duplicate');
-        Route::get('products/export/meta', [AdminProductController::class, 'exportToMeta'])->name('products.export.meta');
+        Route::match(['get', 'post'], 'products/export/meta', [AdminProductController::class, 'exportToMeta'])->name('products.export.meta');
+        Route::match(['get', 'post'], 'products/export/tiktok', [AdminProductController::class, 'exportToTikTok'])->name('products.export.tiktok');
+        Route::match(['get', 'post'], 'products/export/pinterest', [AdminProductController::class, 'exportToPinterest'])->name('products.export.pinterest');
 
         // Products Resource Route (must be last to avoid conflicts)
         Route::resource('products', AdminProductController::class);
@@ -761,4 +837,4 @@ Route::get('/test-variant-removal-page', function () {
 require __DIR__ . '/auth.php';
 
 // Page routes - Must be at the end to avoid conflicts
-Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller|newsletter|verify-email).*$');
+Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller|newsletter|verify-email|create-your-own|explore-design|ai-design|virtual-try-on).*$');

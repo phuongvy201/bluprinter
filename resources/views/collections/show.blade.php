@@ -4,363 +4,400 @@
 @section('meta_description', $collection->meta_description ?? $collection->description)
 
 @section('content')
+@php
+    $collectionUrl = route('collections.show', $collection->slug);
+    $hasFilters = filled(request('min_price'))
+        || filled(request('max_price'))
+        || filled(request('category'))
+        || (filled(request('sort')) && ! in_array(request('sort'), ['default', 'featured'], true));
+    $activeFilterCount = collect([request('min_price'), request('max_price'), request('category')])->filter(fn ($v) => filled($v))->count();
+    $currentSort = request('sort', 'default');
+    if ($currentSort === 'price_asc') {
+        $currentSort = 'price_low';
+    } elseif ($currentSort === 'price_desc') {
+        $currentSort = 'price_high';
+    } elseif ($currentSort === 'default') {
+        $currentSort = 'featured';
+    }
+
+    $collectionDescription = trim(strip_tags($collection->description ?? ''));
+    $displayableCount = $products->total();
+    $collectionSeo = $collectionDescription !== '' ? [
+        'eyebrow' => 'About this collection',
+        'title' => $collection->name,
+        'intro' => $collectionDescription,
+    ] : null;
+
+    $gtagItems = collect($products->items())->map(function ($product, $loopIndex) use ($products, $collection) {
+        return [
+            'item_id' => $product->sku ?? $product->id,
+            'item_name' => $product->name,
+            'item_list_name' => $collection->name,
+            'item_category' => optional($product->template?->category)->name,
+            'price' => (float) ($product->price ?? $product->base_price ?? 0),
+            'index' => ($products->perPage() * max($products->currentPage() - 1, 0)) + $loopIndex + 1,
+        ];
+    })->values()->toArray();
+@endphp
+
 <script>
-// Track Facebook Pixel ViewContent for collection page
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     if (typeof fbq !== 'undefined') {
         fbq('track', 'ViewContent', {
-            content_name: '{{ addslashes($collection->name) }}',
+            content_name: @json($collection->name),
             content_type: 'product_group'
+        });
+    }
+
+    if (typeof dataLayer !== 'undefined') {
+        dataLayer.push({
+            event: 'view_item_list',
+            item_list_name: @json($collection->name),
+            items: @json($gtagItems)
         });
     }
 });
 </script>
-<style>
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
 
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
+<section class="catalog-page" aria-labelledby="catalog-heading">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+            @foreach ($breadcrumbs as $index => $breadcrumb)
+                @if ($index > 0)
+                    <span class="catalog-breadcrumb__sep" aria-hidden="true">/</span>
+                @endif
+                @if ($breadcrumb['url'])
+                    <a href="{{ $breadcrumb['url'] }}">{{ $breadcrumb['name'] }}</a>
+                @else
+                    <span class="catalog-breadcrumb__current">{{ $breadcrumb['name'] }}</span>
+                @endif
+            @endforeach
+        </nav>
 
-    @keyframes scaleIn {
-        from {
-            opacity: 0;
-            transform: scale(0.9);
-        }
-        to {
-            opacity: 1;
-            transform: scale(1);
-        }
-    }
-
-    @keyframes slideInLeft {
-        from {
-            opacity: 0;
-            transform: translateX(-50px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-
-    @keyframes slideInRight {
-        from {
-            opacity: 0;
-            transform: translateX(50px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-
-    @keyframes float {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-10px); }
-    }
-
-    @keyframes shimmer {
-        0% { background-position: -1000px 0; }
-        100% { background-position: 1000px 0; }
-    }
-
-    .animate-fadeInUp {
-        animation: fadeInUp 0.6s ease-out forwards;
-    }
-
-    .animate-fadeIn {
-        animation: fadeIn 0.6s ease-out forwards;
-    }
-
-    .animate-scaleIn {
-        animation: scaleIn 0.5s ease-out forwards;
-    }
-
-    .animate-slideInLeft {
-        animation: slideInLeft 0.6s ease-out forwards;
-    }
-
-    .animate-slideInRight {
-        animation: slideInRight 0.6s ease-out forwards;
-    }
-
-    .animate-float {
-        animation: float 3s ease-in-out infinite;
-    }
-
-    .animate-shimmer {
-        background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%);
-        background-size: 1000px 100%;
-        animation: shimmer 2s infinite;
-    }
-
-    .stagger-1 { animation-delay: 0.1s; opacity: 0; }
-    .stagger-2 { animation-delay: 0.2s; opacity: 0; }
-    .stagger-3 { animation-delay: 0.3s; opacity: 0; }
-    .stagger-4 { animation-delay: 0.4s; opacity: 0; }
-    .stagger-5 { animation-delay: 0.5s; opacity: 0; }
-    .stagger-6 { animation-delay: 0.6s; opacity: 0; }
-
-    .scroll-reveal {
-        opacity: 0;
-        transform: translateY(30px);
-        transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-    }
-
-    .scroll-reveal.revealed {
-        opacity: 1;
-        transform: translateY(0);
-    }
-</style>
-
-<div class="min-h-screen bg-gray-50">
-    <!-- Breadcrumb -->
-    <div class="bg-white border-b border-gray-200 animate-fadeIn">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <nav class="flex items-center space-x-2 text-sm">
-                <a href="{{ route('home') }}" class="text-gray-500 hover:text-[#005366] transition">Home</a>
-                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-                <a href="{{ route('collections.index') }}" class="text-gray-500 hover:text-[#005366] transition">Collections</a>
-                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-                <span class="text-gray-900 font-medium">{{ $collection->name }}</span>
-            </nav>
-        </div>
-    </div>
-
-    <!-- Collection Header -->
-    <div class="bg-white border-b border-gray-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-                <!-- Collection Image -->
-                <div class="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-100 shadow-xl animate-scaleIn">
-                    @if($collection->image)
-                        <img src="{{ $collection->image }}" 
-                             alt="{{ $collection->name }}"
-                             class="w-full h-full object-cover">
+        <div class="catalog-collection-show-hero scroll-reveal">
+            <div class="catalog-collection-show-hero__content">
+                <p class="catalog-collection-show-hero__eyebrow">Collection</p>
+                <h1 id="catalog-heading" class="catalog-collection-show-hero__title">
+                    <span class="gradient-text">{{ $collection->name }}</span>
+                </h1>
+                @if ($collectionDescription !== '')
+                    @include('partials.catalog-intro', ['text' => $collectionDescription, 'introId' => 'collection-intro'])
+                @else
+                    <p class="catalog-collection-show-hero__sub">Curated products hand-picked for this collection</p>
+                @endif
+                <div class="catalog-collection-show-hero__meta">
+                    @if ($displayableCount > 0)
+                        <span class="catalog-collection-show-hero__chip">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                            {{ number_format($displayableCount) }} products
+                        </span>
                     @else
-                        <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#005366] to-[#003d4d]">
-                            <svg class="w-24 h-24 text-white opacity-50 animate-float" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                            </svg>
-                        </div>
+                        <span class="catalog-collection-show-hero__chip catalog-collection-show-hero__chip--soon">Coming soon</span>
+                    @endif
+                    @if ($collection->shop)
+                        <a href="{{ route('shops.show', $collection->shop->shop_slug) }}" class="catalog-collection-show-hero__chip catalog-collection-show-hero__chip--link">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            {{ $collection->shop->shop_name }}
+                        </a>
+                    @endif
+                    @if ($collection->featured)
+                        <span class="catalog-collection-show-hero__chip catalog-collection-show-hero__chip--featured">Featured collection</span>
                     @endif
                 </div>
+            </div>
+            @if ($collection->image)
+                <div class="catalog-collection-show-hero__media">
+                    <img src="{{ $collection->image }}" alt="{{ $collection->name }}" loading="lazy">
+                </div>
+            @endif
+        </div>
 
-                <!-- Collection Info -->
-                <div class="space-y-6">
-                    <h1 class="text-4xl font-bold text-gray-900 animate-fadeInUp stagger-1">{{ $collection->name }}</h1>
-                    
-                    @if($collection->description)
-                        <p class="text-lg text-gray-600 animate-fadeInUp stagger-2">{{ $collection->description }}</p>
+        <div class="catalog-toolbar">
+            <div class="catalog-toolbar__desktop">
+                <p class="catalog-toolbar__summary">
+                    <span class="catalog-toolbar__summary-count">{{ number_format($products->total()) }}</span>
+                    products
+                    @if ($products->total() > 0 && $products->hasPages())
+                        <span class="catalog-toolbar__summary-dot" aria-hidden="true">·</span>
+                        <span class="catalog-toolbar__summary-range">{{ $products->firstItem() }}–{{ $products->lastItem() }}</span>
                     @endif
+                </p>
 
-                    <div class="flex items-center space-x-6 animate-fadeInUp stagger-3">
-                        <div class="flex items-center space-x-2">
-                            <svg class="w-5 h-5 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                            </svg>
-                            <span class="text-gray-700 font-semibold">{{ $products->total() }} Products</span>
-                        </div>
-
-                        @if($collection->shop)
-                            <a href="{{ route('shops.show', $collection->shop->shop_slug) }}" class="flex items-center space-x-2 text-gray-600 hover:text-[#005366] transition">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                                </svg>
-                                <span>{{ $collection->shop->shop_name }}</span>
-                            </a>
-                        @endif
+                <form method="GET" action="{{ $collectionUrl }}" class="catalog-toolbar__filters" id="catalog-filters-form">
+                    <div class="catalog-toolbar__price-group">
+                        <input type="number"
+                               name="min_price"
+                               value="{{ request('min_price') }}"
+                               class="catalog-toolbar__price"
+                               placeholder="Min"
+                               min="0"
+                               step="0.01"
+                               aria-label="Minimum price">
+                        <span class="catalog-toolbar__price-sep" aria-hidden="true">–</span>
+                        <input type="number"
+                               name="max_price"
+                               value="{{ request('max_price') }}"
+                               class="catalog-toolbar__price"
+                               placeholder="Max"
+                               min="0"
+                               step="0.01"
+                               aria-label="Maximum price">
                     </div>
 
-                    @if($collection->featured)
-                        <div class="inline-flex items-center px-4 py-2 bg-yellow-100 text-yellow-800 rounded-full text-sm font-semibold animate-fadeInUp stagger-4">
-                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                            </svg>
-                            Featured Collection
-                        </div>
+                    @if ($filterCategories->isNotEmpty())
+                        <select id="catalog-category" name="category" class="catalog-filters__select" onchange="this.form.submit()" aria-label="Category">
+                            <option value="">All categories</option>
+                            @foreach ($filterCategories as $filterCategory)
+                                <option value="{{ $filterCategory->slug }}" {{ request('category') === $filterCategory->slug ? 'selected' : '' }}>{{ $filterCategory->name }}</option>
+                            @endforeach
+                        </select>
+                    @endif
+
+                    <select id="catalog-sort" name="sort" class="catalog-filters__select" onchange="this.form.submit()" aria-label="Sort by">
+                        <option value="default" {{ $currentSort === 'featured' ? 'selected' : '' }}>Featured order</option>
+                        <option value="newest" {{ $currentSort === 'newest' ? 'selected' : '' }}>Newest</option>
+                        <option value="price_low" {{ $currentSort === 'price_low' ? 'selected' : '' }}>Price: Low to High</option>
+                        <option value="price_high" {{ $currentSort === 'price_high' ? 'selected' : '' }}>Price: High to Low</option>
+                        <option value="name" {{ $currentSort === 'name' ? 'selected' : '' }}>Name: A–Z</option>
+                    </select>
+                </form>
+
+                <div class="catalog-toolbar__actions">
+                    @if ($hasFilters)
+                        <a href="{{ $collectionUrl }}" class="catalog-toolbar__clear">Clear</a>
+                    @endif
+                    <div class="catalog-view-toggle" role="group" aria-label="Product view mode">
+                        <button type="button" class="catalog-view-toggle__btn is-active" data-catalog-view="grid" aria-pressed="true" aria-label="Grid view">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                        </button>
+                        <button type="button" class="catalog-view-toggle__btn" data-catalog-view="list" aria-pressed="false" aria-label="List view">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="catalog-toolbar__mobile">
+                <div class="catalog-toolbar__mobile-head">
+                    <p class="catalog-toolbar__summary">
+                        <span class="catalog-toolbar__summary-count">{{ number_format($products->total()) }}</span> products
+                        @if ($products->total() > 0 && $products->hasPages())
+                            <span class="catalog-toolbar__summary-dot">·</span>
+                            <span class="catalog-toolbar__summary-range">{{ $products->firstItem() }}–{{ $products->lastItem() }}</span>
+                        @endif
+                    </p>
+                    <div class="catalog-view-toggle" role="group" aria-label="Product view mode">
+                        <button type="button" class="catalog-view-toggle__btn is-active" data-catalog-view="grid" aria-pressed="true" aria-label="Grid view">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                        </button>
+                        <button type="button" class="catalog-view-toggle__btn" data-catalog-view="list" aria-pressed="false" aria-label="List view">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="catalog-toolbar__mobile-actions">
+                    <button type="button" class="catalog-mobile-btn" data-catalog-sheet-open="filter" aria-haspopup="dialog">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M6 12h12M10 20h4"/></svg>
+                        Filter
+                        @if ($activeFilterCount > 0)
+                            <span class="catalog-mobile-btn__badge">{{ $activeFilterCount }}</span>
+                        @endif
+                    </button>
+                    <button type="button" class="catalog-mobile-btn" data-catalog-sheet-open="sort" aria-haspopup="dialog">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 12h9M3 20h5M16 6l4 4m0 0l-4 4m4-4H10"/></svg>
+                        Sort
+                    </button>
+                    @if ($hasFilters)
+                        <a href="{{ $collectionUrl }}" class="catalog-mobile-btn catalog-mobile-btn--ghost">Clear</a>
                     @endif
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Filters & Products -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Filter Bar -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-8 scroll-reveal">
-            <form method="GET" class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div class="flex flex-col sm:flex-row gap-3">
-                    <!-- Price Filter -->
-                    <div class="flex items-center gap-2">
-                        <input type="number" name="min_price" placeholder="Min Price" 
-                               value="{{ request('min_price') }}"
-                               class="w-32 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#005366] focus:border-transparent">
-                        <span class="text-gray-500">-</span>
-                        <input type="number" name="max_price" placeholder="Max Price" 
-                               value="{{ request('max_price') }}"
-                               class="w-32 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#005366] focus:border-transparent">
-                    </div>
-                </div>
-
-                <!-- Sort -->
-                <div class="flex items-center gap-3">
-                    <label class="text-sm font-medium text-gray-700">Sort by:</label>
-                    <select name="sort" onchange="this.form.submit()"
-                            class="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#005366] focus:border-transparent">
-                        <option value="default" {{ request('sort') == 'default' ? 'selected' : '' }}>Default</option>
-                        <option value="price_asc" {{ request('sort') == 'price_asc' ? 'selected' : '' }}>Price: Low to High</option>
-                        <option value="price_desc" {{ request('sort') == 'price_desc' ? 'selected' : '' }}>Price: High to Low</option>
-                        <option value="name" {{ request('sort') == 'name' ? 'selected' : '' }}>Name: A-Z</option>
-                        <option value="newest" {{ request('sort') == 'newest' ? 'selected' : '' }}>Newest First</option>
-                    </select>
-                    
-                    @if(request()->hasAny(['min_price', 'max_price', 'sort']))
-                        <a href="{{ route('collections.show', $collection->slug) }}" 
-                           class="text-sm text-gray-500 hover:text-[#005366] transition">Clear Filters</a>
-                    @endif
-                </div>
-            </form>
-        </div>
-
-        <!-- Products Grid -->
-        @if($products->count() > 0)
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-                @foreach($products as $product)
-                    <a href="{{ route('products.show', $product->slug) }}" class="group bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 scroll-reveal">
-                        <!-- Product Image -->
-                        <div class="relative aspect-square bg-gray-100 overflow-hidden">
-                            @if($product->primary_image)
-                                <img src="{{ $product->primary_image }}" 
-                                     alt="{{ $product->name }}"
-                                     class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
-                            @else
-                                <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-                                    <svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                    </svg>
-                                </div>
-                            @endif
-                        </div>
-
-                        <!-- Product Info -->
-                        <div class="p-4">
-                            <h3 class="text-lg font-semibold text-gray-900 mb-2 group-hover:text-[#005366] transition line-clamp-2">
-                                {{ $product->name }}
-                            </h3>
-                            
-                            <div class="flex items-center justify-between mb-2">
-                                @if($product->shop)
-                                    <span class="text-sm text-gray-500">{{ $product->shop->shop_name }}</span>
-                                @endif
-                                @if($product->category)
-                                    <span class="text-xs text-gray-400">{{ $product->category->name }}</span>
-                                @endif
-                            </div>
-
-                            <div class="flex items-center justify-between">
-                                <span class="text-2xl font-bold text-[#005366]">${{ number_format($product->price, 2) }}</span>
-                            </div>
-                        </div>
-                    </a>
+        @if ($products->isEmpty())
+            <div class="catalog-empty">
+                <svg class="catalog-empty__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                </svg>
+                @if ($displayableCount === 0 && ! $hasFilters)
+                    <h2 class="catalog-empty__title">Coming soon</h2>
+                    <p class="catalog-empty__sub">We are curating products for this collection. Check back soon or explore other collections.</p>
+                    <a href="{{ route('collections.index') }}" class="btn-cta">Browse collections</a>
+                @else
+                    <h2 class="catalog-empty__title">No products found</h2>
+                    <p class="catalog-empty__sub">Try adjusting your filters or browse all products in this collection.</p>
+                    <a href="{{ $collectionUrl }}" class="btn-cta">View all in collection</a>
+                @endif
+            </div>
+        @else
+            <div class="catalog-grid" id="catalog-product-grid">
+                @foreach ($products as $product)
+                    <x-product-card :product="$product" :show-shop="true" :show-description="true" class="catalog-product-card" />
                 @endforeach
             </div>
 
-            <!-- Pagination -->
-            <div class="mt-8 scroll-reveal">
-                {{ $products->links() }}
-            </div>
-        @else
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center scroll-reveal">
-                <svg class="w-16 h-16 text-gray-400 mx-auto mb-4 animate-float" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-                </svg>
-                <h3 class="text-xl font-semibold text-gray-900 mb-2">No Products Found</h3>
-                <p class="text-gray-600 mb-4">This collection doesn't have any products yet.</p>
-                @if(request()->hasAny(['min_price', 'max_price', 'sort']))
-                    <a href="{{ route('collections.show', $collection->slug) }}" 
-                       class="inline-flex items-center px-6 py-3 bg-[#005366] text-white rounded-lg hover:bg-[#003d4d] transition">
-                        Clear Filters
-                    </a>
-                @endif
-            </div>
-        @endif
-    </div>
-
-    <!-- Related Collections -->
-    @if($relatedCollections->count() > 0)
-        <div class="bg-white border-t border-gray-200 py-12">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <h2 class="text-2xl font-bold text-gray-900 mb-6 scroll-reveal">Related Collections</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    @foreach($relatedCollections as $related)
-                        <a href="{{ route('collections.show', $related->slug) }}" class="group scroll-reveal">
-                            <div class="relative aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 mb-3">
-                                @if($related->image)
-                                    <img src="{{ $related->image }}" 
-                                         alt="{{ $related->name }}"
-                                         class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
-                                @else
-                                    <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#005366] to-[#003d4d]">
-                                        <svg class="w-12 h-12 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                        </svg>
-                                    </div>
-                                @endif
-                                <div class="absolute bottom-2 left-2">
-                                    <span class="inline-block px-2 py-1 bg-white/90 backdrop-blur text-gray-900 text-xs font-semibold rounded-full">
-                                        {{ $related->active_products_count }} items
-                                    </span>
-                                </div>
-                            </div>
-                            <h3 class="text-lg font-semibold text-gray-900 group-hover:text-[#005366] transition line-clamp-2">
-                                {{ $related->name }}
-                            </h3>
-                        </a>
-                    @endforeach
+            @if ($products->hasPages())
+                <div class="catalog-pagination">
+                    {{ $products->onEachSide(1)->links('vendor.pagination.catalog') }}
                 </div>
-            </div>
+            @endif
+        @endif
+
+        @if ($collectionSeo)
+            @include('products.partials.catalog-seo', ['seo' => $collectionSeo])
+        @endif
+
+        @include('partials.recently-viewed-section', ['recentlyViewedId' => 'collection-recently-viewed'])
+    </div>
+</section>
+
+<div class="catalog-sheet" id="catalog-sheet-filter" hidden aria-hidden="true">
+    <div class="catalog-sheet__backdrop" data-catalog-sheet-close></div>
+    <div class="catalog-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="catalog-sheet-filter-title">
+        <div class="catalog-sheet__head">
+            <h2 id="catalog-sheet-filter-title" class="catalog-sheet__title">Filter products</h2>
+            <button type="button" class="catalog-sheet__close" data-catalog-sheet-close aria-label="Close">&times;</button>
         </div>
-    @endif
+        <form method="GET" action="{{ $collectionUrl }}" class="catalog-sheet__body">
+            @if ($currentSort !== 'featured')
+                <input type="hidden" name="sort" value="{{ $currentSort === 'featured' ? 'default' : $currentSort }}">
+            @endif
+            <label class="catalog-sheet__label" for="sheet-min-price">Min price</label>
+            <input type="number"
+                   id="sheet-min-price"
+                   name="min_price"
+                   value="{{ request('min_price') }}"
+                   class="catalog-filters__select catalog-sheet__select"
+                   placeholder="Min"
+                   min="0"
+                   step="0.01">
+            <label class="catalog-sheet__label" for="sheet-max-price">Max price</label>
+            <input type="number"
+                   id="sheet-max-price"
+                   name="max_price"
+                   value="{{ request('max_price') }}"
+                   class="catalog-filters__select catalog-sheet__select"
+                   placeholder="Max"
+                   min="0"
+                   step="0.01">
+            @if ($filterCategories->isNotEmpty())
+                <label class="catalog-sheet__label" for="sheet-category">Category</label>
+                <select id="sheet-category" name="category" class="catalog-filters__select catalog-sheet__select">
+                    <option value="">All categories</option>
+                    @foreach ($filterCategories as $filterCategory)
+                        <option value="{{ $filterCategory->slug }}" {{ request('category') === $filterCategory->slug ? 'selected' : '' }}>{{ $filterCategory->name }}</option>
+                    @endforeach
+                </select>
+            @endif
+            <div class="catalog-sheet__foot">
+                <a href="{{ $collectionUrl }}" class="catalog-sheet__btn catalog-sheet__btn--ghost">Reset</a>
+                <button type="submit" class="catalog-sheet__btn catalog-sheet__btn--primary">Apply filters</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="catalog-sheet" id="catalog-sheet-sort" hidden aria-hidden="true">
+    <div class="catalog-sheet__backdrop" data-catalog-sheet-close></div>
+    <div class="catalog-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="catalog-sheet-sort-title">
+        <div class="catalog-sheet__head">
+            <h2 id="catalog-sheet-sort-title" class="catalog-sheet__title">Sort by</h2>
+            <button type="button" class="catalog-sheet__close" data-catalog-sheet-close aria-label="Close">&times;</button>
+        </div>
+        <form method="GET" action="{{ $collectionUrl }}" class="catalog-sheet__body">
+            @if (request('min_price'))
+                <input type="hidden" name="min_price" value="{{ request('min_price') }}">
+            @endif
+            @if (request('max_price'))
+                <input type="hidden" name="max_price" value="{{ request('max_price') }}">
+            @endif
+            @if (request('category'))
+                <input type="hidden" name="category" value="{{ request('category') }}">
+            @endif
+            @php
+                $sortOptions = [
+                    'featured' => 'Featured order',
+                    'newest' => 'Newest first',
+                    'price_low' => 'Price: Low to High',
+                    'price_high' => 'Price: High to Low',
+                    'name' => 'Name: A–Z',
+                ];
+            @endphp
+            <ul class="catalog-sort-options">
+                @foreach ($sortOptions as $value => $label)
+                    <li>
+                        <label class="catalog-sort-option {{ $currentSort === $value ? 'is-selected' : '' }}">
+                            <input type="radio" name="sort" value="{{ $value === 'featured' ? 'default' : $value }}" {{ $currentSort === $value ? 'checked' : '' }}>
+                            <span>{{ $label }}</span>
+                        </label>
+                    </li>
+                @endforeach
+            </ul>
+            <div class="catalog-sheet__foot">
+                <button type="submit" class="catalog-sheet__btn catalog-sheet__btn--primary catalog-sheet__btn--full">Apply sort</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Intersection Observer for scroll animations
-        const observerOptions = {
-            threshold: 0.1,
-            rootMargin: '0px 0px -50px 0px'
-        };
+document.addEventListener('DOMContentLoaded', function () {
+    var grid = document.getElementById('catalog-product-grid');
+    var viewButtons = document.querySelectorAll('[data-catalog-view]');
+    var storageKey = 'bluprinter_catalog_view';
 
-        const observer = new IntersectionObserver(function(entries) {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('revealed');
-                    observer.unobserve(entry.target);
-                }
-            });
-        }, observerOptions);
+    function setView(mode) {
+        if (!grid) return;
+        var isList = mode === 'list';
+        grid.classList.toggle('catalog-grid--list', isList);
+        viewButtons.forEach(function (btn) {
+            var active = btn.getAttribute('data-catalog-view') === mode;
+            btn.classList.toggle('is-active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        try { localStorage.setItem(storageKey, mode); } catch (e) {}
+    }
 
-        // Observe all scroll-reveal elements
-        document.querySelectorAll('.scroll-reveal').forEach(element => {
-            observer.observe(element);
+    var savedView = 'grid';
+    try { savedView = localStorage.getItem(storageKey) || 'grid'; } catch (e) {}
+    setView(savedView === 'list' ? 'list' : 'grid');
+
+    viewButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setView(btn.getAttribute('data-catalog-view'));
         });
     });
-</script>
-@endsection
 
+    function openSheet(id) {
+        var sheet = document.getElementById('catalog-sheet-' + id);
+        if (!sheet) return;
+        sheet.hidden = false;
+        sheet.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('catalog-sheet-open');
+    }
+
+    function closeSheets() {
+        document.querySelectorAll('.catalog-sheet').forEach(function (sheet) {
+            sheet.hidden = true;
+            sheet.setAttribute('aria-hidden', 'true');
+        });
+        document.body.classList.remove('catalog-sheet-open');
+    }
+
+    document.querySelectorAll('[data-catalog-sheet-open]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openSheet(btn.getAttribute('data-catalog-sheet-open'));
+        });
+    });
+
+    document.querySelectorAll('[data-catalog-sheet-close]').forEach(function (el) {
+        el.addEventListener('click', closeSheets);
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeSheets();
+    });
+});
+</script>
+@include('partials.catalog-intro-script')
+@endsection

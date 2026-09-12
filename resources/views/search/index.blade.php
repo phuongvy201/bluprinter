@@ -4,7 +4,8 @@
 
 @section('content')
 @php
-    $tiktokSearchContents = collect($products ?? [])
+    $type = $type ?: 'all';
+    $tiktokSearchContents = collect($products instanceof \Illuminate\Contracts\Pagination\Paginator ? $products->items() : ($products ?? []))
         ->take(5)
         ->map(function ($product) {
             return [
@@ -17,9 +18,17 @@
             return !empty($item['content_id']) && !empty($item['content_name']);
         })
         ->values();
+
+    $breadcrumbs = [
+        ['name' => 'Home', 'url' => route('home')],
+        ['name' => 'Search', 'url' => null],
+    ];
+
+    $showProducts = ($type === 'all' || $type === 'products') && $products->count() > 0;
+    $showCollections = ($type === 'all' || $type === 'collections') && $collections->count() > 0;
+    $showShops = ($type === 'all' || $type === 'shops') && $shops->count() > 0;
 @endphp
 <script>
-// Track Facebook Pixel Search event
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof fbq !== 'undefined') {
         @if($query)
@@ -28,7 +37,7 @@ document.addEventListener('DOMContentLoaded', function() {
             content_category: 'product'
         });
         @endif
-        
+
         fbq('track', 'ViewContent', {
             content_name: 'Search Results',
             content_type: 'search'
@@ -50,287 +59,251 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-<div class="min-h-screen bg-gray-50 py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <!-- Search Header -->
-        <div class="mb-8">
-            <div class="flex items-center justify-between mb-6">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900">
-                        @if($query)
-                            Search Results for "{{ $query }}"
+
+<section class="catalog-page catalog-page--search" aria-labelledby="catalog-heading">
+    <div class="catalog-collections-hero scroll-reveal">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <nav class="catalog-breadcrumb catalog-breadcrumb--hero" aria-label="Breadcrumb">
+                @foreach ($breadcrumbs as $index => $breadcrumb)
+                    @if ($index > 0)
+                        <span class="catalog-breadcrumb__sep" aria-hidden="true">/</span>
+                    @endif
+                    @if ($breadcrumb['url'])
+                        <a href="{{ $breadcrumb['url'] }}">{{ $breadcrumb['name'] }}</a>
+                    @else
+                        <span class="catalog-breadcrumb__current">{{ $breadcrumb['name'] }}</span>
+                    @endif
+                @endforeach
+            </nav>
+
+            <div class="catalog-collections-hero__body">
+                <header class="catalog-collections-hero__head">
+                    <p class="catalog-collections-hero__eyebrow">Search</p>
+                    <h1 id="catalog-heading" class="catalog-collections-hero__title">
+                        @if ($query)
+                            Results for <span class="gradient-text">{{ $query }}</span>
                         @else
-                            Search
+                            Find <span class="gradient-text">anything</span>
                         @endif
                     </h1>
-                    @if($query && $totalResults > 0)
-                        <p class="text-gray-600 mt-2">
-                            Found {{ number_format($totalResults) }} result{{ $totalResults !== 1 ? 's' : '' }}
-                        </p>
+                    <p class="catalog-collections-hero__sub">
+                        @if ($query && $totalResults > 0)
+                            {{ number_format($totalResults) }} result{{ $totalResults !== 1 ? 's' : '' }} across products, collections, and shops
+                        @else
+                            Search products, collections, and shops from our creators
+                        @endif
+                    </p>
+                </header>
+
+                <form method="GET" action="{{ route('search') }}" class="catalog-collections-hero__search">
+                    <label class="catalog-collections-hero__search-field">
+                        <span class="sr-only">Search products, collections, and shops</span>
+                        <svg class="catalog-collections-hero__search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <input type="search"
+                               name="q"
+                               value="{{ $query }}"
+                               class="catalog-collections-hero__search-input"
+                               placeholder="Search products, collections, shops…"
+                               aria-label="Search products, collections, and shops">
+                    </label>
+                    @if ($type !== 'all')
+                        <input type="hidden" name="type" value="{{ $type }}">
                     @endif
-                </div>
-                
-                <!-- Search Form -->
-                <div class="w-full max-w-md">
-                    <form action="{{ route('search') }}" method="GET" class="relative">
-                        <div class="relative">
-                            <input type="text" name="q" placeholder="Search products, collections, shops..."
-                                   value="{{ $query }}"
-                                   class="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#005366] focus:border-transparent transition-all duration-200 bg-white">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                                </svg>
-                            </div>
-                            <button type="submit" class="absolute inset-y-0 right-0 pr-3 flex items-center">
-                                <div class="bg-[#005366] text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all duration-200">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                                    </svg>
-                                </div>
-                            </button>
-                        </div>
-                    </form>
+                    <button type="submit" class="btn-cta catalog-collections-hero__apply">Search</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    @if ($query)
+        <div class="catalog-collections-tabs">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="catalog-collections-tabs__track mobile-scroll-hide">
+                    <a href="{{ route('search', ['q' => $query]) }}"
+                       class="catalog-collections-tab {{ $type === 'all' ? 'is-active' : '' }}">
+                        All
+                        <span class="catalog-collections-tab__count">({{ number_format($totalResults) }})</span>
+                    </a>
+                    <a href="{{ route('search', ['q' => $query, 'type' => 'products']) }}"
+                       class="catalog-collections-tab {{ $type === 'products' ? 'is-active' : '' }}">
+                        Products
+                        <span class="catalog-collections-tab__count">({{ number_format($counts['products'] ?? 0) }})</span>
+                    </a>
+                    <a href="{{ route('search', ['q' => $query, 'type' => 'collections']) }}"
+                       class="catalog-collections-tab {{ $type === 'collections' ? 'is-active' : '' }}">
+                        Collections
+                        <span class="catalog-collections-tab__count">({{ number_format($counts['collections'] ?? 0) }})</span>
+                    </a>
+                    <a href="{{ route('search', ['q' => $query, 'type' => 'shops']) }}"
+                       class="catalog-collections-tab {{ $type === 'shops' ? 'is-active' : '' }}">
+                        Shops
+                        <span class="catalog-collections-tab__count">({{ number_format($counts['shops'] ?? 0) }})</span>
+                    </a>
                 </div>
             </div>
-
-            <!-- Filter Tabs -->
-            @if($query)
-                <div class="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
-                    <a href="{{ route('search', ['q' => $query]) }}" 
-                       class="px-4 py-2 text-sm font-medium rounded-md transition-colors {{ !$type ? 'bg-white text-[#005366] shadow-sm' : 'text-gray-600 hover:text-gray-900' }}">
-                        All ({{ $totalResults }})
-                    </a>
-                    <a href="{{ route('search', ['q' => $query, 'type' => 'products']) }}" 
-                       class="px-4 py-2 text-sm font-medium rounded-md transition-colors {{ $type === 'products' ? 'bg-white text-[#005366] shadow-sm' : 'text-gray-600 hover:text-gray-900' }}">
-                        Products ({{ $counts['products'] ?? 0 }})
-                    </a>
-                    <a href="{{ route('search', ['q' => $query, 'type' => 'collections']) }}" 
-                       class="px-4 py-2 text-sm font-medium rounded-md transition-colors {{ $type === 'collections' ? 'bg-white text-[#005366] shadow-sm' : 'text-gray-600 hover:text-gray-900' }}">
-                        Collections ({{ $counts['collections'] ?? 0 }})
-                    </a>
-                    <a href="{{ route('search', ['q' => $query, 'type' => 'shops']) }}" 
-                       class="px-4 py-2 text-sm font-medium rounded-md transition-colors {{ $type === 'shops' ? 'bg-white text-[#005366] shadow-sm' : 'text-gray-600 hover:text-gray-900' }}">
-                        Shops ({{ $counts['shops'] ?? 0 }})
-                    </a>
-                </div>
-            @endif
         </div>
+    @endif
 
-        @if($query)
-            @if($totalResults > 0)
-                <!-- Search Results -->
-                <div class="space-y-8">
-                    <!-- Products Results -->
-                    @if(($type === 'all' || $type === 'products') && $products->count() > 0)
-                        <div>
-                            <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                                <svg class="w-5 h-5 mr-2 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                                </svg>
-                                Products
-                            </h2>
-                            <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
-                                @foreach($products as $product)
-                                    <div class="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow duration-300 overflow-hidden group">
-                                        <div class="aspect-square bg-gray-100 overflow-hidden">
-                                            @php
-                                                $media = $product->getEffectiveMedia();
-                                                $imageUrl = null;
-                                                if ($media && count($media) > 0) {
-                                                    if (is_string($media[0])) {
-                                                        $imageUrl = $media[0];
-                                                    } elseif (is_array($media[0])) {
-                                                        $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? null;
-                                                    }
-                                                }
-                                            @endphp
-                                            @if($imageUrl)
-                                                <img src="{{ $imageUrl }}" 
-                                                     alt="{{ $product->name }}" 
-                                                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        @if ($query)
+            @if ($totalResults > 0)
+                @if ($showProducts)
+                    <section class="catalog-search-section" aria-labelledby="search-products-heading">
+                        <div class="catalog-search-section__head">
+                            <h2 id="search-products-heading" class="catalog-search-section__title">Products</h2>
+                            @if ($type === 'all' && ($counts['products'] ?? 0) > $products->count())
+                                <a href="{{ route('search', ['q' => $query, 'type' => 'products']) }}" class="catalog-search-section__link">
+                                    View all products
+                                    <svg class="w-4 h-4 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                </a>
+                            @endif
+                        </div>
+                        <div class="catalog-grid" id="catalog-product-grid">
+                            @foreach ($products as $product)
+                                <x-product-card :product="$product" :show-shop="true" :show-description="true" class="catalog-product-card" />
+                            @endforeach
+                        </div>
+                        @if ($type === 'products' && method_exists($products, 'hasPages') && $products->hasPages())
+                            <div class="catalog-pagination">
+                                {{ $products->onEachSide(1)->links('vendor.pagination.catalog') }}
+                            </div>
+                        @endif
+                    </section>
+                @endif
+
+                @if ($showCollections)
+                    <section class="catalog-search-section" aria-labelledby="search-collections-heading">
+                        <div class="catalog-search-section__head">
+                            <h2 id="search-collections-heading" class="catalog-search-section__title">Collections</h2>
+                            @if ($type === 'all' && ($counts['collections'] ?? 0) > $collections->count())
+                                <a href="{{ route('search', ['q' => $query, 'type' => 'collections']) }}" class="catalog-search-section__link">
+                                    View all collections
+                                    <svg class="w-4 h-4 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                </a>
+                            @endif
+                        </div>
+                        <ul class="catalog-collections-grid">
+                            @foreach ($collections as $collection)
+                                @php
+                                    $itemCount = $collection->displayable_products_count ?? $collection->active_products_count ?? 0;
+                                    $descText = trim(strip_tags($collection->description ?? ''));
+                                @endphp
+                                <li>
+                                    <a href="{{ route('collections.show', $collection->slug) }}" class="catalog-collection-card scroll-reveal">
+                                        <div class="catalog-collection-card__media">
+                                            @if ($collection->image)
+                                                <img src="{{ $collection->image }}" alt="{{ $collection->name }}" loading="lazy">
+                                            @endif
+                                            @if ($collection->featured)
+                                                <span class="catalog-collection-card__featured">Featured</span>
+                                            @endif
+                                        </div>
+                                        <span class="catalog-collection-card__overlay" aria-hidden="true"></span>
+                                        <span class="catalog-collection-card__content">
+                                            <span class="catalog-collection-card__badge">{{ number_format($itemCount) }} items</span>
+                                            <span class="catalog-collection-card__title">{{ $collection->name }}</span>
+                                            @if ($descText !== '')
+                                                <span class="catalog-collection-card__desc">{{ $descText }}</span>
+                                            @endif
+                                            @if ($collection->shop)
+                                                <span class="catalog-collection-card__shop">{{ $collection->shop->shop_name }}</span>
+                                            @endif
+                                            <span class="catalog-collection-card__cta">
+                                                Shop now
+                                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                            </span>
+                                        </span>
+                                    </a>
+                                </li>
+                            @endforeach
+                        </ul>
+                        @if ($type === 'collections' && method_exists($collections, 'hasPages') && $collections->hasPages())
+                            <div class="catalog-pagination">
+                                {{ $collections->onEachSide(1)->links('vendor.pagination.catalog') }}
+                            </div>
+                        @endif
+                    </section>
+                @endif
+
+                @if ($showShops)
+                    <section class="catalog-search-section" aria-labelledby="search-shops-heading">
+                        <div class="catalog-search-section__head">
+                            <h2 id="search-shops-heading" class="catalog-search-section__title">Shops</h2>
+                            @if ($type === 'all' && ($counts['shops'] ?? 0) > $shops->count())
+                                <a href="{{ route('search', ['q' => $query, 'type' => 'shops']) }}" class="catalog-search-section__link">
+                                    View all shops
+                                    <svg class="w-4 h-4 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                </a>
+                            @endif
+                        </div>
+                        <ul class="catalog-shops-grid">
+                            @foreach ($shops as $shop)
+                                @php
+                                    $shopDesc = trim(strip_tags($shop->shop_description ?? ''));
+                                @endphp
+                                <li>
+                                    <a href="{{ route('shops.show', $shop->shop_slug ?? $shop->id) }}" class="catalog-shop-card">
+                                        <div class="catalog-shop-card__logo">
+                                            @if ($shop->shop_logo)
+                                                <img src="{{ $shop->shop_logo }}" alt="" loading="lazy">
                                             @else
-                                                <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#005366] to-[#003d4d]">
-                                                    <svg class="w-12 h-12 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                                    </svg>
-                                                </div>
+                                                {{ strtoupper(substr($shop->shop_name, 0, 1)) }}
                                             @endif
                                         </div>
-                                        <div class="p-4">
-                                            <h3 class="font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-[#005366] transition-colors">
-                                                <a href="{{ route('products.show', $product->slug) }}">{{ $product->name }}</a>
-                                            </h3>
-                                            @if($product->shop)
-                                                <p class="text-sm text-gray-500 mb-2">by {{ $product->shop->name }}</p>
+                                        <div class="catalog-shop-card__body">
+                                            <h3 class="catalog-shop-card__title">{{ $shop->shop_name }}</h3>
+                                            @if ($shopDesc !== '')
+                                                <p class="catalog-shop-card__desc">{{ $shopDesc }}</p>
                                             @endif
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-lg font-bold text-[#005366]">${{ number_format($product->base_price, 2) }}</span>
-                                                <x-wishlist-button :product="$product" />
-                                            </div>
+                                            <p class="catalog-shop-card__meta">{{ number_format($shop->products_count ?? 0) }} products</p>
                                         </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                            @if($counts['products'] > $products->count())
-                                <div class="text-center mt-6">
-                                    <a href="{{ route('search', ['q' => $query, 'type' => 'products']) }}" 
-                                       class="inline-flex items-center px-6 py-3 bg-[#005366] text-white font-semibold rounded-lg hover:bg-[#003d4d] transition-colors">
-                                        View All Products ({{ $counts['products'] }})
-                                        <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                                        </svg>
                                     </a>
-                                </div>
-                            @endif
-                        </div>
-                    @endif
-
-                    <!-- Collections Results -->
-                    @if(($type === 'all' || $type === 'collections') && $collections->count() > 0)
-                        <div>
-                            <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                                <svg class="w-5 h-5 mr-2 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                </svg>
-                                Collections
-                            </h2>
-                            <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-                                @foreach($collections as $collection)
-                                    <div class="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow duration-300 overflow-hidden group">
-                                        <div class="aspect-[4/3] bg-gray-100 overflow-hidden">
-                                            @if($collection->image)
-                                                <img src="{{ $collection->image }}" 
-                                                     alt="{{ $collection->name }}" 
-                                                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                                            @else
-                                                <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#E2150C] to-[#c0120a]">
-                                                    <svg class="w-12 h-12 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                                    </svg>
-                                                </div>
-                                            @endif
-                                        </div>
-                                        <div class="p-4">
-                                            <h3 class="font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-[#005366] transition-colors">
-                                                <a href="{{ route('collections.show', $collection->slug) }}">{{ $collection->name }}</a>
-                                            </h3>
-                                            @if($collection->shop)
-                                                <p class="text-sm text-gray-500 mb-2">by {{ $collection->shop->name }}</p>
-                                            @endif
-                                            <p class="text-sm text-gray-600 line-clamp-2">{{ $collection->description }}</p>
-                                            <div class="mt-3 flex items-center justify-between">
-                                                <span class="text-sm text-gray-500">{{ $collection->active_products_count }} products</span>
-                                                <span class="text-xs bg-[#E2150C] text-white px-2 py-1 rounded-full">Collection</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                @endforeach
+                                </li>
+                            @endforeach
+                        </ul>
+                        @if ($type === 'shops' && method_exists($shops, 'hasPages') && $shops->hasPages())
+                            <div class="catalog-pagination">
+                                {{ $shops->onEachSide(1)->links('vendor.pagination.catalog') }}
                             </div>
-                            @if($counts['collections'] > $collections->count())
-                                <div class="text-center mt-6">
-                                    <a href="{{ route('search', ['q' => $query, 'type' => 'collections']) }}" 
-                                       class="inline-flex items-center px-6 py-3 bg-[#E2150C] text-white font-semibold rounded-lg hover:bg-[#c0120a] transition-colors">
-                                        View All Collections ({{ $counts['collections'] }})
-                                        <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                                        </svg>
-                                    </a>
-                                </div>
-                            @endif
-                        </div>
-                    @endif
-
-                    <!-- Shops Results -->
-                    @if(($type === 'all' || $type === 'shops') && $shops->count() > 0)
-                        <div>
-                            <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                                <svg class="w-5 h-5 mr-2 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                                </svg>
-                                Shops
-                            </h2>
-                            <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-                                @foreach($shops as $shop)
-                                    <div class="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow duration-300 overflow-hidden group">
-                                        <div class="p-6">
-                                            <div class="flex items-center mb-4">
-                                                <div class="w-16 h-16 bg-gradient-to-br from-[#005366] to-[#003d4d] rounded-full flex items-center justify-center text-white font-bold text-xl mr-4">
-                                                    {{ strtoupper(substr($shop->shop_name, 0, 1)) }}
-                                                </div>
-                                                <div class="flex-1">
-                                                    <h3 class="font-semibold text-gray-900 group-hover:text-[#005366] transition-colors">
-                                                        <a href="{{ route('shops.show', $shop->shop_slug ?? $shop->id) }}">{{ $shop->shop_name }}</a>
-                                                    </h3>
-                                                    <p class="text-sm text-gray-500">{{ $shop->shop_description ? Str::limit($shop->shop_description, 50) : 'No description available' }}</p>
-                                                </div>
-                                            </div>
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-sm text-gray-500">{{ $shop->products_count ?? 0 }} products</span>
-                                                <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Shop</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                            @if($counts['shops'] > $shops->count())
-                                <div class="text-center mt-6">
-                                    <a href="{{ route('search', ['q' => $query, 'type' => 'shops']) }}" 
-                                       class="inline-flex items-center px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors">
-                                        View All Shops ({{ $counts['shops'] }})
-                                        <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                                        </svg>
-                                    </a>
-                                </div>
-                            @endif
-                        </div>
-                    @endif
-                </div>
+                        @endif
+                    </section>
+                @endif
             @else
-                <!-- No Results -->
-                <div class="text-center py-16">
-                    <div class="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                    </div>
-                    <h3 class="text-2xl font-bold text-gray-900 mb-3">No results found</h3>
-                    <p class="text-gray-600 mb-6 max-w-md mx-auto">
-                        We couldn't find any results for "{{ $query }}". Try adjusting your search terms or browse our categories.
-                    </p>
-                    <div class="flex justify-center space-x-4">
-                        <a href="{{ route('products.index') }}" class="bg-[#005366] hover:bg-[#003d4d] text-white px-6 py-3 rounded-lg transition-colors">
-                            Browse Products
-                        </a>
-                        <a href="{{ route('collections.index') }}" class="bg-[#E2150C] hover:bg-[#c0120a] text-white px-6 py-3 rounded-lg transition-colors">
-                            View Collections
-                        </a>
+                <div class="catalog-empty">
+                    <svg class="catalog-empty__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <h2 class="catalog-empty__title">No results found</h2>
+                    <p class="catalog-empty__sub">We couldn't find anything for “{{ $query }}”. Try a different keyword or browse the catalog.</p>
+                    <div class="catalog-empty__actions">
+                        <a href="{{ route('products.index') }}" class="btn-cta">Browse products</a>
+                        <a href="{{ route('collections.index') }}" class="btn-outline-petrol">View collections</a>
                     </div>
                 </div>
             @endif
         @else
-            <!-- Empty Search State -->
-            <div class="text-center py-16">
-                <div class="w-24 h-24 bg-gradient-to-br from-[#005366] to-[#003d4d] rounded-full flex items-center justify-center mx-auto mb-6">
-                    <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                    </svg>
-                </div>
-                <h3 class="text-2xl font-bold text-gray-900 mb-3">Search Products & Collections</h3>
-                <p class="text-gray-600 mb-6 max-w-md mx-auto">
-                    Enter keywords to search for products, collections, or shops. Use the search bar above to get started.
-                </p>
-                <div class="flex justify-center space-x-4">
-                    <a href="{{ route('products.index') }}" class="bg-[#005366] hover:bg-[#003d4d] text-white px-6 py-3 rounded-lg transition-colors">
-                        Browse Products
-                    </a>
-                    <a href="{{ route('collections.index') }}" class="bg-[#E2150C] hover:bg-[#c0120a] text-white px-6 py-3 rounded-lg transition-colors">
-                        View Collections
-                    </a>
+            <div class="catalog-empty">
+                <svg class="catalog-empty__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <h2 class="catalog-empty__title">Start searching</h2>
+                <p class="catalog-empty__sub">Enter a keyword above to find products, collections, or shops.</p>
+                <div class="catalog-empty__actions">
+                    <a href="{{ route('products.index') }}" class="btn-cta">Browse products</a>
+                    <a href="{{ route('collections.index') }}" class="btn-outline-petrol">View collections</a>
                 </div>
             </div>
         @endif
+
+        @include('partials.recently-viewed-section', ['recentlyViewedId' => 'search-recently-viewed'])
     </div>
-</div>
+</section>
 @endsection

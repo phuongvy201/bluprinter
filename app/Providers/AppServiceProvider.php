@@ -21,7 +21,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(\App\Services\CollectionAiMatchService::class);
     }
 
     /**
@@ -36,6 +36,22 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('register', function (Request $request) {
             return Limit::perMinute(5)->by($request->ip());
+        });
+
+        RateLimiter::for('studio-ai-generate', function (Request $request) {
+            $n = max(1, (int) (\App\Support\StudioAiSettings::resolved()['generate_per_minute'] ?? 6));
+
+            return Limit::perMinute($n)->by($request->ip());
+        });
+        RateLimiter::for('studio-ai-improve', function (Request $request) {
+            $n = max(1, (int) (\App\Support\StudioAiSettings::resolved()['improve_per_minute'] ?? 12));
+
+            return Limit::perMinute($n)->by($request->ip());
+        });
+        RateLimiter::for('studio-ai-try-on', function (Request $request) {
+            $n = max(1, (int) (\App\Support\StudioAiSettings::resolved()['try_on_per_minute'] ?? 6));
+
+            return Limit::perMinute($n)->by($request->ip());
         });
 
         // Share currency information with all views

@@ -108,6 +108,9 @@
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <div class="text-2xl font-bold text-gray-900">${{ number_format($template->base_price, 2) }}</div>
+                        @if($template->list_price)
+                        <div class="text-sm text-gray-500 line-through">${{ number_format($template->list_price, 2) }} list</div>
+                        @endif
                         @if($template->user)
                         <div class="text-xs text-gray-500 mt-1">
                             <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -25,7 +25,7 @@ class ProfileController extends Controller
             'wishlist_items' => $user->wishlists()->count(),
         ];
 
-        return view('customer.profile.index', compact('user', 'stats'));
+        return view('customer.profile.index', compact('user', 'stats') + ['title' => 'My Profile']);
     }
 
     /**
@@ -34,7 +34,7 @@ class ProfileController extends Controller
     public function edit()
     {
         $user = auth()->user();
-        return view('customer.profile.edit', compact('user'));
+        return view('customer.profile.edit', compact('user') + ['title' => 'Edit Profile']);
     }
 
     /**

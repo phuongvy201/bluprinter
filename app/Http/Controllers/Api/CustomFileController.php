@@ -52,7 +52,7 @@ class CustomFileController extends Controller
 
             // Check if product exists and is active
             $product = Product::find($productId);
-            if (!$product || !$product->is_active) {
+            if (!$product || $product->status !== 'active') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Product not found or inactive'

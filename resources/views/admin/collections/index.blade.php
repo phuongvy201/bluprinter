@@ -4,28 +4,20 @@
 
 @section('content')
 <div class="space-y-6 w-full max-w-full overflow-x-hidden">
-    <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
-                @if(auth()->user()->hasRole('admin'))
-                    📚 Collections Management
-                @else
-                    📚 My Collections
-                @endif
+                📚 Collections
             </h1>
             <p class="mt-1 text-sm text-gray-600">
-                @if(auth()->user()->hasRole('admin'))
-                    Review and approve collections from all shops
-                @else
-                    Organize your products into collections for better customer experience
-                @endif
+                Global collections managed by admin. Products auto-join by keywords and Studio AI.
             </p>
         </div>
         <div class="mt-4 sm:mt-0 flex items-center space-x-4">
             <span class="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-lg font-semibold">
                 {{ $collections->total() }} collections
             </span>
+            @if(auth()->user()->hasRole('admin'))
             <a href="{{ route('admin.collections.create') }}" 
                class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-indigo-700 shadow-lg transition transform hover:scale-105">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -33,8 +25,25 @@
                 </svg>
                 Create Collection
             </a>
+            @endif
         </div>
     </div>
+
+    @if (session('success'))
+        <div class="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800">
+            {{ session('success') }}
+        </div>
+    @endif
+    @if (session('error'))
+        <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+            {{ session('error') }}
+        </div>
+    @endif
+    @if (session('warning'))
+        <div class="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-yellow-800">
+            {{ session('warning') }}
+        </div>
+    @endif
     
     <!-- Collections Grid -->
     @if($collections->count() > 0)
@@ -121,6 +130,14 @@
                 <p class="text-sm text-gray-600 mb-4 line-clamp-2">
                     {{ $collection->description ?: 'No description provided.' }}
                 </p>
+
+                @if(!empty($collection->keywords))
+                    <div class="flex flex-wrap gap-1 mb-4">
+                        @foreach($collection->keywords as $keyword)
+                            <span class="inline-flex items-center px-2 py-0.5 bg-purple-50 text-purple-700 rounded text-xs">{{ $keyword }}</span>
+                        @endforeach
+                    </div>
+                @endif
                 
                 <!-- Stats -->
                 <div class="flex items-center justify-between mb-4">

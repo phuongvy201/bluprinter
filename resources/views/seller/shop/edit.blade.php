@@ -79,6 +79,29 @@
             </div>
         </div>
 
+        <!-- Flash Deal auto-enrollment -->
+        <div class="border-t border-gray-200 pt-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Flash Deal tự động</h3>
+            <p class="text-sm text-gray-500 mb-4">
+                Bật để platform tự đưa sản phẩm của shop vào Flash Deal (bán chạy, tồn lâu, cân bằng category).
+            </p>
+            <div class="flex items-center gap-3 mb-4">
+                <input type="hidden" name="flash_deal_auto_enroll" value="0">
+                <input type="checkbox" name="flash_deal_auto_enroll" value="1" id="flash_deal_auto_enroll"
+                       class="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                       {{ old('flash_deal_auto_enroll', $shop->flash_deal_auto_enroll) ? 'checked' : '' }}>
+                <label for="flash_deal_auto_enroll" class="text-sm font-medium text-gray-700">Tham gia Flash Deal tự động</label>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">% giảm tối đa chấp nhận</label>
+                <input type="number" name="flash_deal_max_discount_percent" min="5" max="90"
+                       value="{{ old('flash_deal_max_discount_percent', $shop->flash_deal_max_discount_percent ?? 40) }}"
+                       class="w-full max-w-xs px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                       placeholder="40">
+                <p class="text-xs text-gray-500 mt-1">Giá sàn = giá gốc × (1 − %/100). VD 40% → không giảm quá 40%.</p>
+            </div>
+        </div>
+
         <!-- Contact Info -->
         <div class="border-t border-gray-200 pt-6">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Contact Information</h3>

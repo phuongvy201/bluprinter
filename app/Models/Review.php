@@ -14,6 +14,7 @@ class Review extends Model
         'customer_email',
         'rating',
         'review_text',
+        'images',
         'is_verified_purchase',
         'is_approved',
     ];
@@ -22,6 +23,7 @@ class Review extends Model
         'is_verified_purchase' => 'boolean',
         'is_approved' => 'boolean',
         'rating' => 'integer',
+        'images' => 'array',
     ];
 
     // Relationships

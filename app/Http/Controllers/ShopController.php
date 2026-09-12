@@ -11,45 +11,54 @@ use Illuminate\Support\Facades\Log;
 
 class ShopController extends Controller
 {
-    public function show(Shop $shop)
+    public function show(Request $request, Shop $shop)
     {
-        // Load relationships
-        $shop->load(['user', 'products' => function ($query) {
-            $query->where('status', 'active')
-                ->with(['template', 'variants'])
-                ->orderBy('created_at', 'desc');
-        }]);
+        $shop->load('user');
 
-        // Get shop statistics
         $stats = [
-            'total_products' => $shop->products()->where('status', 'active')->count(),
+            'total_products' => $shop->products()->availableForDisplay()->count(),
             'followers' => $shop->followers()->count(),
             'favorited' => $shop->favorites()->count(),
         ];
 
-        // Get product categories for this shop
         $categories = Category::whereHas('templates.products', function ($query) use ($shop) {
-            $query->where('shop_id', $shop->id)->where('status', 'active');
-        })->with(['templates.products' => function ($query) use ($shop) {
-            $query->where('shop_id', $shop->id)->where('status', 'active')->limit(1);
-        }])->get();
+            $query->where('shop_id', $shop->id)->availableForDisplay();
+        })->orderBy('sort_order')->orderBy('name')->get();
 
-        // Get hot products (most viewed/favorited)
-        $hotProducts = $shop->products()
-            ->where('status', 'active')
-            ->with(['template', 'variants'])
-            ->orderBy('created_at', 'desc')
-            ->limit(12)
-            ->get();
+        $categoryProductCounts = Product::query()
+            ->where('shop_id', $shop->id)
+            ->availableForDisplay()
+            ->join('product_templates', 'products.template_id', '=', 'product_templates.id')
+            ->selectRaw('product_templates.category_id, COUNT(*) as total')
+            ->groupBy('product_templates.category_id')
+            ->pluck('total', 'category_id');
 
-        // Get all products for the shop
-        $allProducts = $shop->products()
-            ->where('status', 'active')
-            ->with(['template', 'variants'])
-            ->orderBy('created_at', 'desc')
-            ->paginate(24);
+        $categories->each(function ($category) use ($categoryProductCounts) {
+            $category->shop_products_count = (int) ($categoryProductCounts[$category->id] ?? 0);
+        });
 
-        // Check if current user follows this shop
+        $currentSort = $request->get('sort', 'newest');
+        $categorySlug = $request->get('category');
+
+        $productsQuery = $shop->products()
+            ->availableForDisplay()
+            ->with(['template', 'shop', 'variants']);
+
+        if (filled($categorySlug)) {
+            $productsQuery->whereHas('template.category', function ($query) use ($categorySlug) {
+                $query->where('slug', $categorySlug);
+            });
+        }
+
+        match ($currentSort) {
+            'price_low' => $productsQuery->orderBy('base_price'),
+            'price_high' => $productsQuery->orderByDesc('base_price'),
+            'name' => $productsQuery->orderBy('name'),
+            default => $productsQuery->latest(),
+        };
+
+        $allProducts = $productsQuery->paginate(24)->withQueryString();
+
         $isFollowing = false;
         if (Auth::check()) {
             $isFollowing = $shop->followers()->where('user_id', Auth::id())->exists();
@@ -59,9 +68,10 @@ class ShopController extends Controller
             'shop',
             'stats',
             'categories',
-            'hotProducts',
             'allProducts',
-            'isFollowing'
+            'isFollowing',
+            'currentSort',
+            'categorySlug'
         ));
     }
 

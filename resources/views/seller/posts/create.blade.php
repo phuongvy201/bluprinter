@@ -68,6 +68,16 @@
                         </div>
                 </div>
 
+                <div class="bg-white rounded-lg shadow p-6">
+                    @include('admin.partials.template-picker', [
+                        'selected' => old('template', 'default'),
+                        'options' => \App\Models\Post::templateOptions(),
+                        'meta' => \App\Models\Post::templateMeta(),
+                        'entityLabel' => 'post',
+                        'pickerId' => 'post-template-picker',
+                    ])
+                </div>
+
                 <!-- SEO Section -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4">SEO Settings</h3>

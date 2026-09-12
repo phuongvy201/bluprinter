@@ -21,6 +21,7 @@ class Collection extends Model
         'image',
         'type',
         'auto_rules',
+        'keywords',
         'status',
         'sort_order',
         'featured',
@@ -32,10 +33,19 @@ class Collection extends Model
 
     protected $casts = [
         'auto_rules' => 'array',
+        'keywords' => 'array',
         'featured' => 'boolean',
         'admin_approved' => 'boolean',
         'sort_order' => 'integer',
     ];
+
+    /**
+     * Keywords as comma-separated string for forms.
+     */
+    public function getKeywordsTextAttribute(): string
+    {
+        return implode(', ', $this->keywords ?? []);
+    }
 
     /**
      * Get the user who created this collection
@@ -86,6 +96,28 @@ class Collection extends Model
     public function getActiveProductsCountAttribute(): int
     {
         return $this->activeProducts()->count();
+    }
+
+    /**
+     * Products eligible for storefront display (active, in stock, has media).
+     */
+    public function displayableProducts(): BelongsToMany
+    {
+        return $this->activeProducts()->availableForDisplay();
+    }
+
+    public function scopeWithDisplayableProductsCount($query)
+    {
+        return $query->withCount(['products as displayable_products_count' => function ($productQuery) {
+            $productQuery->where('status', 'active')->availableForDisplay();
+        }]);
+    }
+
+    public function scopeHasDisplayableProducts($query)
+    {
+        return $query->whereHas('products', function ($productQuery) {
+            $productQuery->where('status', 'active')->availableForDisplay();
+        });
     }
 
     /**
@@ -172,12 +204,46 @@ class Collection extends Model
     }
 
     /**
-     * Check if collection can be edited by user
+     * Global collections are admin-managed and shared by all shops.
+     */
+    public function scopeGlobal($query)
+    {
+        return $query->whereNull('shop_id');
+    }
+
+    /**
+     * Check if collection can be edited by user (global collections: admin only)
      */
     public function canEdit($user = null): bool
     {
         $user = $user ?? auth()->user();
-        return $user->hasRole('admin') || $this->user_id === $user->id;
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasRole('admin')) {
+            return true;
+        }
+
+        // Legacy shop-owned collections
+        return $this->shop_id !== null && $this->user_id === $user->id;
+    }
+
+    /**
+     * Sellers and admins can view global collections in admin UI.
+     */
+    public function canView($user = null): bool
+    {
+        $user = $user ?? auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasRole('admin') || $user->hasRole('seller')) {
+            return true;
+        }
+
+        return $this->canEdit($user);
     }
 
     /**

@@ -133,8 +133,17 @@ function validateFiles(files) {
                 message: `File "${file.name}" is too large. Maximum size is 10MB`
             };
         }
-        
-        if (!allowedTypes.includes(file.type)) {
+
+        // Some browsers leave file.type empty; fall back to extension check
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        const allowedExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'mp4', 'avi', 'mov', 'wmv', 'pdf', 'doc', 'docx', 'txt'];
+        if (file.type && !allowedTypes.includes(file.type) && !allowedExt.includes(ext)) {
+            return {
+                isValid: false,
+                message: `File "${file.name}" type not supported`
+            };
+        }
+        if (!file.type && !allowedExt.includes(ext)) {
             return {
                 isValid: false,
                 message: `File "${file.name}" type not supported`
@@ -160,37 +169,49 @@ function hideUploadProgress() {
 function uploadFiles(files) {
     const formData = new FormData();
     formData.append('product_id', '{{ $product->id }}');
-    
+
     files.forEach(file => {
         formData.append('files[]', file);
     });
-    
+
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrf = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
     fetch('/api/custom-files/upload', {
         method: 'POST',
         headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-            'Accept': 'application/json'
+            'X-CSRF-TOKEN': csrf,
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
         },
+        credentials: 'same-origin',
         body: formData
     })
-    .then(response => response.json())
-    .then(data => {
-        hideUploadProgress();
-        
-        if (data.success) {
-            // Add uploaded files to the list
-            data.data.files.forEach(file => {
-                uploadedFiles.push(file);
-            });
-            
-            // Update preview
-            updateFilesPreview();
-            
-            // Show success message
-            showFileUploadSuccess(`Successfully uploaded ${data.data.uploaded_count} file(s)`);
-        } else {
-            showFileUploadError(data.message || 'Upload failed');
+    .then(async (response) => {
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (e) {
+            data = {};
         }
+
+        hideUploadProgress();
+
+        if (!response.ok || !data.success) {
+            const firstError = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null;
+            showFileUploadError(firstError || data.message || `Upload failed (${response.status})`);
+            return;
+        }
+
+        (data.data?.files || []).forEach(file => {
+            uploadedFiles.push(file);
+        });
+
+        updateFilesPreview();
+        showFileUploadSuccess(`Successfully uploaded ${data.data?.uploaded_count || 0} file(s)`);
+        document.getElementById('custom-files-input').value = '';
     })
     .catch(error => {
         hideUploadProgress();

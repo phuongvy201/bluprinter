@@ -41,9 +41,9 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Wishlist::class);
     }
 
-    public function cartItems(): HasMany
+    public function studioAiGenerations(): HasMany
     {
-        return $this->hasMany(CartItem::class);
+        return $this->hasMany(StudioAiGeneration::class);
     }
 
     // Helper methods

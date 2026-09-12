@@ -2,13 +2,18 @@
 
 @section('content')
 @php
-    // Currency helpers for entire home page
-    $currentCurrency = currency();
-    $currencySymbol = currency_symbol();
+    $homeSections = $homeSettings['sections'] ?? [];
+    $heroAutoplayMs = (int) ($homeSettings['hero']['autoplay_ms'] ?? 5000);
+    $whyChooseSection = $homeSections['why_choose'] ?? [];
+    $whyChooseFeatures = $whyChooseSection['features'] ?? [];
+    $whyChooseAutoplayMs = (int) ($whyChooseSection['autoplay_ms'] ?? 4500);
+    $customizeSection = $homeSections['customize_hero'] ?? [];
+    $mainHeroSlide = $heroSlides[0] ?? null;
+    $sideHeroSlides = array_slice($heroSlides, 1, 2);
 @endphp
+
+@include('home.partials.inline-editor')
 <script>
-const CURRENT_CURRENCY = @json($currentCurrency);
-const CURRENCY_SYMBOL = @json($currencySymbol);
 // Track Facebook Pixel ViewContent for home page
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof fbq !== 'undefined') {
@@ -20,6 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <style>
+    /* Home page colors — DESIGN.md tokens (see layouts/app.blade.php :root) */
     @keyframes fadeInUp {
         from {
             opacity: 0;
@@ -134,523 +140,1796 @@ document.addEventListener('DOMContentLoaded', function() {
         transform: translateY(0);
     }
 
-    .circular-item {
-        transition: all 0.3s ease;
-        cursor: pointer;
-    }
-
-    .circular-item:hover {
-        transform: scale(1.05) translateY(-3px);
-    }
-
-    .circular-item.active {
-        transform: scale(1.1);
-        box-shadow: 0 15px 30px rgba(0, 83, 102, 0.2);
-    }
-
     .gradient-text {
-        background: linear-gradient(135deg, #005366 0%, #E2150C 100%);
+        background: linear-gradient(135deg, #005366 0%, #e2150c 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
     }
 
-    /* Collections Slider Styles */
-    #collections-slider {
-        display: flex;
-        transition: transform 0.5s ease-in-out;
+    .section-heading {
+        text-align: center;
+    }
+    .section-heading__eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #f26522;
+    }
+    .section-heading__eyebrow::before,
+    .section-heading__eyebrow::after {
+        content: '';
+        display: block;
+        width: 28px;
+        height: 2px;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, #f26522, #e2150c);
+    }
+    .section-heading__title {
+        font-family: Oswald, Figtree, ui-sans-serif, system-ui, sans-serif;
+        font-size: clamp(2rem, 4.5vw, 3.25rem);
+        font-weight: 700;
+        line-height: 1.1;
+        letter-spacing: 0.02em;
+        color: #111827;
+        margin: 0;
+    }
+    .section-heading__title .gradient-text {
+        background: linear-gradient(105deg, #005366 0%, #f26522 45%, #e2150c 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .section-heading__sub {
+        margin: 12px auto 0;
+        max-width: 36rem;
+        font-size: 1.125rem;
+        font-weight: 400;
+        line-height: 1.55;
+        color: #4b5563;
+    }
+    @media (min-width: 768px) {
+        .section-heading__sub {
+            font-size: 1.25rem;
+        }
+    }
+    .section-heading__accent {
+        display: block;
+        width: 64px;
+        height: 4px;
+        margin: 16px auto 0;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, #005366, #f26522, #e2150c);
     }
 
-    #collections-container {
+    /* Pick a Gift — circular collection slider */
+    .pick-a-gift__slider {
         position: relative;
-        overflow: hidden;
+        margin-top: 1.25rem;
+        min-width: 0;
+        max-width: 100%;
     }
-
-/* Mobile horizontal scroll */
-@media (max-width: 640px) {
-    #collections-container {
+    @media (min-width: 768px) {
+        .pick-a-gift__slider {
+            margin-top: 1.5rem;
+        }
+    }
+    .pick-a-gift__track-wrap {
         overflow-x: auto;
         overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none; /* Firefox */
-        -ms-overflow-style: none; /* IE and Edge */
         scroll-behavior: smooth;
-    }
-    
-    #collections-container::-webkit-scrollbar {
-        display: none; /* Chrome, Safari, Opera */
-    }
-    
-    #collections-slider {
-        display: flex;
-        flex-wrap: nowrap;
-        transition: none;
-        gap: 0;
-    }
-    
-    .mobile-scroll-item {
-        flex-shrink: 0;
-        width: 140px !important; /* Fixed width for mobile */
-        padding: 0 12px;
-    }
-    
-    .mobile-scroll-item:first-child {
-        padding-left: 0;
-    }
-    
-    .mobile-scroll-item:last-child {
-        padding-right: 0;
-    }
-    
-    /* Hide navigation buttons on mobile */
-    #prev-collections, #next-collections {
-        display: none !important;
-    }
-}
-
-/* Mobile scrollbar hiding for Recently Viewed */
-@media (max-width: 1023px) {
-    .mobile-scroll-hide {
-        -ms-overflow-style: none;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
+        -ms-overflow-style: none;
+        min-width: 0;
+        max-width: 100%;
+        width: 100%;
     }
-    .mobile-scroll-hide::-webkit-scrollbar {
+    .pick-a-gift__track-wrap::-webkit-scrollbar {
         display: none;
+        width: 0;
+        height: 0;
     }
-}
-
-/* Mobile horizontal scroll for Blog Posts */
-@media (max-width: 767px) {
-    #blog-posts-container {
-        overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none; /* Firefox */
-        -ms-overflow-style: none; /* IE and Edge */
-        scroll-behavior: smooth;
+    @media (min-width: 768px) {
+        /* Desktop: cuộn bằng nút, không hiện thanh cuộn */
+        .pick-a-gift__track-wrap {
+            overflow-x: hidden;
+        }
     }
-    
-    #blog-posts-container::-webkit-scrollbar {
-        display: none; /* Chrome, Safari, Opera */
-    }
-    
-    #blog-posts-slider {
+    .pick-a-gift__track {
         display: flex;
         flex-wrap: nowrap;
+        gap: 28px;
+        padding: 8px 0 16px;
+        width: max-content;
+        max-width: none;
+    }
+    @media (min-width: 768px) {
+        .pick-a-gift__track {
+            gap: 40px;
+        }
+    }
+    .pick-a-gift__item {
+        flex: 0 0 auto;
+        width: clamp(120px, 22vw, 200px);
+        scroll-snap-align: start;
+        min-width: 0;
+    }
+    .pick-a-gift__nav {
+        position: absolute;
+        top: 50%;
+        z-index: 10;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 9999px;
+        background: #fff;
+        color: #4b5563;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+        border: 1px solid #e5e7eb;
+        transform: translateY(-50%);
+        transition: background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    }
+    @media (min-width: 768px) {
+        .pick-a-gift__nav.pick-a-gift__nav--visible {
+            display: flex;
+        }
+    }
+    .pick-a-gift__nav:hover {
+        background: #f9fafb;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+    }
+    .pick-a-gift__nav:disabled {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .pick-a-gift__nav--prev {
+        left: 4px;
+    }
+    .pick-a-gift__nav--next {
+        right: 4px;
+    }
+    @media (min-width: 1280px) {
+        .pick-a-gift__nav--prev {
+            left: 0;
+        }
+        .pick-a-gift__nav--next {
+            right: 0;
+        }
+    }
+    .pick-a-gift__circle {
+        position: relative;
+        display: block;
+        width: 100%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        overflow: hidden;
+        background: #f7f7f7;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+        transition: box-shadow 0.3s ease, transform 0.3s ease;
+    }
+    .pick-a-gift__circle:hover {
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px);
+    }
+    .pick-a-gift__circle img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.45s ease;
+    }
+    .pick-a-gift__circle:hover img {
+        transform: scale(1.06);
+    }
+    .pick-a-gift__circle__placeholder {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(145deg, #005366 0%, #003d4d 100%);
+    }
+    .pick-a-gift__label {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 14px;
+        text-align: center;
+        font-family: Oswald, Figtree, ui-sans-serif, system-ui, sans-serif;
+        font-size: clamp(0.75rem, 2.2vw, 1.0625rem);
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #fff;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+        pointer-events: none;
+    }
+    .pick-a-gift__label::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        border-radius: 50%;
+        background: radial-gradient(circle at center, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.35) 100%);
+        transition: background 0.3s ease;
+    }
+    .pick-a-gift__circle:hover .pick-a-gift__label::before {
+        background: radial-gradient(circle at center, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.45) 100%);
+    }
+
+    /* Asymmetric collections mosaic — desktop only (mobile uses carousel) */
+    .collections-mosaic {
+        display: none;
+        flex-direction: column;
         gap: 16px;
     }
-    
-    .blog-scroll-item {
-        flex-shrink: 0;
-        width: 280px !important; /* Fixed width for mobile */
-    }
-}
-
-    /* Navigation Button Styles */
-    #prev-collections, #next-collections {
-        transition: all 0.3s ease;
-    }
-
-    #prev-collections:hover, #next-collections:hover {
-        transform: scale(1.1);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    #prev-collections:disabled, #next-collections:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        transform: none;
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 640px) {
-        #prev-collections, #next-collections {
-            width: 8px;
-            height: 8px;
-            font-size: 12px;
+    @media (min-width: 768px) {
+        .collections-mosaic {
+            display: flex;
         }
+    }
+    .collections-mosaic-row {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    @media (min-width: 768px) {
+        .collections-mosaic-row {
+            flex-direction: row;
+            gap: 24px;
+        }
+    }
+    .collections-mosaic-tile {
+        position: relative;
+        display: block;
+        min-height: 180px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #003d4d;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    @media (min-width: 768px) {
+        .collections-mosaic-tile {
+            min-height: 220px;
+        }
+    }
+    .collections-mosaic-tile:hover {
+        box-shadow: 0 10px 24px rgba(0, 83, 102, 0.18);
+        transform: translateY(-2px);
+    }
+    .collections-mosaic-tile img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.35s ease;
+    }
+    .collections-mosaic-tile:hover img {
+        transform: scale(1.05);
+    }
+    .collections-mosaic-tile__overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0, 61, 77, 0.25) 0%, rgba(0, 61, 77, 0.72) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        text-align: center;
+    }
+    .collections-mosaic-tile__title {
+        font-size: 1.125rem;
+        font-weight: 700;
+        line-height: 1.25;
+        color: #fff;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        max-width: 100%;
+    }
+    @media (min-width: 768px) {
+        .collections-mosaic-tile__title {
+            font-size: 1.25rem;
+        }
+    }
+
+    /* Latest Collections — mobile carousel */
+    .collections-carousel {
+        position: relative;
+        margin-top: 1.25rem;
+        min-width: 0;
+    }
+    .collections-carousel__slider {
+        position: relative;
+    }
+    .collections-carousel__track-wrap {
+        overflow-x: auto;
+        overflow-y: hidden;
+        scroll-snap-type: x mandatory;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        padding: 12px 0 8px;
+        perspective: 1200px;
+    }
+    .collections-carousel__track-wrap::-webkit-scrollbar {
+        display: none;
+    }
+    .collections-carousel__track {
+        display: flex;
+        gap: 16px;
+        padding: 0 calc((100% - min(82vw, 320px)) / 2);
+        width: max-content;
+    }
+    .collections-carousel__slide {
+        flex: 0 0 min(82vw, 320px);
+        scroll-snap-align: center;
+        scroll-snap-stop: always;
+        transition: transform 0.45s cubic-bezier(0.34, 1.2, 0.64, 1), opacity 0.45s ease, filter 0.45s ease;
+        transform: scale(0.88) translateY(8px);
+        opacity: 0.55;
+        filter: brightness(0.82);
+    }
+    .collections-carousel__slide.is-active {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+        filter: brightness(1);
+    }
+    .collections-carousel__slide.is-adjacent {
+        transform: scale(0.94) translateY(4px);
+        opacity: 0.78;
+        filter: brightness(0.92);
+    }
+    .collections-carousel__tile {
+        position: relative;
+        display: block;
+        min-height: 220px;
+        border-radius: 16px;
+        overflow: hidden;
+        background: #003d4d;
+        box-shadow: 0 8px 24px rgba(0, 61, 77, 0.15);
+        transition: box-shadow 0.45s ease;
+    }
+    .collections-carousel__slide.is-active .collections-carousel__tile {
+        box-shadow: 0 16px 40px rgba(0, 83, 102, 0.28), 0 0 0 2px rgba(242, 101, 34, 0.35);
+    }
+    .collections-carousel__tile img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.6s ease;
+    }
+    .collections-carousel__slide.is-active .collections-carousel__tile img {
+        animation: collectionsKenBurns 10s ease-in-out infinite alternate;
+    }
+    @keyframes collectionsKenBurns {
+        from { transform: scale(1); }
+        to { transform: scale(1.1); }
+    }
+    .collections-carousel__tile__overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0, 61, 77, 0.2) 0%, rgba(0, 61, 77, 0.78) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        text-align: center;
+    }
+    .collections-carousel__slide.is-active .collections-carousel__tile__overlay::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.12) 50%, transparent 60%);
+        animation: collectionsShimmer 3s ease-in-out infinite;
+        pointer-events: none;
+    }
+    @keyframes collectionsShimmer {
+        0%, 100% { transform: translateX(-120%); opacity: 0; }
+        50% { transform: translateX(120%); opacity: 1; }
+    }
+    .collections-carousel__tile__title {
+        position: relative;
+        z-index: 1;
+        font-size: 1.125rem;
+        font-weight: 700;
+        line-height: 1.25;
+        color: #fff;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        transform: translateY(12px);
+        opacity: 0.7;
+        transition: transform 0.45s cubic-bezier(0.34, 1.2, 0.64, 1), opacity 0.45s ease;
+    }
+    .collections-carousel__slide.is-active .collections-carousel__tile__title {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    .collections-carousel__nav {
+        position: absolute;
+        top: 50%;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 9999px;
+        background: #fff;
+        color: #4b5563;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+        transform: translateY(-50%);
+        transition: background 0.2s ease, opacity 0.2s ease;
+    }
+    .collections-carousel__nav:disabled {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .collections-carousel__nav--prev { left: 4px; }
+    .collections-carousel__nav--next { right: 4px; }
+    .collections-carousel__dots {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 20px;
+    }
+    .collections-carousel__dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: #d1d5db;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        transition: width 0.35s cubic-bezier(0.34, 1.2, 0.64, 1), background 0.25s ease;
+    }
+    .collections-carousel__dot.is-active {
+        width: 28px;
+        background: linear-gradient(90deg, #005366, #f26522);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .collections-carousel__slide.is-active .collections-carousel__tile img {
+            animation: none;
+        }
+        .collections-carousel__slide.is-active .collections-carousel__tile__overlay::after {
+            animation: none;
+        }
+        .collections-carousel__track-wrap {
+            scroll-behavior: auto;
+        }
+    }
+
+    /* Latest collections mosaic — see app layout for customize-hero */
+    /* Flash Sale — compact header + asymmetric carousel */
+    .flash-deal {
+        background: linear-gradient(135deg, var(--petrol) 0%, var(--petrol-dark) 55%, var(--petrol) 100%);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 8px 28px rgba(0, 83, 102, 0.22);
+        overflow: hidden;
+    }
+    @media (min-width: 768px) {
+        .flash-deal {
+            padding: 20px;
+        }
+    }
+    .flash-deal__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+        color: #fff;
+        text-align: left;
+    }
+    .flash-deal__header-left {
+        min-width: 0;
+        flex: 1;
+    }
+    .flash-deal__title {
+        font-family: Oswald, Figtree, ui-sans-serif, system-ui, sans-serif;
+        font-size: clamp(1.25rem, 3.5vw, 1.75rem);
+        font-weight: 700;
+        line-height: 1.15;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        margin: 0;
+    }
+    .flash-deal__tagline {
+        margin-top: 4px;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.92);
+        line-height: 1.35;
+    }
+    .flash-deal__countdown-wrap {
+        flex-shrink: 0;
+        text-align: right;
+    }
+    .flash-deal__countdown-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.85);
+        margin-bottom: 4px;
+    }
+    .flash-deal__countdown {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .flash-deal__countdown-segment {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 40px;
+        padding: 6px 8px;
+        background: var(--petrol-dark);
+        color: #fff;
+        font-family: Oswald, Figtree, ui-sans-serif, system-ui, sans-serif;
+        font-size: 1.125rem;
+        font-weight: 700;
+        line-height: 1;
+        border-radius: 8px;
+        font-variant-numeric: tabular-nums;
+    }
+    @media (min-width: 768px) {
+        .flash-deal__countdown-segment {
+            min-width: 48px;
+            padding: 8px 10px;
+            font-size: 1.375rem;
+        }
+    }
+    .flash-deal__countdown-colon {
+        font-size: 1rem;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.9);
+    }
+    @media (min-width: 768px) {
+        .flash-deal__countdown-colon {
+            font-size: 1.125rem;
+        }
+    }
+    .flash-deal__slider {
+        position: relative;
+    }
+    .flash-deal__track-wrap {
+        overflow-x: auto;
+        overflow-y: hidden;
+        scroll-snap-type: x mandatory;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        padding: 4px 0 8px;
+    }
+    .flash-deal__track-wrap::-webkit-scrollbar {
+        display: none;
+    }
+    .flash-deal__track {
+        display: flex;
+        align-items: stretch;
+        gap: 12px;
+        width: max-content;
+        padding: 0 4px;
+    }
+    @media (min-width: 768px) {
+        .flash-deal__track {
+            gap: 16px;
+        }
+    }
+    .flash-deal__card {
+        flex: 0 0 140px;
+        width: 140px;
+        scroll-snap-align: start;
+    }
+    @media (min-width: 768px) {
+        .flash-deal__card {
+            flex: 0 0 180px;
+            width: 180px;
+        }
+    }
+    .flash-deal__card-inner {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .flash-deal__card-inner:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+    }
+    .flash-deal__media {
+        position: relative;
+        aspect-ratio: 1;
+        overflow: hidden;
+        background: #f7f7f7;
+    }
+    .flash-deal__media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.35s ease;
+    }
+    .flash-deal__card-inner:hover .flash-deal__media img {
+        transform: scale(1.05);
+    }
+    .flash-deal__badge {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        padding: 4px 8px;
+        background: #e2150c;
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1.3;
+        border-radius: 9999px;
+    }
+    .flash-deal__body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 8px;
+    }
+    .flash-deal__name {
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1.3;
+        color: #111827;
+        margin: 0 0 6px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .flash-deal__prices {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 4px 8px;
+        margin-top: auto;
+    }
+    .flash-deal__price {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #111827;
+    }
+    .flash-deal__price-old {
+        font-size: 0.8125rem;
+        color: #9ca3af;
+        text-decoration: line-through;
+    }
+    .flash-deal__off-tag {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #e2150c;
+        background: rgba(226, 21, 12, 0.08);
+        padding: 2px 8px;
+        border-radius: 9999px;
+    }
+    .flash-deal__stock {
+        margin-top: 6px;
+    }
+    .flash-deal__stock-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #d97706;
+        margin-bottom: 4px;
+    }
+    .flash-deal__stock-bar {
+        height: 6px;
+        background: #e5e7eb;
+        border-radius: 9999px;
+        overflow: hidden;
+    }
+    .flash-deal__stock-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #f26522, #e2150c);
+        border-radius: 9999px;
+        transition: width 0.4s ease;
+    }
+    .flash-deal__nav {
+        position: absolute;
+        top: 50%;
+        z-index: 5;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.95);
+        color: #4b5563;
+        border: none;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+        transform: translateY(-50%);
+        transition: background 0.2s ease, opacity 0.2s ease;
+    }
+    @media (min-width: 768px) {
+        .flash-deal__nav.flash-deal__nav--visible {
+            display: flex;
+        }
+    }
+    .flash-deal__nav:disabled {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .flash-deal__nav--prev { left: -4px; }
+    .flash-deal__nav--next { right: -4px; }
+    .flash-deal__footer {
+        margin-top: 12px;
+        text-align: center;
+    }
+    .flash-deal__view-all {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 20px;
+        background: #fff;
+        color: #005366;
+        font-size: 0.875rem;
+        font-weight: 600;
+        border-radius: 9999px;
+        border: 2px solid #fff;
+        transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    }
+    .flash-deal__view-all:hover {
+        background: #005366;
+        color: #fff;
+        transform: translateY(-1px);
+    }
+
+    /* Top Picks — asymmetric bento + uniform row */
+    .top-picks {
+        --top-picks-gap: 16px;
+    }
+    .top-picks__header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    .top-picks__header-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #4b5563;
+        transition: color 0.2s ease, transform 0.2s ease;
+        flex-shrink: 0;
+    }
+    .top-picks__header-link:hover {
+        color: #005366;
+        transform: translateX(2px);
+    }
+    .top-picks-bento {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--top-picks-gap);
+        align-items: stretch;
+    }
+    @media (min-width: 768px) {
+        .top-picks-bento {
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: auto auto auto;
+        }
+    }
+    .top-picks-bento__featured {
+        grid-column: 1 / -1;
+        display: flex;
+        min-height: 300px;
+    }
+    @media (min-width: 768px) {
+        .top-picks-bento__featured {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+            min-height: 0;
+        }
+    }
+    .top-picks-bento__featured .collection-promo-card {
+        flex: 1;
+        width: 100%;
+    }
+    .top-picks-bento__promo {
+        grid-column: 1 / -1;
+        display: flex;
+        min-height: 160px;
+    }
+    @media (min-width: 768px) {
+        .top-picks-bento__promo {
+            grid-column: 1 / span 2;
+            grid-row: 3;
+        }
+    }
+    .top-picks-bento__promo .collection-promo-card {
+        flex: 1;
+        width: 100%;
+    }
+    .top-picks-bento__slot {
+        min-width: 0;
+    }
+    @media (min-width: 768px) {
+        .top-picks-bento__slot--r3-1 {
+            grid-column: 3;
+            grid-row: 3;
+        }
+        .top-picks-bento__slot--r3-2 {
+            grid-column: 4;
+            grid-row: 3;
+        }
+    }
+    .top-picks-uniform {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--top-picks-gap);
+        margin-top: var(--top-picks-gap);
+    }
+    @media (min-width: 768px) {
+        .top-picks-uniform {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    .product-price {
+        color: #003d4d;
+    }
+
+    /* Blog posts — compact editorial cards */
+    .blog-posts__top {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    @media (min-width: 768px) {
+        .blog-posts__top {
+            flex-direction: row;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 24px;
+            margin-bottom: 28px;
+        }
+        .blog-posts__top .section-heading {
+            text-align: left;
+            flex: 1;
+        }
+        .blog-posts__top .section-heading__sub {
+            margin-left: 0;
+        }
+        .blog-posts__top .section-heading__accent {
+            margin-left: 0;
+        }
+    }
+    .blog-posts__see-all {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: #005366;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: color 0.2s ease;
+    }
+    .blog-posts__see-all:hover {
+        color: #003d4d;
+    }
+    .blog-posts__see-all svg {
+        width: 16px;
+        height: 16px;
+        transition: transform 0.2s ease;
+    }
+    .blog-posts__see-all:hover svg {
+        transform: translateX(2px);
+    }
+
+    /* Recently viewed */
+    .recently-viewed__slider {
+        position: relative;
+        margin-top: 24px;
+    }
+    .recently-viewed__track-wrap {
+        overflow-x: auto;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+    }
+    .recently-viewed__track {
+        display: flex;
+        align-items: stretch;
+        gap: 16px;
+        padding-bottom: 4px;
+    }
+    .recently-viewed__track > .product-card,
+    .recently-viewed__track > .product-card-pdp {
+        flex: 0 0 172px;
+        width: 172px;
+        min-width: 0;
+        align-self: stretch;
+        height: auto;
+    }
+    @media (min-width: 640px) {
+        .recently-viewed__track > .product-card,
+        .recently-viewed__track > .product-card-pdp {
+            flex: 0 0 200px;
+            width: 200px;
+        }
+    }
+    @media (min-width: 1024px) {
+        .recently-viewed__track > .product-card,
+        .recently-viewed__track > .product-card-pdp {
+            flex: 0 0 220px;
+            width: 220px;
+        }
+    }
+    .recently-viewed__nav {
+        position: absolute;
+        top: 40%;
+        z-index: 5;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.95);
+        color: #4b5563;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+        transform: translateY(-50%);
+        transition: border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+        cursor: pointer;
+    }
+    .recently-viewed__nav.recently-viewed__nav--visible {
+        display: flex;
+    }
+    .recently-viewed__nav:hover:not(:disabled) {
+        border-color: #005366;
+        color: #005366;
+    }
+    .recently-viewed__nav:disabled {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .recently-viewed__nav--prev { left: -8px; }
+    .recently-viewed__nav--next { right: -8px; }
+    .recently-viewed__empty {
+        text-align: center;
+        padding: 40px 16px;
+        border: 1px dashed #e5e7eb;
+        border-radius: 16px;
+        background: #fff;
+    }
+    .recently-viewed__empty-icon {
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 12px;
+        color: #d1d5db;
+    }
+    .recently-viewed__empty-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #4b5563;
+        margin: 0 0 4px;
+    }
+    .recently-viewed__empty-sub {
+        font-size: 0.875rem;
+        color: #9ca3af;
+        margin: 0;
+    }
+
+    /* Why Choose Bluprinter — mobile tab panels */
+    .why-choose__mobile {
+        display: block;
+        margin-top: 20px;
+    }
+    .why-choose__tab-list {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .why-choose__tab-list::-webkit-scrollbar {
+        display: none;
+    }
+    .why-choose__tab {
+        flex: 0 0 auto;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #374151;
+        border-radius: 9999px;
+        padding: 8px 14px;
+        font-size: 0.8125rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        white-space: nowrap;
+    }
+    .why-choose__tab.is-active {
+        background: #005366;
+        border-color: #005366;
+        color: #fff;
+        box-shadow: 0 8px 20px rgba(0, 83, 102, 0.25);
+    }
+    .why-choose__tab-panels {
+        position: relative;
+        margin-top: 14px;
+        min-height: 180px;
+    }
+    .why-choose__tab-panel {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(12px);
+        transition: opacity 0.35s ease, transform 0.35s ease, visibility 0.35s;
+        pointer-events: none;
+    }
+    .why-choose__tab-panel.is-active {
+        position: relative;
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+    .why-choose__tab-panel .why-choose__card {
+        min-height: 180px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        background: linear-gradient(135deg, rgba(0,83,102,0.06), rgba(242,101,34,0.08));
+        border: 1px solid rgba(0,83,102,0.12);
+    }
+    .why-choose__tab-panel .why-choose__icon {
+        margin-bottom: 12px;
+    }
+    .why-choose__grid {
+        display: none;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+        margin-top: 32px;
+    }
+    @media (min-width: 768px) {
+        .why-choose__mobile {
+            display: none;
+        }
+        .why-choose__grid {
+            display: grid;
+        }
+    }
+    @media (min-width: 1024px) {
+        .why-choose__grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+    }
+    .why-choose__card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 24px 20px;
+        text-align: center;
+        height: 100%;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .why-choose__card:hover {
+        border-color: #d1d5db;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+    }
+    .why-choose__icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+    }
+    .why-choose__icon svg {
+        width: 26px;
+        height: 26px;
+    }
+    .why-choose__icon--petrol {
+        background: rgba(0, 83, 102, 0.1);
+        color: #005366;
+    }
+    .why-choose__icon--cta {
+        background: rgba(226, 21, 12, 0.08);
+        color: #e2150c;
+    }
+    .why-choose__icon--orange {
+        background: rgba(242, 101, 34, 0.1);
+        color: #f26522;
+    }
+    .why-choose__title {
+        font-size: 1.0625rem;
+        font-weight: 700;
+        line-height: 1.35;
+        color: #111827;
+        margin: 0 0 8px;
+    }
+    .why-choose__desc {
+        font-size: 0.875rem;
+        line-height: 1.55;
+        color: #4b5563;
+        margin: 0;
+    }
+
+    /* Mobile scrollbar hiding for horizontal carousels */
+    @media (max-width: 1023px) {
+        .mobile-scroll-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .mobile-scroll-hide::-webkit-scrollbar {
+            display: none;
+        }
+    }
+
+    .product-badge {
+        background: #e2150c;
+        color: #fff;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+
+    .hero-banner-title {
+        font-family: Oswald, Figtree, sans-serif;
+        font-weight: 700;
+        font-style: italic;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+
+    .hero-overlay {
+        background: linear-gradient(135deg, rgba(226, 21, 12, 0.72) 0%, rgba(0, 83, 102, 0.78) 100%);
+    }
+
+    /* Hero banners — mobile fade autoplay slideshow */
+    .hero-carousel {
+        position: relative;
+        min-width: 0;
+    }
+    .hero-carousel__viewport {
+        position: relative;
+        min-height: 300px;
+        border-radius: 16px;
+        overflow: hidden;
+    }
+    .hero-carousel__slide {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.65s ease, visibility 0.65s ease;
+        pointer-events: none;
+    }
+    .hero-carousel__slide.is-active {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        z-index: 2;
+    }
+    .hero-carousel__card {
+        position: relative;
+        display: block;
+        height: 100%;
+        min-height: 300px;
+        border-radius: 16px;
+        overflow: hidden;
+        text-decoration: none;
+        color: inherit;
+    }
+    .hero-carousel__card img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.8s ease;
+    }
+    .hero-carousel__slide.is-active .hero-carousel__card img {
+        transform: scale(1.03);
+    }
+    .hero-carousel__overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+    }
+    .hero-carousel__content {
+        position: relative;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        min-height: 300px;
+        padding: 24px;
+    }
+    .hero-carousel__progress {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 3px;
+        background: rgba(255,255,255,0.25);
+        z-index: 12;
+    }
+    .hero-carousel__progress-bar {
+        display: block;
+        height: 100%;
+        width: 0;
+        background: #f26522;
+        transition: width linear;
+    }
+    .hero-carousel__dots {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 12px;
+    }
+    .hero-carousel__dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        border: none;
+        padding: 0;
+        background: #d1d5db;
+        cursor: pointer;
+        transition: width 0.25s ease, background-color 0.25s ease;
+    }
+    .hero-carousel__dot.is-active {
+        width: 24px;
+        background: #005366;
+    }
+
+    /* Customer reviews */
+    .customer-reviews__header {
+        text-align: center;
+        max-width: 40rem;
+        margin: 0 auto 32px;
+    }
+    .customer-reviews__score {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .customer-reviews__stars {
+        display: inline-flex;
+        gap: 2px;
+        color: #005366;
+    }
+    .customer-reviews__stars svg {
+        width: 18px;
+        height: 18px;
+    }
+    .customer-reviews__score-value {
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: #111827;
+    }
+    .customer-reviews__title {
+        font-size: clamp(1.5rem, 4vw, 2rem);
+        font-weight: 700;
+        line-height: 1.2;
+        color: #111827;
+        margin: 0 0 16px;
+    }
+    .customer-reviews__view-all {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.9375rem;
+        text-decoration: none;
+    }
+
+    /* Mobile carousel */
+    .customer-reviews__mobile {
+        display: block;
+    }
+    .customer-reviews__desktop {
+        display: none;
+    }
+    .customer-reviews__carousel {
+        overflow: hidden;
+    }
+    .customer-reviews__track {
+        display: flex;
+        transition: transform 0.35s ease;
+        will-change: transform;
+    }
+    .customer-reviews__slide {
+        flex: 0 0 100%;
+        min-width: 0;
+    }
+    .customer-reviews__mobile-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    .customer-reviews__mobile-top {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+    }
+    .customer-reviews__mobile-media {
+        flex-shrink: 0;
+        width: 88px;
+        height: 88px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #f7f7f7;
+        display: block;
+    }
+    .customer-reviews__mobile-media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .customer-reviews__mobile-media .customer-reviews__media-placeholder {
+        width: 88px;
+        height: 88px;
+    }
+    .customer-reviews__mobile-text {
+        flex: 1;
+        min-width: 0;
+    }
+    .customer-reviews__mobile-headline {
+        font-size: 0.9375rem;
+        font-weight: 700;
+        line-height: 1.4;
+        color: #111827;
+        margin: 0 0 8px;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .customer-reviews__card-stars {
+        display: inline-flex;
+        gap: 1px;
+        color: #005366;
+    }
+    .customer-reviews__card-stars svg {
+        width: 14px;
+        height: 14px;
+    }
+    .customer-reviews__divider {
+        height: 1px;
+        background: #f7f7f7;
+        margin: 14px 0;
+    }
+    .customer-reviews__author--mobile {
+        margin-top: 0;
+    }
+    .customer-reviews__verified--mobile {
+        color: #9ca3af;
+        font-weight: 400;
+    }
+    .customer-reviews__verified--mobile svg {
+        color: #9ca3af;
+    }
+    .customer-reviews__dots {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 20px;
+        flex-wrap: wrap;
+    }
+    .customer-reviews__dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        border: none;
+        padding: 0;
+        background: #d1d5db;
+        cursor: pointer;
+        transition: width 0.25s ease, background-color 0.25s ease;
+    }
+    .customer-reviews__dot.is-active {
+        width: 24px;
+        background: #005366;
+    }
+
+    /* Desktop grid */
+    @media (min-width: 1024px) {
+        .customer-reviews__mobile {
+            display: none;
+        }
+        .customer-reviews__desktop {
+            display: block;
+        }
+    }
+    .customer-reviews__grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+    }
+    .customer-reviews__card {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+    .customer-reviews__media {
+        display: block;
+        border-radius: 16px;
+        overflow: hidden;
+        aspect-ratio: 1;
+        background: #f7f7f7;
+        margin-bottom: 16px;
+    }
+    .customer-reviews__media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.35s ease;
+    }
+    .customer-reviews__media:hover img {
+        transform: scale(1.03);
+    }
+    .customer-reviews__media-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f7f7f7;
+    }
+    .customer-reviews__headline {
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1.4;
+        color: #111827;
+        margin: 0 0 8px;
+    }
+    .customer-reviews__body {
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: #4b5563;
+        font-style: italic;
+        margin: 0 0 16px;
+    }
+    .customer-reviews__author {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: auto;
+    }
+    .customer-reviews__avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 9999px;
+        background: #f7f7f7;
+        color: #4b5563;
+        font-size: 0.8125rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .customer-reviews__author-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+    .customer-reviews__name {
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1.3;
+    }
+    .customer-reviews__verified {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: #005366;
+        line-height: 1.3;
+    }
+    .customer-reviews__verified svg {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+    }
+    .customer-reviews__pager {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 32px;
+    }
+    .customer-reviews__pager-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 9999px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #4b5563;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+    }
+    .customer-reviews__pager-btn:hover:not(:disabled) {
+        border-color: #005366;
+        color: #005366;
+        background: rgba(0, 83, 102, 0.06);
+    }
+    .customer-reviews__pager-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    .customer-reviews__pager-status {
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: #4b5563;
+        min-width: 3rem;
+        text-align: center;
     }
 </style>
 
 
 
-<!-- Dynamic Circular Categories Section -->
-<div class="py-16 sm:py-20 md:py-24 bg-white">
+<!-- Hero banners: large apparel + stacked accessories -->
+@if(count($heroSlides) > 0)
+<section class="bg-white pt-4 sm:pt-5 pb-0" data-home-edit-section="hero" data-home-edit-label="Hero">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-        <div class="text-center scroll-reveal">
-            <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl md:text-5xl">
-                Latest 
-                <span class="gradient-text">Collections</span>
-            </h2>
-            <p class="mt-4 sm:mt-6 max-w-3xl mx-auto text-lg sm:text-xl text-gray-600 px-4">
-                Discover our newest collections and trending designs
-            </p>
-        </div>
-
-        <!-- Collections Grid -->
-        <div class="mt-12 sm:mt-16 md:mt-20">
-            <div class="relative">
-                <div id="collections-container" class="overflow-hidden">
-                    <div id="collections-slider" class="flex transition-transform duration-500 ease-in-out">
-                        @php
-                            $collections = \App\Models\Collection::where('status', 'active')
-                                ->where('admin_approved', true)
-                                ->orderBy('created_at', 'desc')
-                                ->get();
-                            $collectionColors = [
-                                'from-green-400 to-green-600',
-                                'from-pink-400 to-pink-600', 
-                                'from-blue-400 to-blue-600',
-                                'from-yellow-400 to-yellow-600',
-                                'from-red-400 to-red-600',
-                                'from-purple-400 to-purple-600'
-                            ];
-                        @endphp
-                        
-                        @foreach($collections as $index => $collection)
-                            <div class="w-1/2 sm:w-1/3 md:w-1/4 lg:w-1/6 flex-shrink-0 px-3 mobile-scroll-item">
-                                <a href="{{ route('collections.show', $collection->slug) }}" class="circular-item group scroll-reveal block" 
-                                   data-collection="{{ $collection->name }}"
-                                   style="animation-delay: {{ $index * 0.1 }}s">
-                                    <div class="relative w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 mx-auto">
-                                        <!-- Circular Image Container -->
-                                        <div class="w-full h-full rounded-full overflow-hidden bg-gradient-to-br {{ $collectionColors[$index % 6] }} shadow-lg group-hover:shadow-xl transition-all duration-300">
-                                            @if($collection->image)
-                                                <img src="{{ $collection->image }}" 
-                                                     alt="{{ $collection->name }}"
-                                                     class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
-                                            @else
-                                                <div class="w-full h-full flex items-center justify-center">
-                                                    <svg class="w-12 h-12 text-white opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                    </svg>
-                                                </div>
-                                            @endif
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Collection Name -->
-                                    <h3 class="mt-4 text-sm sm:text-base font-semibold text-gray-900 text-center group-hover:text-[#005366] transition-colors line-clamp-2">
-                                        {{ $collection->name }}
-                                    </h3>
-                                </a>
+        {{-- Mobile: fade autoplay slideshow --}}
+        <div class="hero-carousel lg:hidden" id="hero-carousel" data-autoplay-ms="{{ $heroAutoplayMs }}">
+            <div class="hero-carousel__viewport" id="heroCarouselViewport">
+                @foreach ($heroSlides as $index => $slide)
+                    <div class="hero-carousel__slide {{ $index === 0 ? 'is-active' : '' }}" data-hero-index="{{ $index }}">
+                        <a href="{{ $slide['url'] }}" class="hero-carousel__card group">
+                            <img src="{{ $slide['image'] }}" alt="{{ $slide['alt'] }}" loading="{{ $index === 0 ? 'eager' : 'lazy' }}"
+                                 @if($index < 3) data-home-preview="hero.slides.{{ $index }}.image" @endif>
+                            <div class="hero-carousel__overlay" style="background: linear-gradient(135deg, {{ $slide['overlay_from'] ?? 'rgba(0,0,0,0.45)' }}, {{ $slide['overlay_to'] ?? 'rgba(0,0,0,0.65)' }});"
+                                 data-home-preview="hero.slides.{{ $index }}.overlay"></div>
+                            <div class="hero-carousel__content">
+                                @if (!empty($slide['eyebrow']))
+                                    <p class="text-white/80 text-sm font-semibold tracking-widest uppercase mb-2 inline-flex items-center gap-2" data-home-preview="hero.slides.{{ $index }}.eyebrow">
+                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path d="M9.5 3.2l1.15 3.1 3.15 1.15-3.15 1.15-1.15 3.1-1.15-3.1L5.2 7.45l3.15-1.15L9.5 3.2zM17.4 9.2l.85 2.2 2.25.85-2.25.85-.85 2.2-.85-2.2-2.25-.85 2.25-.85.85-2.2zM13.8 14.6l.7 1.85 1.9.7-1.9.7-.7 1.85-.7-1.85-1.9-.7 1.9-.7.7-1.85z"/>
+                                        </svg>
+                                        {{ $slide['eyebrow'] }}
+                                    </p>
+                                @endif
+                                <h2 class="hero-banner-title {{ $slide['title_size'] ?? 'text-2xl sm:text-3xl' }} text-white leading-tight" data-home-preview="hero.slides.{{ $index }}.title_html">{!! $slide['title_html'] !!}</h2>
+                                @if (!empty($slide['description']))
+                                    <p class="mt-3 text-white/90 max-w-md text-sm sm:text-base" data-home-preview="hero.slides.{{ $index }}.description">{{ $slide['description'] }}</p>
+                                @endif
+                                <span class="btn-cta mt-5 w-fit {{ empty($slide['description']) ? 'text-sm px-5 py-2' : '' }}">{{ $slide['button_label'] ?? 'Shop Now' }}</span>
                             </div>
-                        @endforeach
+                        </a>
                     </div>
+                @endforeach
+                <div class="hero-carousel__progress" aria-hidden="true">
+                    <span class="hero-carousel__progress-bar" id="heroCarouselProgress"></span>
                 </div>
-                
-                <!-- Navigation Buttons -->
-                @if($collections->count() > 6)
-                    <button id="prev-collections" class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors z-10">
-                        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                        </svg>
-                    </button>
-                    <button id="next-collections" class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors z-10">
-                        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                    </svg>
-                    </button>
-                @endif
+            </div>
+            <div class="hero-carousel__dots" id="heroCarouselDots" role="tablist" aria-label="Hero banners">
+                @foreach ($heroSlides as $index => $slide)
+                    <button type="button"
+                            class="hero-carousel__dot {{ $index === 0 ? 'is-active' : '' }}"
+                            data-hero-dot="{{ $index }}"
+                            onclick="goToHeroSlide({{ $index }}, true)"
+                            aria-label="Go to {{ $slide['alt'] }}"
+                            aria-selected="{{ $index === 0 ? 'true' : 'false' }}"></button>
+                @endforeach
             </div>
         </div>
 
-        <!-- Categories Grid (like the image) -->
-        <div class="mt-16 sm:mt-20 md:mt-24">
-            <div class="text-center mb-12 scroll-reveal">
-                <h3 class="text-3xl font-bold text-gray-900 mb-4">Shop by Category</h3>
-                <p class="text-lg text-gray-600">Discover products in your favorite categories</p>
-            </div>
-            
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-6 sm:gap-8">
-                @php
-                    $allCategories = \App\Models\Category::whereNull('parent_id')
-                        ->orderBy('name')
-                        ->limit(6)
-                        ->get();
-                @endphp
-                
-                @foreach($allCategories as $index => $category)
-                    <a href="{{ route('category.show', $category->slug) }}" class="group scroll-reveal" 
-                       style="animation-delay: {{ $index * 0.1 }}s">
-                        <div class="relative overflow-hidden rounded-2xl bg-white shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                            @if($category->image)
-                                <div class="aspect-[4/3]">
-                                    <img src="{{ $category->image }}" 
-                                         alt="{{ $category->name }}"
-                                         class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
-                                </div>
-                            @else
-                                <div class="aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                                    <svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                                    </svg>
-                                </div>
-                            @endif
-                            
-                            <!-- Category Label Overlay -->
-                            <div class="absolute inset-0 bg-black/20 flex items-end">
-                                <div class="w-full p-4 bg-gradient-to-t from-black/70 to-transparent">
-                                    <h4 class="text-white font-bold text-lg text-center">
-                                        {{ $category->name }}
-                                    </h4>
-                                </div>
-                            </div>
+        {{-- Desktop: asymmetric grid --}}
+        <div class="hidden lg:grid grid-cols-3 gap-3 sm:gap-4 lg:h-[440px]">
+            @if($mainHeroSlide)
+                <a href="{{ $mainHeroSlide['url'] }}" class="relative overflow-hidden rounded-2xl lg:col-span-2 min-h-[240px] lg:min-h-0 group">
+                    <img src="{{ $mainHeroSlide['image'] }}"
+                         alt="{{ $mainHeroSlide['alt'] }}"
+                         class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                    <div class="absolute inset-0" style="background: linear-gradient(135deg, {{ $mainHeroSlide['overlay_from'] ?? 'rgba(0,0,0,0.45)' }}, {{ $mainHeroSlide['overlay_to'] ?? 'rgba(0,0,0,0.65)' }});"></div>
+                    <div class="relative z-10 h-full flex flex-col justify-end p-6 sm:p-8 lg:p-10">
+                        @if(!empty($mainHeroSlide['eyebrow']))
+                            <p class="text-white/80 text-sm font-semibold tracking-widest uppercase mb-2 inline-flex items-center gap-2">
+                                <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M9.5 3.2l1.15 3.1 3.15 1.15-3.15 1.15-1.15 3.1-1.15-3.1L5.2 7.45l3.15-1.15L9.5 3.2z"/>
+                                </svg>
+                                {{ $mainHeroSlide['eyebrow'] }}
+                            </p>
+                        @endif
+                        <h1 class="hero-banner-title text-3xl sm:text-5xl lg:text-6xl text-white leading-tight">{!! $mainHeroSlide['title_html'] !!}</h1>
+                        @if(!empty($mainHeroSlide['description']))
+                            <p class="mt-3 text-white/90 max-w-md text-sm sm:text-base">{{ $mainHeroSlide['description'] }}</p>
+                        @endif
+                        <span class="btn-cta mt-5 w-fit">{{ $mainHeroSlide['button_label'] ?? 'Shop Now' }}</span>
+                    </div>
+                </a>
+            @endif
+
+            <div class="grid grid-rows-2 gap-3 sm:gap-4 min-h-[320px] lg:min-h-0">
+                @foreach($sideHeroSlides as $slide)
+                    <a href="{{ $slide['url'] }}" class="relative overflow-hidden rounded-2xl group">
+                        <img src="{{ $slide['image'] }}"
+                             alt="{{ $slide['alt'] }}"
+                             class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                        <div class="absolute inset-0" style="background: linear-gradient(135deg, {{ $slide['overlay_from'] ?? 'rgba(0,0,0,0.45)' }}, {{ $slide['overlay_to'] ?? 'rgba(0,0,0,0.65)' }});"></div>
+                        <div class="relative z-10 h-full flex flex-col justify-end p-5">
+                            <h2 class="hero-banner-title text-2xl sm:text-3xl text-white">{!! $slide['title_html'] !!}</h2>
+                            <span class="btn-cta mt-3 w-fit text-sm px-5 py-2">{{ $slide['button_label'] ?? 'Shop Now' }}</span>
                         </div>
                     </a>
                 @endforeach
             </div>
         </div>
+    </div>
+</section>
+@endif
 
-        <!-- Category Details Panel -->
-        <div id="category-details" class="mt-12 scroll-reveal hidden">
-            <div class="bg-gradient-to-r from-[#005366] to-[#E2150C] rounded-2xl p-8 text-white">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-                    <div>
-                        <h3 id="category-title" class="text-2xl font-bold mb-4"></h3>
-                        <p id="category-description" class="text-lg opacity-90 mb-6"></p>
-                        <div class="flex flex-wrap gap-4">
-                            <span class="px-4 py-2 bg-white/20 rounded-full text-sm font-semibold">
-                                <span id="category-count">0</span> Products
-                            </span>
-                            <span class="px-4 py-2 bg-white/20 rounded-full text-sm font-semibold">
-                                Starting from $<span id="category-price">0</span>
-                            </span>
-                        </div>
-                    </div>
-                    <div class="relative">
-                        <div class="aspect-square rounded-2xl overflow-hidden bg-white/10 backdrop-blur">
-                            <img id="category-image" src="" alt="" class="w-full h-full object-cover">
-                </div>
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-2xl"></div>
-                </div>
+@php
+    $pickGiftItems = $homeSections['pick_a_gift']['items'] ?? [];
+    $pickGiftVisibleCount = collect($pickGiftItems)->filter(function ($item) {
+        return trim((string) ($item['label'] ?? '')) !== '' || trim((string) ($item['image'] ?? '')) !== '';
+    })->count();
+@endphp
+
+@if (($homeSections['pick_a_gift']['enabled'] ?? true) && ($pickGiftVisibleCount > 0 || ($homeEditMode ?? false)))
+<!-- Pick a Gift — circular gift slider -->
+<section class="py-8 sm:py-10 border-t border-gray-200 overflow-x-hidden" style="background: {{ $homeSections['pick_a_gift']['background'] ?? '#ffffff' }};" aria-labelledby="pick-a-gift-heading" data-home-edit-section="pick_a_gift" data-home-edit-label="Pick a Gift">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-w-0">
+        <div class="section-heading scroll-reveal">
+            <p class="section-heading__eyebrow" data-home-preview="sections.pick_a_gift.eyebrow">{{ $homeSections['pick_a_gift']['eyebrow'] ?? 'Gift ideas' }}</p>
+            <h2 id="pick-a-gift-heading" class="section-heading__title" data-home-preview="sections.pick_a_gift.title_html">
+                {!! $homeSections['pick_a_gift']['title_html'] ?? 'Pick a <span class="gradient-text">Gift</span>' !!}
+            </h2>
+            <p class="section-heading__sub" data-home-preview="sections.pick_a_gift.subtitle">
+                {{ $homeSections['pick_a_gift']['subtitle'] ?? 'Browse curated collections for every occasion' }}
+            </p>
+            <span class="section-heading__accent" aria-hidden="true"></span>
+        </div>
+
+        <div class="pick-a-gift__slider scroll-reveal" id="pick-a-gift-slider">
+            <button type="button"
+                    id="pickAGiftPrevBtn"
+                    class="pick-a-gift__nav pick-a-gift__nav--prev"
+                    onclick="scrollPickAGift('prev')"
+                    aria-label="Previous collections"
+                    disabled>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </button>
+
+            <div id="pickAGiftTrackWrap" class="pick-a-gift__track-wrap mobile-scroll-hide">
+                <div id="pickAGiftTrack" class="pick-a-gift__track">
+                    @for ($gi = 0; $gi < 12; $gi++)
+                        @php
+                            $giftItem = $pickGiftItems[$gi] ?? ['image' => '', 'url' => '', 'label' => ''];
+                            $giftLabel = trim((string) ($giftItem['label'] ?? ''));
+                            $giftImage = trim((string) ($giftItem['image'] ?? ''));
+                            $giftUrl = trim((string) ($giftItem['url'] ?? ''));
+                            $showGiftItem = $giftLabel !== '' || $giftImage !== '' || ($homeEditMode ?? false);
+                        @endphp
+                        @if ($showGiftItem)
+                            <div class="pick-a-gift__item" data-home-pick-gift-index="{{ $gi }}">
+                                <a href="{{ $giftUrl !== '' ? $giftUrl : '#' }}"
+                                   class="pick-a-gift__circle group"
+                                   aria-label="{{ $giftLabel !== '' ? $giftLabel : 'Gift item ' . ($gi + 1) }}">
+                                    @if ($giftImage !== '')
+                                        <img src="{{ $giftImage }}"
+                                             alt="{{ $giftLabel }}"
+                                             loading="lazy"
+                                             width="200"
+                                             height="200"
+                                             data-home-preview="sections.pick_a_gift.items.{{ $gi }}.image">
+                                    @else
+                                        <span class="pick-a-gift__circle__placeholder" aria-hidden="true"
+                                              data-home-preview="sections.pick_a_gift.items.{{ $gi }}.image"></span>
+                                    @endif
+                                    <span class="pick-a-gift__label" data-home-preview="sections.pick_a_gift.items.{{ $gi }}.label">
+                                        {{ $giftLabel !== '' ? \Illuminate\Support\Str::upper($giftLabel) : 'GIFT ' . ($gi + 1) }}
+                                    </span>
+                                </a>
+                            </div>
+                        @endif
+                    @endfor
                 </div>
             </div>
+
+            <button type="button"
+                    id="pickAGiftNextBtn"
+                    class="pick-a-gift__nav pick-a-gift__nav--next"
+                    onclick="scrollPickAGift('next')"
+                    aria-label="Next collections">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
         </div>
     </div>
-</div>
+</section>
+@endif
 
-<!-- New Arrivals Section -->
-<div class="py-16 sm:py-20 md:py-24 bg-gray-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-        <div class="text-center scroll-reveal">
-            <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl md:text-5xl">
-                New 
-                <span class="gradient-text">Arrivals</span>
-            </h2>
-            <p class="mt-4 sm:mt-6 max-w-3xl mx-auto text-lg sm:text-xl text-gray-600 px-4">
-                Discover our latest products from Halloween and Christmas collections
-            </p>
-        </div>
-
-        <!-- New Arrivals Products -->
-        <div class="mt-12 sm:mt-16 md:mt-20">
-            <div id="new-arrivals-container" class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
-                @php
-                    $allNewArrivals = \App\Models\Product::with(['shop', 'template.category'])
-                        ->availableForDisplay()
-                        ->where(function($query) {
-                            $query->where('name', 'like', '%Halloween%')
-                                  ->orWhere('name', 'like', '%Christmas%')
-                                  ->orWhere('name', 'like', '%Giáng Sinh%')
-                                  ->orWhere('name', 'like', '%Noel%')
-                                  ->orWhere('name', 'like', '%Holiday%')
-                                  ->orWhere('name', 'like', '%Xmas%')
-                                  ->orWhere('name', 'like', '%Santa%')
-                                  ->orWhere('name', 'like', '%Ghost%')
-                                  ->orWhere('name', 'like', '%Pumpkin%')
-                                  ->orWhere('name', 'like', '%Spooky%')
-                                  ->orWhere('name', 'like', '%Trick%')
-                                  ->orWhere('name', 'like', '%Treat%')
-                                  ->orWhere('name', 'like', '%Witch%')
-                                  ->orWhere('name', 'like', '%Candy%')
-                                  ->orWhere('name', 'like', '%Costume%')
-                                  ->orWhere('name', 'like', '%Festive%')
-                                  ->orWhere('name', 'like', '%Winter%')
-                                  ->orWhere('name', 'like', '%Snow%')
-                                  ->orWhere('name', 'like', '%Gift%')
-                                  ->orWhere('name', 'like', '%Present%')
-                                  ->orWhere('name', 'like', '%Tree%')
-                                  ->orWhere('name', 'like', '%Star%')
-                                  ->orWhere('name', 'like', '%Bell%')
-                                  ->orWhere('name', 'like', '%Reindeer%')
-                                  ->orWhere('name', 'like', '%Elf%')
-                                  ->orWhere('description', 'like', '%Halloween%')
-                                  ->orWhere('description', 'like', '%Christmas%')
-                                  ->orWhere('description', 'like', '%Giáng Sinh%')
-                                  ->orWhere('description', 'like', '%Noel%')
-                                  ->orWhere('description', 'like', '%Holiday%')
-                                  ->orWhere('description', 'like', '%Xmas%')
-                                  ->orWhere('description', 'like', '%Santa%')
-                                  ->orWhere('description', 'like', '%Ghost%')
-                                  ->orWhere('description', 'like', '%Pumpkin%')
-                                  ->orWhere('description', 'like', '%Spooky%')
-                                  ->orWhere('description', 'like', '%Trick%')
-                                  ->orWhere('description', 'like', '%Treat%')
-                                  ->orWhere('description', 'like', '%Witch%')
-                                  ->orWhere('description', 'like', '%Candy%')
-                                  ->orWhere('description', 'like', '%Costume%')
-                                  ->orWhere('description', 'like', '%Festive%')
-                                  ->orWhere('description', 'like', '%Winter%')
-                                  ->orWhere('description', 'like', '%Snow%')
-                                  ->orWhere('description', 'like', '%Gift%')
-                                  ->orWhere('description', 'like', '%Present%')
-                                  ->orWhere('description', 'like', '%Tree%')
-                                  ->orWhere('description', 'like', '%Star%')
-                                  ->orWhere('description', 'like', '%Bell%')
-                                  ->orWhere('description', 'like', '%Reindeer%')
-                                  ->orWhere('description', 'like', '%Elf%');
-                        })
-                        ->orderBy('created_at', 'desc')
-                        ->get();
-                    
-                    // Chỉ hiển thị sản phẩm có từ khóa Halloween/Christmas, không lấy sản phẩm mới nhất
-                    
-                    // Lấy 10 sản phẩm đầu tiên để hiển thị ban đầu
-                    $newArrivals = $allNewArrivals->take(10);
-                @endphp
-                
-                @if($newArrivals->count() > 0)
-                    @foreach($newArrivals as $index => $product)
-                        <div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 group overflow-hidden scroll-reveal" style="animation-delay: {{ $index * 0.1 }}s">
-                            <!-- Product Image -->
-                            <div class="relative aspect-square overflow-hidden">
-                                @php
-                                    $media = $product->getEffectiveMedia();
-                                    $imageUrl = null;
-                                    if ($media && count($media) > 0) {
-                                        if (is_string($media[0])) {
-                                            $imageUrl = $media[0];
-                                        } elseif (is_array($media[0])) {
-                                            $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? null;
-                                        }
-                                    }
-                                @endphp
-                                @if($imageUrl)
-                                    <img src="{{ $imageUrl }}" 
-                                         alt="{{ $product->name }}" 
-                                         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                                @else
-                                    <div class="w-full h-full bg-gray-200 flex items-center justify-center">
-                                        <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                        </svg>
-                                    </div>
-                                @endif
-                                
-                                <!-- Wishlist Button -->
-                                <div class="absolute top-2 left-2 sm:top-3 sm:left-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
-                                    <x-wishlist-button :product="$product" size="sm" />
-                                </div>
-
-                                <!-- New Badge -->
-                                <div class="absolute top-2 right-2 sm:top-3 sm:right-3 bg-[#E2150C] text-white px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">
-                                    NEW
-                                </div>
-                            </div>
-
-                            <!-- Product Info -->
-                            <div class="p-2 sm:p-4">
-                                <h3 class="font-semibold text-gray-900 mb-1 sm:mb-2 line-clamp-2 group-hover:text-[#005366] transition-colors text-sm sm:text-base">
-                                    <a href="{{ route('products.show', $product->slug) }}">
-                                        {{ Str::limit($product->name, 50) }}
-                                    </a>
-                                </h3>
-                                
-                                <p class="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2 line-clamp-1">By {{ $product->shop->name ?? 'Unknown Shop' }}</p>
-                                
-                                <div class="flex items-center justify-between">
-                                    <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
-                                        @if($product->template && $product->template->base_price > $product->price)
-                                            <span class="text-xs sm:text-sm text-gray-500 line-through">{{ format_price_usd((float) $product->template->base_price) }}</span>
-                                            <span class="text-base sm:text-lg font-bold text-[#E2150C]">{{ format_price_usd((float) $product->price) }}</span>
-                                        @else
-                                            <span class="text-base sm:text-lg font-bold text-[#E2150C]">{{ format_price_usd((float) $product->base_price) }}</span>
-                                        @endif
-                                    </div>
-                                </div>
-
-                                <!-- Sale End Date -->
-                                @if($product->template && $product->template->base_price > $product->price)
-                                    <div class="mt-1 sm:mt-2 text-[10px] sm:text-xs text-red-600 font-medium">
-                                        Sale ends at {{ now()->addDays(7)->format('F d') }}
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-                    @endforeach
-                @else
-                    <!-- Empty State for Holiday Products -->
-                    <div class="col-span-full text-center py-12">
-                        <div class="max-w-md mx-auto">
-                            <div class="w-16 h-16 bg-gradient-to-br from-orange-100 to-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <svg class="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                                </svg>
-                            </div>
-                            <h3 class="text-lg font-semibold text-gray-900 mb-2">No Holiday Products Yet</h3>
-                            <p class="text-gray-600 mb-6">We're working on adding Halloween and Christmas themed products. Check back soon!</p>
-                            <a href="{{ route('products.index') }}" class="inline-flex items-center px-4 py-2 bg-[#005366] text-white rounded-lg hover:bg-[#003d4d] transition-colors">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                                </svg>
-                                Browse All Products
-                            </a>
-                        </div>
-                    </div>
-                @endif
-            </div>
-            
-            <!-- View All and Load More Buttons for New Arrivals -->
-            @if($newArrivals->count() > 0)
-                <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
-                    <a href="{{ route('products.index', ['filter' => 'new']) }}" 
-                       class="bg-[#E2150C] hover:bg-[#c0120a] text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105">
-                        View All Holiday Products
-                    </a>
-                    @if($allNewArrivals->count() > 10)
-                        <button id="load-more-new-arrivals" 
-                                class="bg-[#005366] hover:bg-[#003d4d] text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-                                data-offset="10"
-                                data-total="{{ $allNewArrivals->count() }}">
-                            Load More
-                        </button>
-                    @endif
+@if(isset($flashDeals) && $flashDeals->count() > 0)
+<!-- Flash Sale -->
+<section class="py-8 sm:py-10 bg-white border-t border-gray-200" aria-labelledby="flash-deal-heading">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flash-deal scroll-reveal">
+            <header class="flash-deal__header">
+                <div class="flash-deal__header-left">
+                    <h2 id="flash-deal-heading" class="flash-deal__title">Today's Big Deals</h2>
+                    <p class="flash-deal__tagline">
+                        Limited time &bull; Up to {{ $flashDealMaxDiscount }}% off
+                    </p>
                 </div>
-            @endif
-        </div>
-    </div>
-</div>
+                <div class="flash-deal__countdown-wrap">
+                    <p class="flash-deal__countdown-label">Ends in</p>
+                    <div class="flash-deal__countdown"
+                         id="flashDealCountdown"
+                         data-ends-at="{{ $flashSaleEndsAt->toIso8601String() }}"
+                         role="timer"
+                         aria-live="polite"
+                         aria-atomic="true">
+                        <span class="flash-deal__countdown-segment" id="flashDealHours">00</span>
+                        <span class="flash-deal__countdown-colon" aria-hidden="true">:</span>
+                        <span class="flash-deal__countdown-segment" id="flashDealMinutes">00</span>
+                        <span class="flash-deal__countdown-colon" aria-hidden="true">:</span>
+                        <span class="flash-deal__countdown-segment" id="flashDealSeconds">00</span>
+                    </div>
+                </div>
+            </header>
 
-<!-- Best Sellers Section -->
-<div class="py-16 sm:py-20 md:py-24 bg-white">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-        <div class="text-center scroll-reveal">
-            <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl md:text-5xl">
-                Best 
-                <span class="gradient-text">Sellers</span>
-            </h2>
-            <p class="mt-4 sm:mt-6 max-w-3xl mx-auto text-lg sm:text-xl text-gray-600 px-4">
-                Our most popular products loved by customers worldwide
-            </p>
-        </div>
+            <div class="flash-deal__slider">
+                <button type="button"
+                        id="flashDealPrev"
+                        class="flash-deal__nav flash-deal__nav--prev"
+                        onclick="scrollFlashDeal('prev')"
+                        aria-label="Previous deal"
+                        disabled>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </button>
 
-        <!-- Best Sellers Products -->
-        <div class="mt-12 sm:mt-16 md:mt-20">
-            <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
-                @php
-                    $bestSellers = \App\Models\Product::with(['shop', 'template.category'])
-                        ->availableForDisplay()
-                        ->orderBy('created_at', 'desc')
-                        ->limit(10)
-                        ->get();
-                @endphp
-                
-                @foreach($bestSellers as $index => $product)
-                    <div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 group overflow-hidden scroll-reveal" style="animation-delay: {{ $index * 0.1 }}s">
-                        <!-- Product Image -->
-                        <div class="relative aspect-square overflow-hidden">
+                <div id="flashDealWrap" class="flash-deal__track-wrap mobile-scroll-hide">
+                    <div id="flashDealTrack" class="flash-deal__track">
+                        @foreach ($flashDeals as $index => $deal)
                             @php
+                                $product = $deal->product;
                                 $media = $product->getEffectiveMedia();
                                 $imageUrl = null;
                                 if ($media && count($media) > 0) {
@@ -660,449 +1939,520 @@ document.addEventListener('DOMContentLoaded', function() {
                                         $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? null;
                                     }
                                 }
+                                $originalPrice = (float) $deal->original_price;
+                                $salePrice = (float) $deal->sale_price;
+                                $discountPct = $deal->discount_percent;
+                                $stockLeft = (int) $product->quantity;
+                                $showLowStock = $stockLeft > 0 && $stockLeft <= 25;
+                                $stockBarPct = $showLowStock ? min(100, max(8, ($stockLeft / 25) * 100)) : 0;
                             @endphp
-                            @if($imageUrl)
-                                <img src="{{ $imageUrl }}" 
-                                     alt="{{ $product->name }}" 
-                                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                            @else
-                                <div class="w-full h-full bg-gray-200 flex items-center justify-center">
-                                    <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                    </svg>
-                                </div>
-                            @endif
-                            
-                            <!-- Wishlist Button -->
-                            <div class="absolute top-2 left-2 sm:top-3 sm:left-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
-                                <x-wishlist-button :product="$product" size="sm" />
-                            </div>
-
-                            <!-- Best Seller Badge -->
-                            <div class="absolute top-2 right-2 sm:top-3 sm:right-3 bg-[#005366] text-white px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">
-                                BEST
-                            </div>
-                        </div>
-
-                        <!-- Product Info -->
-                        <div class="p-2 sm:p-4">
-                            <h3 class="font-semibold text-gray-900 mb-1 sm:mb-2 line-clamp-2 group-hover:text-[#005366] transition-colors text-sm sm:text-base">
-                                <a href="{{ route('products.show', $product->slug) }}">
-                                    {{ Str::limit($product->name, 50) }}
+                            <article class="flash-deal__card">
+                                <a href="{{ route('products.show', $product->slug) }}"
+                                   class="flash-deal__card-inner group"
+                                   aria-label="{{ $product->name }}, {{ $discountPct }}% off">
+                                    <div class="flash-deal__media">
+                                        @if ($imageUrl)
+                                            <img src="{{ $imageUrl }}" alt="{{ $product->name }}" loading="lazy">
+                                        @else
+                                            <div class="w-full h-full bg-[#f7f7f7] flex items-center justify-center">
+                                                <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                                </svg>
+                                            </div>
+                                        @endif
+                                        @if ($discountPct > 0)
+                                            <span class="flash-deal__badge">-{{ $discountPct }}%</span>
+                                        @endif
+                                    </div>
+                                    <div class="flash-deal__body">
+                                        <h3 class="flash-deal__name">{{ $product->name }}</h3>
+                                        <div class="flash-deal__prices">
+                                            <span class="flash-deal__price">{{ format_price_usd($salePrice) }}</span>
+                                            @if ($originalPrice > $salePrice)
+                                                <span class="flash-deal__price-old">{{ format_price_usd($originalPrice) }}</span>
+                                            @endif
+                                            @if ($discountPct > 0)
+                                                <span class="flash-deal__off-tag">{{ $discountPct }}% OFF</span>
+                                            @endif
+                                        </div>
+                                        @if ($showLowStock)
+                                            <div class="flash-deal__stock">
+                                                <p class="flash-deal__stock-label">Only {{ $stockLeft }} left</p>
+                                                <div class="flash-deal__stock-bar" role="progressbar"
+                                                     aria-valuenow="{{ $stockLeft }}"
+                                                     aria-valuemin="0"
+                                                     aria-valuemax="25"
+                                                     aria-label="Stock remaining: {{ $stockLeft }} units">
+                                                    <div class="flash-deal__stock-fill" style="width: {{ $stockBarPct }}%"></div>
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
                                 </a>
-                            </h3>
-                            
-                            <p class="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2 line-clamp-1">By {{ $product->shop->name ?? 'Unknown Shop' }}</p>
-                            
-                            <div class="flex items-center justify-between">
-                                <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
-                                    @if($product->template && $product->template->base_price > $product->price)
-                                        <span class="text-xs sm:text-sm text-gray-500 line-through">{{ format_price_usd((float) $product->template->base_price) }}</span>
-                                        <span class="text-base sm:text-lg font-bold text-[#E2150C]">{{ format_price_usd((float) $product->price) }}</span>
-                                    @else
-                                        <span class="text-base sm:text-lg font-bold text-[#E2150C]">{{ format_price_usd((float) $product->base_price) }}</span>
-                                    @endif
-                                </div>
-                            </div>
+                            </article>
+                        @endforeach
+                    </div>
+                </div>
 
-                            <!-- Sale End Date -->
-                            @if($product->template && $product->template->base_price > $product->price)
-                                <div class="mt-1 sm:mt-2 text-[10px] sm:text-xs text-red-600 font-medium">
-                                    Sale ends at {{ now()->addDays(7)->format('F d') }}
+                <button type="button"
+                        id="flashDealNext"
+                        class="flash-deal__nav flash-deal__nav--next"
+                        onclick="scrollFlashDeal('next')"
+                        aria-label="Next deal">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flash-deal__footer">
+                <a href="{{ route('products.index') }}" class="flash-deal__view-all">
+                    View all deals
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+@endif
+
+<!-- Top Pick for You — asymmetric bento grid -->
+@if($homeSections['top_picks']['enabled'] ?? true)
+<section class="py-8 sm:py-10 border-t border-gray-200" style="background: {{ $homeSections['top_picks']['background'] ?? '#ffffff' }};" aria-labelledby="top-picks-heading" data-home-edit-section="top_picks" data-home-edit-label="Top Picks">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 top-picks">
+        <div class="top-picks__header">
+            <div class="section-heading section-heading--compact">
+                <p class="section-heading__eyebrow" data-home-preview="sections.top_picks.eyebrow">{{ $homeSections['top_picks']['eyebrow'] ?? 'Personalized' }}</p>
+                <h2 id="top-picks-heading" class="section-heading__title" data-home-preview="sections.top_picks.title_html">
+                    {!! $homeSections['top_picks']['title_html'] ?? 'Top Picks <span class="gradient-text">For You</span>' !!}
+                </h2>
+                <p class="section-heading__sub" data-home-preview="sections.top_picks.subtitle">{{ $homeSections['top_picks']['subtitle'] ?? 'Curated from what’s trending and what fits your style' }}</p>
+            </div>
+            <a href="{{ route('products.index') }}" class="top-picks__header-link" aria-label="View all products">
+                See more
+                <svg class="w-4 h-4 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </a>
+        </div>
+
+        <div class="top-picks-bento">
+            @php
+                $topPicksBanners = $homeSections['top_picks']['banners'] ?? [];
+                $featuredBanner = $topPicksBanners['featured'] ?? [];
+                $promoBanner = $topPicksBanners['promo'] ?? [];
+            @endphp
+            {{-- Banner dọc (cột trái, span 2 hàng) --}}
+            <div class="top-picks-bento__featured">
+                <x-collection-promo-card
+                    :collection="$topPickBannerCollection"
+                    layout="tall"
+                    :banner-image="$featuredBanner['image'] ?? null"
+                    :banner-url="$featuredBanner['url'] ?? null"
+                    :banner-title="$featuredBanner['title'] ?? null"
+                    :banner-subtitle="$featuredBanner['subtitle'] ?? null"
+                    fallback-title="Create Your Own"
+                    fallback-subtitle="Design custom products with AI and print on demand"
+                    :fallback-url="route('products.index')"
+                    preview-image="sections.top_picks.banners.featured.image"
+                    preview-title="sections.top_picks.banners.featured.title"
+                    preview-subtitle="sections.top_picks.banners.featured.subtitle"
+                />
+            </div>
+
+            @forelse ($topPickBentoSmall as $product)
+                <x-product-card :product="$product" :show-wishlist="false" />
+            @empty
+                <div class="col-span-full rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center md:col-span-3">
+                    <p class="text-base font-semibold text-gray-900">No products yet</p>
+                    <p class="mt-2 text-sm text-gray-600">Product picks will appear here once published.</p>
+                    <a href="{{ route('products.index') }}" class="btn-cta mt-4 inline-flex">Browse products</a>
+                </div>
+            @endforelse
+
+            {{-- Banner ngang (2 cột, hàng 3) --}}
+            <div class="top-picks-bento__promo">
+                <x-collection-promo-card
+                    :collection="$topPickPromoCollection"
+                    :ends-at="$topPickPromoEndsAt ?? null"
+                    :banner-image="$promoBanner['image'] ?? null"
+                    :banner-url="$promoBanner['url'] ?? null"
+                    :banner-title="$promoBanner['title'] ?? null"
+                    :banner-subtitle="$promoBanner['subtitle'] ?? null"
+                    :banner-tag="$promoBanner['tag'] ?? null"
+                    fallback-title="Shop all collections"
+                    fallback-subtitle="Curated designs for every occasion"
+                    :fallback-url="route('collections.index')"
+                    preview-image="sections.top_picks.banners.promo.image"
+                    preview-title="sections.top_picks.banners.promo.title"
+                    preview-subtitle="sections.top_picks.banners.promo.subtitle"
+                    preview-tag="sections.top_picks.banners.promo.tag"
+                />
+            </div>
+
+            @foreach ($topPickRowThree as $index => $product)
+                <div class="top-picks-bento__slot top-picks-bento__slot--r3-{{ $index + 1 }}">
+                    <x-product-card :product="$product" :show-wishlist="false" />
+                </div>
+            @endforeach
+        </div>
+
+        @if ($topPickMore->isNotEmpty())
+            <div class="top-picks-uniform">
+                @foreach ($topPickMore as $product)
+                    <x-product-card :product="$product" :show-wishlist="false" />
+                @endforeach
+            </div>
+        @endif
+    </div>
+</section>
+@endif
+
+<!-- Latest Collections — asymmetric mosaic -->
+@if($homeSections['latest_collections']['enabled'] ?? true)
+<div class="py-8 sm:py-10" style="background: {{ $homeSections['latest_collections']['background'] ?? '#ffffff' }};" data-home-edit-section="latest_collections" data-home-edit-label="Collections">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="section-heading scroll-reveal">
+            <p class="section-heading__eyebrow" data-home-preview="sections.latest_collections.eyebrow">{{ $homeSections['latest_collections']['eyebrow'] ?? 'Curated picks' }}</p>
+            <h2 class="section-heading__title" data-home-preview="sections.latest_collections.title_html">
+                {!! $homeSections['latest_collections']['title_html'] ?? 'Latest <span class="gradient-text">Collections</span>' !!}
+            </h2>
+            <p class="section-heading__sub" data-home-preview="sections.latest_collections.subtitle">
+                {{ $homeSections['latest_collections']['subtitle'] ?? 'Discover our newest collections and trending designs' }}
+            </p>
+            <span class="section-heading__accent" aria-hidden="true"></span>
+        </div>
+
+        @php
+            $mosaicCollections = \App\Models\Collection::global()
+                ->where('status', 'active')
+                ->where('admin_approved', true)
+                ->orderBy('created_at', 'desc')
+                ->limit(6)
+                ->get()
+                ->values();
+
+            // Bất đối xứng theo hàng: lớn–nhỏ / nhỏ–lớn / lớn–rộng hẹp (ảnh 2)
+            $mosaicRows = [
+                [66.666, 33.333],
+                [40, 60],
+                [75, 25],
+            ];
+        @endphp
+
+        @if ($mosaicCollections->count() > 0)
+            {{-- Mobile: carousel with depth + Ken Burns --}}
+            <div class="collections-carousel md:hidden scroll-reveal" id="collections-carousel">
+                <div class="collections-carousel__slider">
+                    <button type="button"
+                            id="collectionsCarouselPrev"
+                            class="collections-carousel__nav collections-carousel__nav--prev"
+                            onclick="scrollCollectionsCarousel('prev')"
+                            aria-label="Previous collection"
+                            disabled>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                    </button>
+
+                    <div id="collectionsCarouselWrap" class="collections-carousel__track-wrap mobile-scroll-hide">
+                        <div id="collectionsCarouselTrack" class="collections-carousel__track">
+                            @foreach ($mosaicCollections as $index => $collection)
+                                <div class="collections-carousel__slide {{ $index === 0 ? 'is-active' : '' }}" data-slide-index="{{ $index }}">
+                                    <a href="{{ route('collections.show', $collection->slug) }}"
+                                       class="collections-carousel__tile"
+                                       aria-label="View collection {{ $collection->name }}">
+                                        @if ($collection->image)
+                                            <img src="{{ $collection->image }}" alt="{{ $collection->name }}" loading="lazy">
+                                        @else
+                                            <div class="absolute inset-0 bg-gradient-to-br from-[#005366] to-[#003d4d]"></div>
+                                        @endif
+                                        <div class="collections-carousel__tile__overlay">
+                                            <h3 class="collections-carousel__tile__title line-clamp-2">{{ $collection->name }}</h3>
+                                        </div>
+                                    </a>
                                 </div>
-                            @endif
+                            @endforeach
                         </div>
                     </div>
-                @endforeach
-            </div>
-            
-            <!-- View All Button for Best Sellers -->
-            <div class="text-center mt-8">
-                <a href="{{ route('products.index', ['filter' => 'bestsellers']) }}" 
-                   class="bg-[#005366] hover:bg-[#003d4d] text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105">
-                    View All Best Sellers
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Collections Showcase Section -->
-<div class="py-16 sm:py-20 md:py-24 bg-gray-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-        <div class="text-center scroll-reveal">
-            <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl md:text-5xl">
-                Featured 
-                <span class="gradient-text">Collections</span>
-            </h2>
-            <p class="mt-4 sm:mt-6 max-w-3xl mx-auto text-lg sm:text-xl text-gray-600 px-4">
-                Explore our curated collections of amazing designs
-            </p>
-        </div>
-
-        <!-- Collections Grid -->
-        <div class="mt-12 sm:mt-16 md:mt-20">
-            <div id="featured-collections-container" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                @php
-                    $allFeaturedCollections = \App\Models\Collection::where('status', 'active')
-                        ->where('admin_approved', true)
-                        ->where('featured', true)
-                        ->orderBy('sort_order')
-                        ->orderBy('created_at', 'desc')
-                        ->get();
-                    
-                    // Lấy 4 collections đầu tiên để hiển thị ban đầu
-                    $featuredCollections = $allFeaturedCollections->take(4);
-                @endphp
-                
-                @foreach($featuredCollections as $index => $collection)
-                    <a href="{{ route('collections.show', $collection->slug) }}" class="group scroll-reveal" 
-                       style="animation-delay: {{ $index * 0.1 }}s">
-                        <div class="relative overflow-hidden rounded-2xl bg-white shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                            @if($collection->image)
-                                <div class="aspect-[4/3]">
-                                    <img src="{{ $collection->image }}" 
-                                         alt="{{ $collection->name }}"
-                                         class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
-                                </div>
-                            @else
-                                <div class="aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                                    <svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                    </svg>
-                                </div>
-                            @endif
-                            
-                            <!-- Collection Info Overlay -->
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end">
-                                <div class="w-full p-6">
-                                    <h3 class="text-white font-bold text-xl mb-2">
-                                        {{ $collection->name }}
-                                    </h3>
-                                    <p class="text-white/90 text-sm mb-4 line-clamp-2">
-                                        {{ $collection->description }}
-                                    </p>
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-white/80 text-sm">
-                                            {{ $collection->products()->count() }} Products
-                                        </span>
-                                        <span class="text-white font-semibold text-sm">
-                                            View Collection →
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                @endforeach
-            </div>
-            
-            <!-- View All and Load More Buttons for Featured Collections -->
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
-                <a href="{{ route('collections.index') }}" 
-                   class="bg-[#E2150C] hover:bg-[#c0120a] text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105">
-                    View All Collections
-                </a>
-                @if($allFeaturedCollections->count() > 4)
-                    <button id="load-more-collections" 
-                            class="bg-[#005366] hover:bg-[#003d4d] text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-                            data-offset="4"
-                            data-total="{{ $allFeaturedCollections->count() }}">
-                        Load More
+                    <button type="button"
+                            id="collectionsCarouselNext"
+                            class="collections-carousel__nav collections-carousel__nav--next"
+                            onclick="scrollCollectionsCarousel('next')"
+                            aria-label="Next collection">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
                     </button>
-                @endif
-            </div>
-        </div>
-    </div>
-</div>
+                </div>
 
-<!-- Recent Posts Section -->
-<div class="py-16 sm:py-20 md:py-24 bg-white">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-        <div class="text-center scroll-reveal">
-            <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl md:text-5xl">
-                Latest 
-                <span class="gradient-text">Blog Posts</span>
-            </h2>
-            <p class="mt-4 sm:mt-6 max-w-3xl mx-auto text-lg sm:text-xl text-gray-600 px-4">
-                Stay updated with our latest design tips, trends, and inspiration
-            </p>
-        </div>
-
-        <!-- Recent Posts Grid -->
-        <div class="mt-12 sm:mt-16 md:mt-20">
-            <div id="blog-posts-container" class="overflow-hidden">
-                <div id="blog-posts-slider" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-                    @php
-                        $recentPosts = \App\Models\Post::with(['user'])
-                            ->where('status', 'published')
-                            ->orderBy('created_at', 'desc')
-                            ->limit(6)
-                            ->get();
-                    @endphp
-                    
-                    @foreach($recentPosts as $index => $post)
-                        <article class="group scroll-reveal blog-scroll-item" style="animation-delay: {{ $index * 0.1 }}s">
-                        <a href="{{ route('blog.show', $post->slug) }}" class="block">
-                            <div class="relative overflow-hidden rounded-xl bg-white shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                                @if($post->featured_image)
-                                    <div class="aspect-[4/3]">
-                                        <img src="{{ $post->featured_image }}" 
-                                             alt="{{ $post->title }}"
-                                             class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
-                                    </div>
-                                @else
-                                    <div class="aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                                        <svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"></path>
-                                        </svg>
-                                    </div>
-                                @endif
-                                
-                                <!-- Post Info -->
-                                <div class="p-6">
-                                    <div class="flex items-center text-sm text-gray-500 mb-3">
-                                        <span>{{ $post->created_at->format('M d, Y') }}</span>
-                                        <span class="mx-2">•</span>
-                                        <span>{{ $post->user->name ?? 'Admin' }}</span>
-                                    </div>
-                                    
-                                    <h3 class="font-bold text-gray-900 text-lg mb-3 line-clamp-2 group-hover:text-[#005366] transition-colors">
-                                        {{ $post->title }}
-                                    </h3>
-                                    
-                                    <p class="text-gray-600 text-sm line-clamp-3 mb-4">
-                                        {{ $post->excerpt ?? Str::limit(strip_tags($post->content), 120) }}
-                                    </p>
-                                    
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-[#005366] font-semibold text-sm group-hover:text-[#E2150C] transition-colors">
-                                            Read More →
-                                        </span>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                                                Blog
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
-                        </article>
+                <div class="collections-carousel__dots" id="collectionsCarouselDots" role="tablist" aria-label="Collection slides">
+                    @foreach ($mosaicCollections as $index => $collection)
+                        <button type="button"
+                                class="collections-carousel__dot {{ $index === 0 ? 'is-active' : '' }}"
+                                data-dot-index="{{ $index }}"
+                                onclick="goToCollectionsSlide({{ $index }})"
+                                aria-label="Go to {{ $collection->name }}"
+                                aria-selected="{{ $index === 0 ? 'true' : 'false' }}"></button>
                     @endforeach
                 </div>
             </div>
-            
-            <!-- View All Button for Blog Posts -->
-            <div class="text-center mt-8">
-                <a href="{{ route('blog.index') }}" 
-                   class="bg-[#005366] hover:bg-[#003d4d] text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105">
-                    View All Posts
+
+            {{-- Desktop: asymmetric mosaic --}}
+            <div class="collections-mosaic mt-6 sm:mt-8 scroll-reveal">
+                @foreach ($mosaicRows as $rowIndex => $widths)
+                    @php
+                        $left = $mosaicCollections->get($rowIndex * 2);
+                        $right = $mosaicCollections->get($rowIndex * 2 + 1);
+                    @endphp
+                    @if ($left || $right)
+                        <div class="collections-mosaic-row">
+                            @foreach ([['item' => $left, 'w' => $widths[0]], ['item' => $right, 'w' => $widths[1]]] as $cell)
+                                @if ($cell['item'])
+                                    @php $collection = $cell['item']; @endphp
+                                    <a href="{{ route('collections.show', $collection->slug) }}"
+                                       class="collections-mosaic-tile group"
+                                       style="flex: 1 1 {{ $cell['w'] }}%; max-width: 100%;"
+                                       aria-label="View collection {{ $collection->name }}">
+                                        @if ($collection->image)
+                                            <img src="{{ $collection->image }}" alt="{{ $collection->name }}" loading="lazy">
+                                        @else
+                                            <div class="absolute inset-0 bg-gradient-to-br from-[#005366] to-[#003d4d]"></div>
+                                        @endif
+                                        <div class="collections-mosaic-tile__overlay">
+                                            <h3 class="collections-mosaic-tile__title line-clamp-2">{{ $collection->name }}</h3>
+                                        </div>
+                                    </a>
+                                @endif
+                            @endforeach
+                        </div>
+                    @endif
+                @endforeach
+            </div>
+
+            <div class="mt-6 flex justify-center">
+                <a href="{{ route('collections.index') }}" class="btn-outline-petrol">
+                    View all collections
                 </a>
+            </div>
+        @else
+            <div class="mt-8 text-center py-8">
+                <p class="text-base text-gray-600">No collections yet.</p>
+            </div>
+        @endif
+    </div>
+</div>
+@endif
+
+<!-- New Products -->
+@if(($homeSections['new_products']['enabled'] ?? true) && isset($newProducts) && $newProducts->isNotEmpty())
+<section class="py-8 sm:py-10 border-t border-gray-200" style="background: {{ $homeSections['new_products']['background'] ?? '#ffffff' }};" aria-labelledby="new-products-heading" data-home-edit-section="new_products" data-home-edit-label="New Products">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="top-picks__header scroll-reveal">
+            <div class="section-heading section-heading--compact">
+                <p class="section-heading__eyebrow" data-home-preview="sections.new_products.eyebrow">{{ $homeSections['new_products']['eyebrow'] ?? 'Just dropped' }}</p>
+                <h2 id="new-products-heading" class="section-heading__title" data-home-preview="sections.new_products.title_html">
+                    {!! $homeSections['new_products']['title_html'] ?? 'New <span class="gradient-text">Products</span>' !!}
+                </h2>
+                <p class="section-heading__sub" data-home-preview="sections.new_products.subtitle">
+                    {{ $homeSections['new_products']['subtitle'] ?? 'Fresh designs and latest additions to our catalog' }}
+                </p>
+                <span class="section-heading__accent" aria-hidden="true"></span>
+            </div>
+            <a href="{{ route('products.index', ['sort' => 'newest']) }}" class="top-picks__header-link" aria-label="View all new products">
+                See more
+                <svg class="w-4 h-4 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </a>
+        </div>
+
+        <div class="catalog-grid scroll-reveal mt-6 sm:mt-8">
+            @foreach ($newProducts as $product)
+                <x-product-card :product="$product" :show-wishlist="false" />
+            @endforeach
+        </div>
+    </div>
+</section>
+@endif
+
+<!-- Customize products hero -->
+@if($homeSections['customize_hero']['enabled'] ?? true)
+@include('partials.customize-hero-section', [
+    'customizeSection' => $customizeSection,
+    'showHomeEdit' => true,
+])
+@endif
+
+<!-- Latest Blog Posts -->
+@php
+    $recentPosts = \App\Models\Post::with(['user', 'category'])
+        ->published()
+        ->orderByDesc('published_at')
+        ->orderByDesc('created_at')
+        ->limit(3)
+        ->get();
+@endphp
+
+@if ($recentPosts->count() > 0 && ($homeSections['blog']['enabled'] ?? true))
+<section class="catalog-page--blog py-8 sm:py-10 border-t border-gray-200" style="background: {{ $homeSections['blog']['background'] ?? '#ffffff' }};" aria-labelledby="blog-posts-heading" data-home-edit-section="blog" data-home-edit-label="Blog">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="blog-posts__top scroll-reveal">
+            <div class="section-heading">
+                <p class="section-heading__eyebrow" data-home-preview="sections.blog.eyebrow">{{ $homeSections['blog']['eyebrow'] ?? 'Inspiration' }}</p>
+                <h2 id="blog-posts-heading" class="section-heading__title" data-home-preview="sections.blog.title_html">
+                    {!! $homeSections['blog']['title_html'] ?? 'Latest <span class="gradient-text">Blog Posts</span>' !!}
+                </h2>
+                <p class="section-heading__sub" data-home-preview="sections.blog.subtitle">
+                    {{ $homeSections['blog']['subtitle'] ?? 'Design tips, trends, and creative inspiration' }}
+                </p>
+                <span class="section-heading__accent md:hidden" aria-hidden="true"></span>
+            </div>
+            <a href="{{ route('blog.index') }}" class="blog-posts__see-all md:self-end">
+                View all posts
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </a>
+        </div>
+
+        <div class="catalog-blog-grid catalog-blog-grid--home scroll-reveal">
+            @foreach ($recentPosts as $post)
+                <x-catalog-blog-post-item :post="$post" view="grid" />
+            @endforeach
+        </div>
+    </div>
+</section>
+@endif
+
+<!-- Recently Viewed -->
+@if($homeSections['recently_viewed']['enabled'] ?? true)
+<section class="py-8 sm:py-10 border-t border-gray-200" style="background: {{ $homeSections['recently_viewed']['background'] ?? '#f9fafb' }};" aria-labelledby="recently-viewed-heading" data-home-edit-section="recently_viewed" data-home-edit-label="Recently Viewed">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="section-heading scroll-reveal">
+            <p class="section-heading__eyebrow" data-home-preview="sections.recently_viewed.eyebrow">{{ $homeSections['recently_viewed']['eyebrow'] ?? 'Continue browsing' }}</p>
+            <h2 id="recently-viewed-heading" class="section-heading__title" data-home-preview="sections.recently_viewed.title_html">
+                {!! $homeSections['recently_viewed']['title_html'] ?? 'Recently <span class="gradient-text">Viewed</span>' !!}
+            </h2>
+            <p class="section-heading__sub" data-home-preview="sections.recently_viewed.subtitle">
+                {{ $homeSections['recently_viewed']['subtitle'] ?? "Pick up where you left off with products you've explored" }}
+            </p>
+            <span class="section-heading__accent" aria-hidden="true"></span>
+        </div>
+
+        <div class="recently-viewed scroll-reveal">
+            <div class="recently-viewed__slider hidden" id="recently-viewed-wrapper">
+                <button type="button"
+                        id="recentlyViewedPrevBtn"
+                        class="recently-viewed__nav recently-viewed__nav--prev"
+                        onclick="scrollRecentlyViewed('prev')"
+                        aria-label="Previous products"
+                        disabled>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </button>
+
+                <div id="recentlyViewedWrap" class="recently-viewed__track-wrap mobile-scroll-hide">
+                    <div id="recently-viewed-container" class="recently-viewed__track"></div>
+                </div>
+
+                <button type="button"
+                        id="recentlyViewedNextBtn"
+                        class="recently-viewed__nav recently-viewed__nav--next"
+                        onclick="scrollRecentlyViewed('next')"
+                        aria-label="Next products">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div id="recently-viewed-empty" class="recently-viewed__empty hidden">
+                <svg class="recently-viewed__empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                <p class="recently-viewed__empty-title">No products viewed yet</p>
+                <p class="recently-viewed__empty-sub">Products you browse will appear here for quick access</p>
             </div>
         </div>
     </div>
-</div>
+</section>
+@endif
 
-<!-- Recently Viewed Section -->
-<div class="py-16 sm:py-20 md:py-24 bg-gray-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-        <div class="text-center scroll-reveal">
-            <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl md:text-5xl">
-                Recently 
-                <span class="gradient-text">Viewed</span>
+<x-customer-reviews
+    :average-rating="$customerReviewAverage"
+    :happy-customers-label="$customerHappyCustomersLabel"
+    :pages="$customerReviewPages"
+/>
+
+<!-- Why Choose Bluprinter -->
+@if(($whyChooseSection['enabled'] ?? true) && count($whyChooseFeatures) > 0)
+<section class="why-choose py-6 sm:py-10 border-t border-gray-200" style="background: {{ $whyChooseSection['background'] ?? '#f9fafb' }};" aria-labelledby="why-choose-heading" id="why-choose-section" data-autoplay-ms="{{ $whyChooseAutoplayMs }}" data-home-edit-section="why_choose" data-home-edit-label="Why Choose">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="section-heading scroll-reveal">
+            <p class="section-heading__eyebrow" data-home-preview="sections.why_choose.eyebrow">{{ $whyChooseSection['eyebrow'] ?? 'Our promise' }}</p>
+            <h2 id="why-choose-heading" class="section-heading__title" data-home-preview="sections.why_choose.title_html">
+                {!! $whyChooseSection['title_html'] ?? 'Why Choose <span class="gradient-text">Bluprinter</span>?' !!}
             </h2>
-            <p class="mt-4 sm:mt-6 max-w-3xl mx-auto text-lg sm:text-xl text-gray-600 px-4">
-                Continue exploring products you've shown interest in
+            <p class="section-heading__sub" data-home-preview="sections.why_choose.subtitle">
+                {{ $whyChooseSection['subtitle'] ?? 'Professional customization with cutting-edge technology and support you can count on' }}
             </p>
+            <span class="section-heading__accent" aria-hidden="true"></span>
         </div>
 
-                <!-- Recently Viewed Products -->
-                <div class="mt-12 sm:mt-16 md:mt-20">
-                    <div class="relative" id="recently-viewed-wrapper">
-                        <!-- Navigation Buttons (Desktop only) -->
-                        <button id="recentlyViewedPrevBtn" 
-                                onclick="scrollRecentlyViewed('prev')"
-                                class="hidden lg:block absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100">
-                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                            </svg>
-                        </button>
-                        
-                        <button id="recentlyViewedNextBtn" 
-                                onclick="scrollRecentlyViewed('next')"
-                                class="hidden lg:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-all">
-                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                            </svg>
-                        </button>
-                        
-                        <!-- Products Container -->
-                        <div id="recentlyViewedContainer" class="overflow-x-auto lg:overflow-hidden mobile-scroll-hide group pb-2" style="scroll-behavior: smooth;">
-                            <div id="recently-viewed-container" class="flex gap-3 lg:transition-transform lg:duration-300">
-                                <!-- Products will be loaded here by JavaScript -->
+        {{-- Mobile: pill tabs + fade panels --}}
+        <div class="why-choose__mobile scroll-reveal lg:hidden" id="why-choose-mobile">
+            <div class="why-choose__tab-list" role="tablist" aria-label="Why choose us">
+                @foreach ($whyChooseFeatures as $index => $feature)
+                    <button type="button"
+                            class="why-choose__tab {{ $index === 0 ? 'is-active' : '' }}"
+                            data-why-tab="{{ $index }}"
+                            onclick="goToWhyChooseTab({{ $index }}, true)"
+                            role="tab"
+                            aria-selected="{{ $index === 0 ? 'true' : 'false' }}">
+                        {{ $feature['title'] }}
+                    </button>
+                @endforeach
+            </div>
+            <div class="why-choose__tab-panels">
+                @foreach ($whyChooseFeatures as $index => $feature)
+                    <article class="why-choose__tab-panel {{ $index === 0 ? 'is-active' : '' }}" data-why-panel="{{ $index }}" role="tabpanel">
+                        <div class="why-choose__card">
+                            <div class="why-choose__icon why-choose__icon--{{ $feature['accent'] }}" aria-hidden="true">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    {!! $feature['icon'] !!}
+                                </svg>
                             </div>
+                            <h3 class="why-choose__title" data-home-preview="sections.why_choose.features.{{ $index }}.title">{{ $feature['title'] }}</h3>
+                            <p class="why-choose__desc" data-home-preview="sections.why_choose.features.{{ $index }}.description">{{ $feature['description'] }}</p>
                         </div>
-                    </div>
-                    
-                    <!-- Empty State -->
-                    <div id="recently-viewed-empty" class="text-center py-12 hidden">
-                        <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                        </svg>
-                        <p class="text-gray-500 text-lg mb-2">No products viewed yet</p>
-                        <p class="text-gray-400 text-sm">Products you view will appear here</p>
-                    </div>
-                </div>
-    </div>
-</div>
-
-<!-- Testimonials Section -->
-<div class="py-16 sm:py-20 md:py-24 bg-white">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-        <div class="text-center scroll-reveal">
-            <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl md:text-5xl">
-                What Our 
-                <span class="gradient-text">Customers Say</span>
-            </h2>
-            <p class="mt-4 sm:mt-6 max-w-3xl mx-auto text-lg sm:text-xl text-gray-600 px-4">
-                Don't just take our word for it - hear from our satisfied customers
-            </p>
-        </div>
-
-        <!-- Testimonials Grid -->
-        <div class="mt-12 sm:mt-16 md:mt-20">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-                @php
-                    $testimonials = [
-                        [
-                            'name' => 'Sarah Johnson',
-                            'role' => 'Small Business Owner',
-                            'content' => 'Bluprinter transformed my business with their amazing custom designs. The quality is outstanding and the customer service is top-notch!',
-                            'rating' => 5,
-                            'avatar' => 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face'
-                        ],
-                        [
-                            'name' => 'Mike Chen',
-                            'role' => 'Marketing Director',
-                            'content' => 'We\'ve been using Bluprinter for all our promotional materials. Fast delivery, great prices, and the designs always exceed expectations.',
-                            'rating' => 5,
-                            'avatar' => 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face'
-                        ],
-                        [
-                            'name' => 'Emily Rodriguez',
-                            'role' => 'Event Planner',
-                            'content' => 'Perfect for our wedding invitations and event materials. The attention to detail and customization options are incredible.',
-                            'rating' => 5,
-                            'avatar' => 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face'
-                        ]
-                    ];
-                @endphp
-                
-                @foreach($testimonials as $index => $testimonial)
-                    <div class="scroll-reveal" style="animation-delay: {{ $index * 0.1 }}s">
-                        <div class="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all duration-300">
-                            <!-- Rating -->
-                            <div class="flex items-center mb-4">
-                                @for($i = 0; $i < $testimonial['rating']; $i++)
-                                    <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                    </svg>
-                                @endfor
-                            </div>
-                            
-                            <!-- Content -->
-                            <p class="text-gray-700 mb-6 italic">
-                                "{{ $testimonial['content'] }}"
-                            </p>
-                            
-                            <!-- Author -->
-                            <div class="flex items-center">
-                                <img src="{{ $testimonial['avatar'] }}" 
-                                     alt="{{ $testimonial['name'] }}"
-                                     class="w-12 h-12 rounded-full object-cover mr-4">
-                                <div>
-                                    <h4 class="font-semibold text-gray-900">{{ $testimonial['name'] }}</h4>
-                                    <p class="text-sm text-gray-600">{{ $testimonial['role'] }}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    </article>
                 @endforeach
             </div>
         </div>
-    </div>
-</div>
 
-<!-- Features Section -->
-<div class="py-16 sm:py-20 md:py-24 bg-gray-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-        <div class="text-center scroll-reveal">
-            <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl md:text-5xl">
-                Why Choose 
-                <span class="gradient-text">Bluprinter</span>?
-            </h2>
-            <p class="mt-4 sm:mt-6 max-w-3xl mx-auto text-lg sm:text-xl text-gray-600 px-4">
-                We provide professional customization services with cutting-edge technology and exceptional customer support.
-            </p>
-        </div>
-
-        <div class="mt-12 sm:mt-16 md:mt-20 grid grid-cols-1 gap-6 sm:gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            <!-- Feature 1 -->
-            <div class="text-center group p-6 rounded-2xl hover:shadow-lg transition-all duration-300 scroll-reveal">
-                <div class="flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-[#005366] to-[#003d4d] text-white mx-auto shadow-lg group-hover:shadow-xl transition-all duration-300 transform group-hover:scale-110">
-                    <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                </div>
-                <h3 class="mt-6 text-xl font-semibold text-gray-900">Premium Quality</h3>
-                <p class="mt-3 text-base text-gray-600">
-                    Professional-grade materials and state-of-the-art printing technology
-                </p>
-            </div>
-
-            <!-- Feature 2 -->
-            <div class="text-center group p-6 rounded-2xl hover:shadow-lg transition-all duration-300 scroll-reveal">
-                <div class="flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-[#E2150C] to-[#c0120a] text-white mx-auto shadow-lg group-hover:shadow-xl transition-all duration-300 transform group-hover:scale-110">
-                    <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                </div>
-                <h3 class="mt-6 text-xl font-semibold text-gray-900">Fast Delivery</h3>
-                <p class="mt-3 text-base text-gray-600">
-                    Quick turnaround times with express shipping options available
-                </p>
-            </div>
-
-            <!-- Feature 3 -->
-            <div class="text-center group p-6 rounded-2xl hover:shadow-lg transition-all duration-300 scroll-reveal">
-                <div class="flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-[#005366] to-[#003d4d] text-white mx-auto shadow-lg group-hover:shadow-xl transition-all duration-300 transform group-hover:scale-110">
-                    <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
-                    </svg>
-                </div>
-                <h3 class="mt-6 text-xl font-semibold text-gray-900">Fair Pricing</h3>
-                <p class="mt-3 text-base text-gray-600">
-                    Transparent pricing with no hidden fees and competitive rates
-                </p>
-            </div>
-
-            <!-- Feature 4 -->
-            <div class="text-center group p-6 rounded-2xl hover:shadow-lg transition-all duration-300 scroll-reveal">
-                <div class="flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-[#E2150C] to-[#c0120a] text-white mx-auto shadow-lg group-hover:shadow-xl transition-all duration-300 transform group-hover:scale-110">
-                    <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192L5.636 18.364M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5z"></path>
-                    </svg>
-                </div>
-                <h3 class="mt-6 text-xl font-semibold text-gray-900">24/7 Support</h3>
-                <p class="mt-3 text-base text-gray-600">
-                    Dedicated customer support team available around the clock
-                </p>
-            </div>
+        {{-- Desktop: 4-column grid --}}
+        <div class="why-choose__grid scroll-reveal">
+            @foreach ($whyChooseFeatures as $feature)
+                <article class="why-choose__card">
+                    <div class="why-choose__icon why-choose__icon--{{ $feature['accent'] }}" aria-hidden="true">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {!! $feature['icon'] !!}
+                        </svg>
+                    </div>
+                    <h3 class="why-choose__title" data-home-preview="sections.why_choose.features.{{ $loop->index }}.title">{{ $feature['title'] }}</h3>
+                    <p class="why-choose__desc" data-home-preview="sections.why_choose.features.{{ $loop->index }}.description">{{ $feature['description'] }}</p>
+                </article>
+            @endforeach
         </div>
     </div>
-</div>
+</section>
+@endif
 
 <!-- CTA Section -->
 
@@ -1131,564 +2481,659 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.scroll-reveal').forEach(element => {
             observer.observe(element);
         });
-
-        // Collections slider functionality
-        const collectionsSlider = document.getElementById('collections-slider');
-        const prevCollectionsBtn = document.getElementById('prev-collections');
-        const nextCollectionsBtn = document.getElementById('next-collections');
-        let currentSlide = 0;
-        const itemsPerView = {
-            mobile: 2,
-            tablet: 3,
-            desktop: 6
-        };
-
-        function getItemsPerView() {
-            if (window.innerWidth < 640) return itemsPerView.mobile;
-            if (window.innerWidth < 1024) return itemsPerView.tablet;
-            return itemsPerView.desktop;
-        }
-
-        function isMobile() {
-            return window.innerWidth < 640;
-        }
-
-        function updateSlider() {
-            // Skip slider logic on mobile - use native scroll
-            if (isMobile()) {
-                return;
-            }
-
-            const itemsPerView = getItemsPerView();
-            const totalItems = {{ $collections->count() }};
-            const maxSlides = Math.max(0, totalItems - itemsPerView);
-            
-            // Ensure currentSlide is within bounds
-            currentSlide = Math.min(currentSlide, maxSlides);
-            currentSlide = Math.max(0, currentSlide);
-            
-            // Calculate translateX based on item width
-            const itemWidth = 100 / itemsPerView;
-            const translateX = -(currentSlide * itemWidth);
-            collectionsSlider.style.transform = `translateX(${translateX}%)`;
-            
-            // Update button states
-            if (prevCollectionsBtn && nextCollectionsBtn) {
-                const canGoPrev = currentSlide > 0;
-                const canGoNext = currentSlide < maxSlides;
-                
-                prevCollectionsBtn.style.opacity = canGoPrev ? '1' : '0.5';
-                nextCollectionsBtn.style.opacity = canGoNext ? '1' : '0.5';
-                prevCollectionsBtn.disabled = !canGoPrev;
-                nextCollectionsBtn.disabled = !canGoNext;
-                
-                // Hide buttons if no need for navigation
-                if (totalItems <= itemsPerView) {
-                    prevCollectionsBtn.style.display = 'none';
-                    nextCollectionsBtn.style.display = 'none';
-                } else {
-                    prevCollectionsBtn.style.display = 'flex';
-                    nextCollectionsBtn.style.display = 'flex';
-                }
-            }
-        }
-
-        // Only initialize slider buttons for desktop/tablet
-        if (prevCollectionsBtn && nextCollectionsBtn && !isMobile()) {
-            prevCollectionsBtn.addEventListener('click', () => {
-                if (isMobile()) return;
-                const itemsPerView = getItemsPerView();
-                const totalItems = {{ $collections->count() }};
-                const maxSlides = Math.max(0, totalItems - itemsPerView);
-                
-                if (currentSlide > 0) {
-                    currentSlide--;
-                    updateSlider();
-                }
-            });
-
-            nextCollectionsBtn.addEventListener('click', () => {
-                if (isMobile()) return;
-                const itemsPerView = getItemsPerView();
-                const totalItems = {{ $collections->count() }};
-                const maxSlides = Math.max(0, totalItems - itemsPerView);
-                
-                if (currentSlide < maxSlides) {
-                    currentSlide++;
-                    updateSlider();
-                }
-            });
-
-            // Handle window resize
-            window.addEventListener('resize', () => {
-                if (!isMobile()) {
-                    updateSlider();
-                }
-            });
-
-            // Initialize slider
-            updateSlider();
-            
-            // Debug info
-            console.log('Collections count:', {{ $collections->count() }});
-            console.log('Items per view:', getItemsPerView());
-            console.log('Max slides:', Math.max(0, {{ $collections->count() }} - getItemsPerView()));
-        }
-
-        // Circular categories interaction
-        const circularItems = document.querySelectorAll('.circular-item');
-        const categoryDetails = document.getElementById('category-details');
-        const categoryTitle = document.getElementById('category-title');
-        const categoryDescription = document.getElementById('category-description');
-        const categoryCount = document.getElementById('category-count');
-        const categoryPrice = document.getElementById('category-price');
-        const categoryImage = document.getElementById('category-image');
-
-        // Sample category data
-        const categoryData = {
-            "Happy Patrick's Day": {
-                description: "Celebrate St. Patrick's Day with our festive collection of green-themed products and designs.",
-                count: 25,
-                price: 19.99,
-                image: "https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=600&h=400&fit=crop&crop=center"
-            },
-            "Easter's Day": {
-                description: "Beautiful Easter-themed products perfect for the spring season and family celebrations.",
-                count: 18,
-                price: 24.99,
-                image: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=600&h=400&fit=crop&crop=center"
-            },
-            "3D Hoodies": {
-                description: "Premium 3D printed hoodies with stunning visual effects and comfortable materials.",
-                count: 32,
-                price: 49.99,
-                image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=600&h=400&fit=crop&crop=center"
-            },
-            "Calendar 2025": {
-                description: "Custom 2025 calendars with your designs, perfect for planning and organization.",
-                count: 15,
-                price: 12.99,
-                image: "https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=600&h=400&fit=crop&crop=center"
-            },
-            "Baseball Jersey": {
-                description: "Professional baseball jerseys with custom team colors and player names.",
-                count: 28,
-                price: 39.99,
-                image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&h=400&fit=crop&crop=center"
-            },
-            "3D Sweater": {
-                description: "Cozy 3D sweaters with intricate patterns and premium wool materials.",
-                count: 22,
-                price: 59.99,
-                image: "https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=600&h=400&fit=crop&crop=center"
-            },
-            "Hoodie": {
-                description: "Comfortable and stylish hoodies perfect for casual wear and outdoor activities.",
-                count: 35,
-                price: 29.99,
-                image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=600&h=400&fit=crop&crop=center"
-            },
-            "Premium Posters": {
-                description: "High-quality posters with vibrant colors and professional printing techniques.",
-                count: 42,
-                price: 14.99,
-                image: "https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=600&h=400&fit=crop&crop=center"
-            }
-        };
-
-        // Handle collections and categories interaction
-        circularItems.forEach(item => {
-            item.addEventListener('click', function(e) {
-                // Check if it's a collection or category
-                const isCollection = this.dataset.collection;
-                const isCategory = this.dataset.category;
-                
-                if (isCollection) {
-                    // For collections, just navigate to the collection page
-                    return; // Let the default link behavior handle navigation
-                }
-                
-                if (isCategory) {
-                    // For categories, show details panel
-                    e.preventDefault(); // Prevent default link behavior
-                    
-                    // Remove active class from all items
-                    circularItems.forEach(i => i.classList.remove('active'));
-                    
-                    // Add active class to clicked item
-                    this.classList.add('active');
-                    
-                    // Get category name
-                    const categoryName = this.dataset.category;
-                    const data = categoryData[categoryName];
-                    
-                    if (data) {
-                        // Update category details
-                        categoryTitle.textContent = categoryName;
-                        categoryDescription.textContent = data.description;
-                        categoryCount.textContent = data.count;
-                        categoryPrice.textContent = data.price;
-                        categoryImage.src = data.image;
-                        categoryImage.alt = categoryName;
-                        
-                        // Show category details with animation
-                        categoryDetails.classList.remove('hidden');
-                        categoryDetails.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                }
-            });
-
-            // Add hover effects
-            item.addEventListener('mouseenter', function() {
-                this.style.transform = 'scale(1.05) translateY(-3px)';
-            });
-
-            item.addEventListener('mouseleave', function() {
-                if (!this.classList.contains('active')) {
-                    this.style.transform = 'scale(1) translateY(0)';
-                }
-            });
-        });
     });
 
+    const RECENTLY_VIEWED_CARDS_URL = @json(route('products.recently-viewed-cards'));
+
     // Recently Viewed Functions
-    function loadRecentlyViewed() {
+    async function loadRecentlyViewed() {
         const recentlyViewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
         const container = document.getElementById('recently-viewed-container');
         const emptyState = document.getElementById('recently-viewed-empty');
         const wrapper = document.getElementById('recently-viewed-wrapper');
-        
-        console.log('Loading recently viewed products:', recentlyViewed);
-        
-        if (!container) {
-            console.log('Recently viewed container not found');
-            return;
-        }
-        
-        // Filter out current product and limit to 12 products
-        const productsToShow = recentlyViewed.slice(0, 12);
-        
-        console.log('Products to show:', productsToShow.length);
-        
-        if (productsToShow.length === 0) {
+
+        if (!container) return;
+
+        const ids = recentlyViewed
+            .slice(0, 12)
+            .map(function (product) { return product.id; })
+            .filter(Boolean);
+
+        if (ids.length === 0) {
             if (wrapper) wrapper.classList.add('hidden');
             if (emptyState) emptyState.classList.remove('hidden');
-            console.log('No recently viewed products to display');
             return;
         }
-        
-        if (wrapper) wrapper.classList.remove('hidden');
-        emptyState.classList.add('hidden');
-        
-        // Generate HTML for each product (same style as Related Products)
-        container.innerHTML = productsToShow.map(product => `
-            <a href="/products/${product.slug}" 
-               class="flex-shrink-0 w-52 bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 group/item overflow-hidden">
-                <!-- Product Image -->
-                <div class="relative aspect-square overflow-hidden">
-                    ${product.image ? `
-                        <img src="${product.image}" 
-                             alt="${product.name}" 
-                             class="w-full h-full object-cover group-hover/item:scale-105 transition-transform duration-300"
-                             onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full bg-gray-200 flex items-center justify-center\\'><svg class=\\'w-8 h-8 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'></path></svg></div>'">
-                    ` : `
-                        <div class="w-full h-full bg-gray-200 flex items-center justify-center">
-                            <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
-                </div>
-                    `}
-            </div>
 
-                <!-- Product Info -->
-                <div class="p-3">
-                    <h4 class="font-semibold text-gray-900 text-sm line-clamp-2 group-hover/item:text-[#005366] transition-colors mb-2 min-h-[40px]" title="${product.name}">
-                        ${product.name.length > 40 ? product.name.substring(0, 40) + '...' : product.name}
-                    </h4>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm font-bold text-[#E2150C]">${CURRENCY_SYMBOL}${parseFloat(product.price).toFixed(2)}</span>
-                        <div class="flex items-center text-xs text-gray-500">
-                            <svg class="w-4 h-4 text-yellow-400 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                    </svg>
-                            <span class="text-sm">4.5</span>
-                </div>
-                    </div>
-                </div>
-            </a>
-        `).join('');
-        
-        // Show/hide navigation buttons based on number of products
-        updateRecentlyViewedNavigation(productsToShow.length);
+        if (wrapper) wrapper.classList.remove('hidden');
+        if (emptyState) emptyState.classList.add('hidden');
+
+        try {
+            const params = new URLSearchParams();
+            ids.forEach(function (id) { params.append('ids[]', id); });
+
+            const response = await fetch(RECENTLY_VIEWED_CARDS_URL + '?' + params.toString(), {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load recently viewed products');
+            }
+
+            const data = await response.json();
+
+            if (!data.html) {
+                if (wrapper) wrapper.classList.add('hidden');
+                if (emptyState) emptyState.classList.remove('hidden');
+                return;
+            }
+
+            container.innerHTML = data.html;
+            initRecentlyViewedCarousel();
+        } catch (error) {
+            if (wrapper) wrapper.classList.add('hidden');
+            if (emptyState) emptyState.classList.remove('hidden');
+        }
     }
 
-    // Recently Viewed Carousel Navigation
-    let recentlyViewedCurrentIndex = 0;
+    function getRecentlyViewedMetrics() {
+        const wrap = document.getElementById('recentlyViewedWrap');
+        const track = document.getElementById('recently-viewed-container');
+        if (!wrap || !track || !track.children.length) return null;
+
+        const firstItem = track.children[0];
+        const itemWidth = firstItem.offsetWidth;
+        const gap = parseFloat(getComputedStyle(track).columnGap || getComputedStyle(track).gap || '16');
+        const step = itemWidth + gap;
+
+        return { wrap, track, itemWidth, gap, step };
+    }
+
+    function updateRecentlyViewedNav() {
+        const metrics = getRecentlyViewedMetrics();
+        const prevBtn = document.getElementById('recentlyViewedPrevBtn');
+        const nextBtn = document.getElementById('recentlyViewedNextBtn');
+        if (!metrics || !prevBtn || !nextBtn) return;
+
+        const { wrap } = metrics;
+        const hasOverflow = wrap.scrollWidth > wrap.clientWidth + 2;
+        const atStart = wrap.scrollLeft <= 1;
+        const atEnd = wrap.scrollLeft >= wrap.scrollWidth - wrap.clientWidth - 2;
+
+        prevBtn.disabled = atStart;
+        nextBtn.disabled = atEnd;
+
+        prevBtn.classList.toggle('recently-viewed__nav--visible', hasOverflow);
+        nextBtn.classList.toggle('recently-viewed__nav--visible', hasOverflow);
+    }
 
     function scrollRecentlyViewed(direction) {
-        const container = document.getElementById('recentlyViewedContainer');
-        const track = document.getElementById('recently-viewed-container');
-        const prevBtn = document.getElementById('recentlyViewedPrevBtn');
-        const nextBtn = document.getElementById('recentlyViewedNextBtn');
-        
-        if (!track) return;
-        
-        const itemWidth = 208 + 12; // w-52 (208px) + gap-3 (12px)
-        const containerWidth = container.offsetWidth;
-        const itemsVisible = Math.floor(containerWidth / itemWidth);
-        const totalItems = track.children.length;
-        const maxIndex = Math.max(0, totalItems - itemsVisible);
-        
-        if (direction === 'next') {
-            recentlyViewedCurrentIndex = Math.min(recentlyViewedCurrentIndex + itemsVisible, maxIndex);
-        } else {
-            recentlyViewedCurrentIndex = Math.max(0, recentlyViewedCurrentIndex - itemsVisible);
+        const metrics = getRecentlyViewedMetrics();
+        if (!metrics) return;
+
+        const { wrap, step } = metrics;
+        const delta = direction === 'next' ? step : -step;
+        wrap.scrollBy({ left: delta, behavior: 'smooth' });
+    }
+
+    function initRecentlyViewedCarousel() {
+        const wrap = document.getElementById('recentlyViewedWrap');
+        if (!wrap) return;
+
+        wrap.addEventListener('scroll', updateRecentlyViewedNav, { passive: true });
+        updateRecentlyViewedNav();
+    }
+
+    // Pick a Gift carousel — full-width, chỉ hiện vòng tròn nguyên (không lộ mép / không thanh cuộn)
+    function getPickAGiftMetrics() {
+        const wrap = document.getElementById('pickAGiftTrackWrap');
+        const track = document.getElementById('pickAGiftTrack');
+        if (!wrap || !track || !track.children.length) {
+            return null;
         }
-        
-        const translateX = -recentlyViewedCurrentIndex * itemWidth;
-        track.style.transform = `translateX(${translateX}px)`;
-        
-        // Update button states
-        if (prevBtn) {
-            if (recentlyViewedCurrentIndex === 0) {
-                prevBtn.classList.add('opacity-0');
+
+        const firstItem = track.children[0];
+        const itemWidth = firstItem.offsetWidth;
+        const gap = parseFloat(getComputedStyle(track).columnGap || getComputedStyle(track).gap || '28');
+        const step = itemWidth + gap;
+
+        return { wrap, track, itemWidth, gap, step };
+    }
+
+    function fitPickAGiftViewport() {
+        const metrics = getPickAGiftMetrics();
+        if (!metrics) return;
+
+        const { wrap, track, gap } = metrics;
+
+        // Luôn full-width — không thu hẹp wrap (tránh khoảng trắng bên phải)
+        wrap.style.width = '';
+        wrap.style.maxWidth = '100%';
+        Array.from(track.children).forEach((item) => {
+            item.style.width = '';
+        });
+
+        const preferredWidth = track.children[0].offsetWidth || 160;
+        const available = wrap.clientWidth;
+        if (available < 80) return;
+
+        const visibleCount = Math.max(1, Math.floor((available + gap) / (preferredWidth + gap)));
+        const itemWidth = Math.floor((available - (visibleCount - 1) * gap) / visibleCount);
+
+        Array.from(track.children).forEach((item) => {
+            item.style.width = itemWidth + 'px';
+        });
+    }
+
+    function updatePickAGiftNav() {
+        const metrics = getPickAGiftMetrics();
+        const prevBtn = document.getElementById('pickAGiftPrevBtn');
+        const nextBtn = document.getElementById('pickAGiftNextBtn');
+        if (!metrics || !prevBtn || !nextBtn) return;
+
+        const { wrap } = metrics;
+        const hasOverflow = wrap.scrollWidth > wrap.clientWidth + 2;
+        const atStart = wrap.scrollLeft <= 1;
+        const atEnd = wrap.scrollLeft >= wrap.scrollWidth - wrap.clientWidth - 2;
+
+        prevBtn.disabled = atStart;
+        nextBtn.disabled = atEnd;
+
+        prevBtn.classList.toggle('pick-a-gift__nav--visible', hasOverflow);
+        nextBtn.classList.toggle('pick-a-gift__nav--visible', hasOverflow);
+    }
+
+    function scrollPickAGift(direction) {
+        const metrics = getPickAGiftMetrics();
+        if (!metrics) return;
+
+        const { wrap, step } = metrics;
+        const delta = direction === 'next' ? step : -step;
+        wrap.scrollBy({ left: delta, behavior: 'smooth' });
+    }
+
+    function refreshPickAGiftCarousel() {
+        fitPickAGiftViewport();
+        updatePickAGiftNav();
+    }
+
+    function initPickAGiftCarousel() {
+        const wrap = document.getElementById('pickAGiftTrackWrap');
+        if (!wrap) return;
+
+        wrap.addEventListener('scroll', updatePickAGiftNav, { passive: true });
+        refreshPickAGiftCarousel();
+    }
+
+    // Hero banners mobile fade slideshow
+    let heroActiveIndex = 0;
+    let heroAutoplayTimer = null;
+    let heroProgressTimer = null;
+
+    function getHeroAutoplayMs() {
+        const root = document.getElementById('hero-carousel');
+        return root ? parseInt(root.getAttribute('data-autoplay-ms') || '5000', 10) : 5000;
+    }
+
+    function updateHeroCarouselState() {
+        const slides = document.querySelectorAll('.hero-carousel__slide');
+        const dots = document.querySelectorAll('.hero-carousel__dot');
+        if (!slides.length) return;
+
+        slides.forEach(function (slide, index) {
+            slide.classList.toggle('is-active', index === heroActiveIndex);
+        });
+
+        dots.forEach(function (dot, index) {
+            const active = index === heroActiveIndex;
+            dot.classList.toggle('is-active', active);
+            dot.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+    }
+
+    function resetHeroProgressBar() {
+        const bar = document.getElementById('heroCarouselProgress');
+        if (!bar) return;
+
+        bar.style.transition = 'none';
+        bar.style.width = '0%';
+        void bar.offsetWidth;
+        bar.style.transition = 'width ' + getHeroAutoplayMs() + 'ms linear';
+        bar.style.width = '100%';
+    }
+
+    function goToHeroSlide(index, manual) {
+        const slides = document.querySelectorAll('.hero-carousel__slide');
+        if (!slides.length) return;
+
+        heroActiveIndex = ((index % slides.length) + slides.length) % slides.length;
+        updateHeroCarouselState();
+        resetHeroProgressBar();
+
+        if (manual) {
+            startHeroAutoplay();
+        }
+    }
+
+    function startHeroAutoplay() {
+        stopHeroAutoplay();
+        const slides = document.querySelectorAll('.hero-carousel__slide');
+        if (slides.length <= 1) return;
+
+        resetHeroProgressBar();
+        heroAutoplayTimer = setInterval(function () {
+            goToHeroSlide(heroActiveIndex + 1, false);
+        }, getHeroAutoplayMs());
+    }
+
+    function stopHeroAutoplay() {
+        if (heroAutoplayTimer) {
+            clearInterval(heroAutoplayTimer);
+            heroAutoplayTimer = null;
+        }
+    }
+
+    function initHeroCarousel() {
+        const viewport = document.getElementById('heroCarouselViewport');
+        if (!viewport) return;
+
+        viewport.addEventListener('mouseenter', stopHeroAutoplay);
+        viewport.addEventListener('mouseleave', startHeroAutoplay);
+        viewport.addEventListener('touchstart', stopHeroAutoplay, { passive: true });
+        viewport.addEventListener('touchend', function () {
+            setTimeout(startHeroAutoplay, 1200);
+        }, { passive: true });
+
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) {
+                stopHeroAutoplay();
             } else {
-                prevBtn.classList.remove('opacity-0');
+                startHeroAutoplay();
             }
-        }
-        
-        if (nextBtn) {
-            if (recentlyViewedCurrentIndex >= maxIndex) {
-                nextBtn.classList.add('opacity-0');
-            } else {
-                nextBtn.classList.remove('opacity-0');
+        });
+
+        updateHeroCarouselState();
+        startHeroAutoplay();
+    }
+
+    function refreshHeroCarousel() {
+        updateHeroCarouselState();
+    }
+
+    // Latest Collections mobile carousel
+    let collectionsActiveIndex = 0;
+    let collectionsAutoplayTimer = null;
+
+    function getCollectionsCarouselMetrics() {
+        const wrap = document.getElementById('collectionsCarouselWrap');
+        const track = document.getElementById('collectionsCarouselTrack');
+        if (!wrap || !track || !track.children.length) return null;
+
+        const slide = track.children[0];
+        const slideWidth = slide.offsetWidth;
+        const gap = parseFloat(getComputedStyle(track).gap || '16');
+        const step = slideWidth + gap;
+
+        return { wrap, track, slideWidth, gap, step };
+    }
+
+    function updateCollectionsCarouselState() {
+        const metrics = getCollectionsCarouselMetrics();
+        const prevBtn = document.getElementById('collectionsCarouselPrev');
+        const nextBtn = document.getElementById('collectionsCarouselNext');
+        const dots = document.querySelectorAll('.collections-carousel__dot');
+        if (!metrics) return;
+
+        const { wrap, track, step } = metrics;
+        const slides = Array.from(track.children);
+        const maxIndex = slides.length - 1;
+
+        collectionsActiveIndex = Math.max(0, Math.min(maxIndex, Math.round(wrap.scrollLeft / step)));
+
+        slides.forEach(function (slide, index) {
+            slide.classList.remove('is-active', 'is-adjacent');
+            if (index === collectionsActiveIndex) {
+                slide.classList.add('is-active');
+            } else if (Math.abs(index - collectionsActiveIndex) === 1) {
+                slide.classList.add('is-adjacent');
             }
+        });
+
+        dots.forEach(function (dot, index) {
+            const active = index === collectionsActiveIndex;
+            dot.classList.toggle('is-active', active);
+            dot.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+
+        if (prevBtn) prevBtn.disabled = collectionsActiveIndex <= 0;
+        if (nextBtn) nextBtn.disabled = collectionsActiveIndex >= maxIndex;
+    }
+
+    function scrollCollectionsCarousel(direction) {
+        const metrics = getCollectionsCarouselMetrics();
+        if (!metrics) return;
+
+        const { wrap, step } = metrics;
+        const delta = direction === 'next' ? step : -step;
+        wrap.scrollBy({ left: delta, behavior: 'smooth' });
+    }
+
+    function goToCollectionsSlide(index) {
+        const metrics = getCollectionsCarouselMetrics();
+        if (!metrics) return;
+
+        const { wrap, step } = metrics;
+        wrap.scrollTo({ left: index * step, behavior: 'smooth' });
+    }
+
+    function startCollectionsAutoplay() {
+        stopCollectionsAutoplay();
+        const metrics = getCollectionsCarouselMetrics();
+        if (!metrics || metrics.track.children.length <= 1) return;
+
+        collectionsAutoplayTimer = setInterval(function () {
+            const total = metrics.track.children.length;
+            const next = (collectionsActiveIndex + 1) % total;
+            goToCollectionsSlide(next);
+        }, 5000);
+    }
+
+    function stopCollectionsAutoplay() {
+        if (collectionsAutoplayTimer) {
+            clearInterval(collectionsAutoplayTimer);
+            collectionsAutoplayTimer = null;
         }
     }
 
-    function updateRecentlyViewedNavigation(totalProducts) {
-        const prevBtn = document.getElementById('recentlyViewedPrevBtn');
-        const nextBtn = document.getElementById('recentlyViewedNextBtn');
-        
-        if (!prevBtn || !nextBtn) return;
-        
-        // Only show navigation buttons on desktop (lg: 1024px+) if more than what can fit on screen
-        const isDesktop = window.innerWidth >= 1024;
-        
-        // With w-52 (208px) cards, approximately 4 cards fit on a typical 1024px+ screen
-        if (isDesktop && totalProducts > 4) {
-            prevBtn.classList.remove('hidden');
-            prevBtn.classList.add('lg:block');
-            nextBtn.classList.remove('hidden');
-            nextBtn.classList.add('lg:block');
-            
-            // Set initial state
-            prevBtn.classList.add('opacity-0');
-            nextBtn.classList.remove('opacity-0');
-            
-            // Reset index
-            recentlyViewedCurrentIndex = 0;
-            
-            // Reset transform (only for desktop)
-            const track = document.getElementById('recently-viewed-container');
-            if (track) {
-                track.style.transform = 'translateX(0px)';
+    function initCollectionsCarousel() {
+        const wrap = document.getElementById('collectionsCarouselWrap');
+        if (!wrap) return;
+
+        let scrollTimer;
+        wrap.addEventListener('scroll', function () {
+            clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(updateCollectionsCarouselState, 40);
+        }, { passive: true });
+
+        wrap.addEventListener('touchstart', stopCollectionsAutoplay, { passive: true });
+        wrap.addEventListener('mouseenter', stopCollectionsAutoplay);
+        wrap.addEventListener('mouseleave', startCollectionsAutoplay);
+
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) {
+                stopCollectionsAutoplay();
+            } else if (document.getElementById('collectionsCarouselWrap')) {
+                startCollectionsAutoplay();
             }
-        } else {
-            // Hide navigation buttons on mobile or if 4 or fewer products
-            prevBtn.classList.add('hidden');
-            nextBtn.classList.add('hidden');
-            
-            // Remove transform on mobile
-            const track = document.getElementById('recently-viewed-container');
-            if (track && !isDesktop) {
-                track.style.transform = '';
-            }
-        }
+        });
+
+        updateCollectionsCarouselState();
+        startCollectionsAutoplay();
     }
 
-    // Load More functionality for New Arrivals
-    function loadMoreNewArrivals() {
-        const button = document.getElementById('load-more-new-arrivals');
-        const container = document.getElementById('new-arrivals-container');
-        
-        if (!button || !container) return;
-        
-        const offset = parseInt(button.dataset.offset);
-        const total = parseInt(button.dataset.total);
-        
-        // Simulate loading more products (in real app, this would be an AJAX call)
-        fetch(`/api/products/new-arrivals?offset=${offset}&limit=10`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.products.length > 0) {
-                    // Add new products to container
-                    data.products.forEach((product, index) => {
-                        const productHtml = `
-                            <div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 group overflow-hidden scroll-reveal" style="animation-delay: ${index * 0.1}s">
-                                <!-- Product Image -->
-                                <div class="relative aspect-square overflow-hidden">
-                                    ${product.image ? `
-                                        <img src="${product.image}" 
-                                             alt="${product.name}" 
-                                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                                    ` : `
-                                        <div class="w-full h-full bg-gray-200 flex items-center justify-center">
-                                            <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                            </svg>
-                                        </div>
-                                    `}
-                                    
-                                    <!-- Wishlist Button -->
-                                    <div class="absolute top-2 left-2 sm:top-3 sm:left-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
-                                        <button class="w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors">
-                                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                                            </svg>
-                                        </button>
-                                    </div>
+    function refreshCollectionsCarousel() {
+        updateCollectionsCarouselState();
+    }
 
-                                    <!-- New Badge -->
-                                    <div class="absolute top-2 right-2 sm:top-3 sm:right-3 bg-[#E2150C] text-white px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold">
-                                        NEW
-                                    </div>
-                                </div>
+    // Flash Sale countdown + carousel
+    let flashDealCountdownTimer = null;
 
-                                <!-- Product Info -->
-                                <div class="p-2 sm:p-4">
-                                    <h3 class="font-semibold text-gray-900 mb-1 sm:mb-2 line-clamp-2 group-hover:text-[#005366] transition-colors text-sm sm:text-base">
-                                        <a href="/products/${product.slug}">
-                                            ${product.name.length > 50 ? product.name.substring(0, 50) + '...' : product.name}
-                                        </a>
-                                    </h3>
-                                    
-                                    <p class="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2 line-clamp-1">By ${product.shop_name || 'Unknown Shop'}</p>
-                                    
-                                    <div class="flex items-center justify-between">
-                                    <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
-                                        <span class="text-base sm:text-lg font-bold text-[#E2150C]">${CURRENCY_SYMBOL}${parseFloat(product.base_price).toFixed(2)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                        container.insertAdjacentHTML('beforeend', productHtml);
-                    });
-                    
-                    // Update offset
-                    const newOffset = offset + 10;
-                    button.dataset.offset = newOffset;
-                    
-                    // Hide button if no more products
-                    if (newOffset >= total) {
-                        button.style.display = 'none';
-                    }
-                    
-                    // Trigger scroll reveal animation for new items
-                    const newItems = container.querySelectorAll('.scroll-reveal:not(.revealed)');
-                    newItems.forEach(item => {
-                        observer.observe(item);
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error loading more products:', error);
+    function padFlashTime(n) {
+        return String(Math.max(0, n)).padStart(2, '0');
+    }
+
+    function initFlashDealCountdown() {
+        const root = document.getElementById('flashDealCountdown');
+        if (!root) return;
+
+        const endsAt = new Date(root.dataset.endsAt).getTime();
+        const hoursEl = document.getElementById('flashDealHours');
+        const minutesEl = document.getElementById('flashDealMinutes');
+        const secondsEl = document.getElementById('flashDealSeconds');
+
+        function tick() {
+            const diff = endsAt - Date.now();
+            if (diff <= 0) {
+                if (hoursEl) hoursEl.textContent = '00';
+                if (minutesEl) minutesEl.textContent = '00';
+                if (secondsEl) secondsEl.textContent = '00';
+                if (flashDealCountdownTimer) clearInterval(flashDealCountdownTimer);
+                return;
+            }
+
+            const totalSeconds = Math.floor(diff / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            if (hoursEl) hoursEl.textContent = padFlashTime(hours);
+            if (minutesEl) minutesEl.textContent = padFlashTime(minutes);
+            if (secondsEl) secondsEl.textContent = padFlashTime(seconds);
+        }
+
+        tick();
+        flashDealCountdownTimer = setInterval(tick, 1000);
+    }
+
+    function getFlashDealMetrics() {
+        const wrap = document.getElementById('flashDealWrap');
+        const track = document.getElementById('flashDealTrack');
+        if (!wrap || !track || !track.children.length) return null;
+
+        const cards = Array.from(track.children);
+        const refCard = cards[0];
+        const step = refCard.offsetWidth + parseFloat(getComputedStyle(track).gap || '12');
+
+        return { wrap, track, step };
+    }
+
+    function updateFlashDealNav() {
+        const metrics = getFlashDealMetrics();
+        const prevBtn = document.getElementById('flashDealPrev');
+        const nextBtn = document.getElementById('flashDealNext');
+        if (!metrics || !prevBtn || !nextBtn) return;
+
+        const { wrap } = metrics;
+        const hasOverflow = wrap.scrollWidth > wrap.clientWidth + 2;
+        const atStart = wrap.scrollLeft <= 1;
+        const atEnd = wrap.scrollLeft >= wrap.scrollWidth - wrap.clientWidth - 2;
+
+        prevBtn.disabled = atStart;
+        nextBtn.disabled = atEnd;
+        prevBtn.classList.toggle('flash-deal__nav--visible', hasOverflow);
+        nextBtn.classList.toggle('flash-deal__nav--visible', hasOverflow);
+    }
+
+    function scrollFlashDeal(direction) {
+        const metrics = getFlashDealMetrics();
+        if (!metrics) return;
+
+        const { wrap, step } = metrics;
+        wrap.scrollBy({ left: direction === 'next' ? step : -step, behavior: 'smooth' });
+    }
+
+    function initFlashDealCarousel() {
+        const wrap = document.getElementById('flashDealWrap');
+        if (!wrap) return;
+
+        wrap.addEventListener('scroll', updateFlashDealNav, { passive: true });
+        updateFlashDealNav();
+    }
+
+    function initCustomerReviewsPager() {
+        const panels = document.querySelectorAll('.customer-reviews__page');
+        const prevBtn = document.getElementById('customerReviewsPrev');
+        const nextBtn = document.getElementById('customerReviewsNext');
+        const statusEl = document.getElementById('customerReviewsStatus');
+
+        if (!panels.length || !prevBtn || !nextBtn || !statusEl) return;
+
+        let currentPage = 0;
+        const totalPages = panels.length;
+
+        function renderPage() {
+            panels.forEach(function (panel, index) {
+                const isActive = index === currentPage;
+                panel.classList.toggle('is-active', isActive);
+                panel.hidden = !isActive;
             });
+
+            statusEl.textContent = (currentPage + 1) + '/' + totalPages;
+            prevBtn.disabled = currentPage === 0;
+            nextBtn.disabled = currentPage >= totalPages - 1;
+        }
+
+        prevBtn.addEventListener('click', function () {
+            if (currentPage > 0) {
+                currentPage--;
+                renderPage();
+            }
+        });
+
+        nextBtn.addEventListener('click', function () {
+            if (currentPage < totalPages - 1) {
+                currentPage++;
+                renderPage();
+            }
+        });
+
+        renderPage();
     }
 
-    // Load More functionality for Featured Collections
-    function loadMoreCollections() {
-        const button = document.getElementById('load-more-collections');
-        const container = document.getElementById('featured-collections-container');
-        
-        if (!button || !container) return;
-        
-        const offset = parseInt(button.dataset.offset);
-        const total = parseInt(button.dataset.total);
-        
-        // Simulate loading more collections (in real app, this would be an AJAX call)
-        fetch(`/api/collections/featured?offset=${offset}&limit=4`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.collections.length > 0) {
-                    // Add new collections to container
-                    data.collections.forEach((collection, index) => {
-                        const collectionHtml = `
-                            <a href="/collections/${collection.slug}" class="group scroll-reveal" 
-                               style="animation-delay: ${index * 0.1}s">
-                                <div class="relative overflow-hidden rounded-2xl bg-white shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                                    ${collection.image ? `
-                                        <div class="aspect-[4/3]">
-                                            <img src="${collection.image}" 
-                                                 alt="${collection.name}"
-                                                 class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
-                                        </div>
-                                    ` : `
-                                        <div class="aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                                            <svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                            </svg>
-                                        </div>
-                                    `}
-                                    
-                                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end">
-                                        <div class="w-full p-6">
-                                            <h3 class="text-white font-bold text-xl mb-2">
-                                                ${collection.name}
-                                            </h3>
-                                            <p class="text-white/90 text-sm mb-4 line-clamp-2">
-                                                ${collection.description}
-                                            </p>
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-white/80 text-sm">
-                                                    ${collection.products_count} Products
-                                                </span>
-                                                <span class="text-white font-semibold text-sm">
-                                                    View Collection →
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </a>
-                        `;
-                        container.insertAdjacentHTML('beforeend', collectionHtml);
-                    });
-                    
-                    // Update offset
-                    const newOffset = offset + 4;
-                    button.dataset.offset = newOffset;
-                    
-                    // Hide button if no more collections
-                    if (newOffset >= total) {
-                        button.style.display = 'none';
-                    }
-                    
-                    // Trigger scroll reveal animation for new items
-                    const newItems = container.querySelectorAll('.scroll-reveal:not(.revealed)');
-                    newItems.forEach(item => {
-                        observer.observe(item);
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error loading more collections:', error);
+    function initCustomerReviewsMobileCarousel() {
+        const track = document.getElementById('customerReviewsTrack');
+        const dots = document.querySelectorAll('.customer-reviews__dot');
+
+        if (!track || !dots.length) return;
+
+        let currentSlide = 0;
+        const totalSlides = dots.length;
+        let touchStartX = 0;
+
+        function goToSlide(index) {
+            currentSlide = Math.max(0, Math.min(index, totalSlides - 1));
+            track.style.transform = 'translateX(-' + (currentSlide * 100) + '%)';
+
+            dots.forEach(function (dot, i) {
+                const isActive = i === currentSlide;
+                dot.classList.toggle('is-active', isActive);
+                dot.setAttribute('aria-selected', isActive ? 'true' : 'false');
             });
+        }
+
+        dots.forEach(function (dot) {
+            dot.addEventListener('click', function () {
+                goToSlide(parseInt(dot.getAttribute('data-index'), 10));
+            });
+        });
+
+        track.addEventListener('touchstart', function (e) {
+            touchStartX = e.changedTouches[0].clientX;
+        }, { passive: true });
+
+        track.addEventListener('touchend', function (e) {
+            const diff = e.changedTouches[0].clientX - touchStartX;
+            if (Math.abs(diff) < 40) return;
+
+            if (diff < 0 && currentSlide < totalSlides - 1) {
+                goToSlide(currentSlide + 1);
+            } else if (diff > 0 && currentSlide > 0) {
+                goToSlide(currentSlide - 1);
+            }
+        }, { passive: true });
+
+        goToSlide(0);
+    }
+
+    // Why Choose — mobile tab panels
+    let whyChooseActiveIndex = 0;
+    let whyChooseAutoplayTimer = null;
+
+    function getWhyChooseAutoplayMs() {
+        const root = document.getElementById('why-choose-section');
+        return root ? parseInt(root.getAttribute('data-autoplay-ms') || '4500', 10) : 4500;
+    }
+
+    function goToWhyChooseTab(index, manual) {
+        const tabs = document.querySelectorAll('.why-choose__tab');
+        const panels = document.querySelectorAll('.why-choose__tab-panel');
+        if (!tabs.length) return;
+
+        whyChooseActiveIndex = ((index % tabs.length) + tabs.length) % tabs.length;
+
+        tabs.forEach(function (tab, i) {
+            const active = i === whyChooseActiveIndex;
+            tab.classList.toggle('is-active', active);
+            tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+
+        panels.forEach(function (panel, i) {
+            panel.classList.toggle('is-active', i === whyChooseActiveIndex);
+        });
+
+        if (manual) {
+            startWhyChooseAutoplay();
+        }
+    }
+
+    function startWhyChooseAutoplay() {
+        stopWhyChooseAutoplay();
+        const tabs = document.querySelectorAll('.why-choose__tab');
+        if (tabs.length <= 1) return;
+
+        whyChooseAutoplayTimer = setInterval(function () {
+            goToWhyChooseTab(whyChooseActiveIndex + 1, false);
+        }, getWhyChooseAutoplayMs());
+    }
+
+    function stopWhyChooseAutoplay() {
+        if (whyChooseAutoplayTimer) {
+            clearInterval(whyChooseAutoplayTimer);
+            whyChooseAutoplayTimer = null;
+        }
+    }
+
+    function initWhyChooseCarousel() {
+        const mobile = document.getElementById('why-choose-mobile');
+        if (!mobile) return;
+
+        mobile.addEventListener('mouseenter', stopWhyChooseAutoplay);
+        mobile.addEventListener('mouseleave', startWhyChooseAutoplay);
+        mobile.addEventListener('touchstart', stopWhyChooseAutoplay, { passive: true });
+        mobile.addEventListener('touchend', function () {
+            setTimeout(startWhyChooseAutoplay, 1200);
+        }, { passive: true });
+
+        goToWhyChooseTab(0, false);
+        startWhyChooseAutoplay();
+    }
+
+    function refreshWhyChooseCarousel() {
+        goToWhyChooseTab(whyChooseActiveIndex, false);
     }
 
     // Add event listeners for Load More buttons
     document.addEventListener('DOMContentLoaded', function() {
-        const loadMoreNewArrivalsBtn = document.getElementById('load-more-new-arrivals');
-        const loadMoreCollectionsBtn = document.getElementById('load-more-collections');
-        
-        if (loadMoreNewArrivalsBtn) {
-            loadMoreNewArrivalsBtn.addEventListener('click', loadMoreNewArrivals);
-        }
-        
-        if (loadMoreCollectionsBtn) {
-            loadMoreCollectionsBtn.addEventListener('click', loadMoreCollections);
-        }
+        initHeroCarousel();
+        initPickAGiftCarousel();
+        initCollectionsCarousel();
+        initFlashDealCountdown();
+        initFlashDealCarousel();
+        initCustomerReviewsPager();
+        initCustomerReviewsMobileCarousel();
+        initWhyChooseCarousel();
+        window.addEventListener('resize', function () {
+            refreshHeroCarousel();
+            refreshPickAGiftCarousel();
+            refreshCollectionsCarousel();
+            refreshWhyChooseCarousel();
+            updateFlashDealNav();
+            updateRecentlyViewedNav();
+            updateBlogPostsNav();
+        });
     });
 </script>
 @endsection

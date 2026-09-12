@@ -4,166 +4,174 @@
 @section('meta_description', $post->meta_description ?? $post->excerpt)
 
 @section('content')
-<!-- Post Header -->
-@if($post->featured_image)
-    <div class="relative h-96 bg-gray-900">
-        <img src="{{ $post->featured_image_url }}" 
-             alt="{{ $post->title }}"
-             class="w-full h-full object-cover opacity-60">
-        <div class="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent"></div>
-        <div class="absolute bottom-0 left-0 right-0">
-            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                @if($post->category)
-                    <a href="{{ route('blog.category', $post->category->slug) }}" class="inline-block px-3 py-1 bg-[#005366] text-white text-sm font-semibold rounded-full mb-4">
+@php
+    $publishedAt = $post->published_at ?? $post->created_at;
+    $shareUrl = url(route('blog.show', $post->slug));
+
+    $breadcrumbs = [
+        ['name' => 'Home', 'url' => route('home')],
+        ['name' => 'Blog', 'url' => route('blog.index')],
+    ];
+    if ($post->category) {
+        $breadcrumbs[] = ['name' => $post->category->name, 'url' => route('blog.category', $post->category->slug)];
+    }
+    $breadcrumbs[] = ['name' => $post->title, 'url' => null];
+@endphp
+
+<section class="catalog-page catalog-page--blog catalog-page--blog-show" aria-labelledby="blog-post-heading">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+            @foreach ($breadcrumbs as $index => $breadcrumb)
+                @if ($index > 0)
+                    <span class="catalog-breadcrumb__sep" aria-hidden="true">/</span>
+                @endif
+                @if ($breadcrumb['url'])
+                    <a href="{{ $breadcrumb['url'] }}">{{ $breadcrumb['name'] }}</a>
+                @else
+                    <span class="catalog-breadcrumb__current">{{ $breadcrumb['name'] }}</span>
+                @endif
+            @endforeach
+        </nav>
+
+        <div class="catalog-blog-show-hero scroll-reveal {{ $post->featured_image_url ? 'catalog-blog-show-hero--has-media' : '' }}">
+            <div class="catalog-blog-show-hero__content">
+                @if ($post->category)
+                    <a href="{{ route('blog.category', $post->category->slug) }}" class="catalog-blog-show-hero__category">
                         {{ $post->category->name }}
                     </a>
                 @endif
-                <h1 class="text-4xl md:text-5xl font-bold text-white mb-4">{{ $post->title }}</h1>
-                <div class="flex items-center space-x-4 text-sm text-gray-200">
-                    @if($post->published_at)
-                        <span>{{ $post->published_at ? $post->published_at->format('M d, Y') : 'Draft' }}</span>
-                        <span>•</span>
+                <h1 id="blog-post-heading" class="catalog-blog-show-hero__title">{{ $post->title }}</h1>
+                @if ($post->excerpt)
+                    <p class="catalog-blog-show-hero__excerpt">{{ $post->excerpt }}</p>
+                @endif
+                <div class="catalog-blog-show-hero__meta">
+                    @if ($publishedAt)
+                        <span class="catalog-collection-show-hero__chip">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            {{ $publishedAt->format('M d, Y') }}
+                        </span>
                     @endif
-                    <span>{{ $post->reading_time ?? 1 }} min read</span>
-                    <span>•</span>
-                    <span>{{ number_format($post->views ?? 0) }} views</span>
+                    <span class="catalog-collection-show-hero__chip">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        {{ $post->reading_time ?? 1 }} min read
+                    </span>
+                    <span class="catalog-collection-show-hero__chip">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        {{ number_format($post->views ?? 0) }} views
+                    </span>
                 </div>
             </div>
-        </div>
-    </div>
-@else
-    <div class="bg-gradient-to-r from-[#005366] to-[#003d4d] text-white py-16">
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            @if($post->category)
-                <a href="{{ route('blog.category', $post->category->slug) }}" class="inline-block px-3 py-1 bg-white/20 text-white text-sm font-semibold rounded-full mb-4">
-                    {{ $post->category->name }}
-                </a>
+            @if ($post->featured_image_url)
+                <div class="catalog-blog-show-hero__media">
+                    <img src="{{ $post->featured_image_url }}" alt="{{ $post->title }}" loading="eager">
+                </div>
             @endif
-            <h1 class="text-4xl md:text-5xl font-bold mb-4">{{ $post->title }}</h1>
-            <div class="flex items-center space-x-4 text-sm text-gray-200">
-                @if($post->published_at)
-                    <span>{{ $post->published_at ? $post->published_at->format('M d, Y') : 'Draft' }}</span>
-                    <span>•</span>
-                @endif
-                <span>{{ $post->reading_time ?? 1 }} min read</span>
-                <span>•</span>
-                <span>{{ number_format($post->views ?? 0) }} views</span>
-            </div>
         </div>
-    </div>
-@endif
 
-<!-- Post Content -->
-<div class="bg-gray-50 py-12">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="bg-white rounded-2xl shadow-sm p-8 md:p-12">
-            <!-- Author & Shop Info -->
-            @if($post->shop)
-                <div class="flex items-center space-x-4 pb-6 mb-6 border-b border-gray-200">
-                    <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-100">
-                        @if($post->shop->shop_logo)
-                            <img src="{{ $post->shop->shop_logo }}" alt="{{ $post->shop->shop_name }}" class="w-full h-full object-cover">
+        <article class="catalog-blog-article scroll-reveal">
+            @if ($post->shop)
+                <div class="catalog-blog-article__author">
+                    <div class="catalog-blog-article__author-avatar">
+                        @if ($post->shop->shop_logo)
+                            <img src="{{ $post->shop->shop_logo }}" alt="{{ $post->shop->shop_name }}" loading="lazy">
                         @else
-                            <div class="w-full h-full flex items-center justify-center bg-[#005366] text-white font-bold">
-                                {{ substr($post->shop->shop_name, 0, 1) }}
-                            </div>
+                            <span aria-hidden="true">{{ strtoupper(substr($post->shop->shop_name, 0, 1)) }}</span>
                         @endif
                     </div>
-                    <div>
-                        <a href="{{ route('shops.show', $post->shop->shop_slug) }}" class="font-bold text-gray-900 hover:text-[#005366]">
+                    <div class="catalog-blog-article__author-body">
+                        <a href="{{ route('shops.show', $post->shop->shop_slug) }}" class="catalog-blog-article__author-name">
                             {{ $post->shop->shop_name }}
                         </a>
-                        <p class="text-sm text-gray-500">Posted by {{ $post->user->name }}</p>
+                        @if ($post->user)
+                            <p class="catalog-blog-article__author-meta">Posted by {{ $post->user->name }}</p>
+                        @endif
                     </div>
+                    <a href="{{ route('shops.show', $post->shop->shop_slug) }}" class="btn-outline-petrol catalog-blog-article__author-cta">
+                        Visit shop
+                    </a>
                 </div>
             @endif
 
-            <!-- Post Content -->
-            <div class="prose prose-lg max-w-none mb-8">
+            <div class="catalog-blog-article__content">
                 {!! $post->content !!}
             </div>
 
-            <!-- Gallery -->
-            @if($post->gallery && count($post->gallery) > 0)
-                <div class="mb-8">
-                    <h3 class="text-xl font-bold text-gray-900 mb-4">Gallery</h3>
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        @foreach($post->gallery_urls as $imageUrl)
-                            <div class="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                                <img src="{{ $imageUrl }}" alt="Gallery image" class="w-full h-full object-cover">
-                            </div>
+            @if ($post->gallery && count($post->gallery) > 0)
+                <div class="catalog-blog-article__gallery">
+                    <h2 class="catalog-blog-article__gallery-title">Gallery</h2>
+                    <div class="catalog-blog-article__gallery-grid">
+                        @foreach ($post->gallery_urls as $imageUrl)
+                            <figure class="catalog-blog-article__gallery-item">
+                                <img src="{{ $imageUrl }}" alt="Gallery image" loading="lazy">
+                            </figure>
                         @endforeach
                     </div>
                 </div>
             @endif
 
-            <!-- Tags -->
-            @if($post->tags->isNotEmpty())
-                <div class="flex flex-wrap gap-2 pt-6 border-t border-gray-200">
-                    @foreach($post->tags as $tag)
-                        <a href="{{ route('blog.tag', $tag->slug) }}" class="inline-block px-3 py-1 bg-gray-100 hover:bg-[#005366] hover:text-white text-gray-700 text-sm rounded-full transition">
-                            #{{ $tag->name }}
-                        </a>
+            @if ($post->tags->isNotEmpty())
+                <div class="catalog-blog-article__tags">
+                    @foreach ($post->tags as $tag)
+                        <a href="{{ route('blog.tag', $tag->slug) }}" class="catalog-blog-widget__tag">#{{ $tag->name }}</a>
                     @endforeach
                 </div>
             @endif
 
-            <!-- Social Share -->
-            <div class="flex items-center justify-between pt-6 mt-6 border-t border-gray-200">
-                <div class="flex items-center space-x-4 text-gray-500">
-                    <button class="flex items-center space-x-1 hover:text-red-500 transition">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                        </svg>
-                        <span>{{ number_format($post->likes) }}</span>
-                    </button>
-                    <span class="flex items-center space-x-1">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                        </svg>
-                        <span>{{ number_format($post->comments_count) }}</span>
+            <footer class="catalog-blog-article__footer">
+                <div class="catalog-blog-article__stats">
+                    <span class="catalog-blog-article__stat">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                        {{ number_format($post->likes) }}
+                    </span>
+                    <span class="catalog-blog-article__stat">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                        {{ number_format($post->comments_count) }}
                     </span>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <span class="text-sm text-gray-500">Share:</span>
-                    <button class="p-2 hover:text-blue-600 transition">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                    </button>
-                    <button class="p-2 hover:text-blue-400 transition">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/></svg>
-                    </button>
+                <div class="catalog-blog-article__share">
+                    <span class="catalog-blog-article__share-label">Share</span>
+                    <a href="https://www.facebook.com/sharer/sharer.php?u={{ urlencode($shareUrl) }}"
+                       class="catalog-blog-article__share-btn"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       aria-label="Share on Facebook">
+                        <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                    </a>
+                    <a href="https://twitter.com/intent/tweet?url={{ urlencode($shareUrl) }}&text={{ urlencode($post->title) }}"
+                       class="catalog-blog-article__share-btn"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       aria-label="Share on X">
+                        <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                    </a>
                 </div>
-            </div>
+            </footer>
+        </article>
+
+        @if ($relatedPosts->isNotEmpty())
+            <section class="catalog-blog-related scroll-reveal" aria-labelledby="blog-related-heading">
+                <div class="section-heading section-heading--catalog catalog-blog-related__head">
+                    <p class="section-heading__eyebrow">Keep reading</p>
+                    <h2 id="blog-related-heading" class="section-heading__title">
+                        Related <span class="gradient-text">Articles</span>
+                    </h2>
+                    <span class="section-heading__accent" aria-hidden="true"></span>
+                </div>
+                <ul class="catalog-blog-related__grid">
+                    @foreach ($relatedPosts as $related)
+                        <li>
+                            <x-blog-card :post="$related" />
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+        @endif
+
+        <div class="catalog-blog-show-back">
+            <a href="{{ route('blog.index') }}" class="btn-outline-petrol">Back to all articles</a>
         </div>
 
-        <!-- Related Posts -->
-        @if($relatedPosts->isNotEmpty())
-            <div class="mt-12">
-                <h2 class="text-2xl font-bold text-gray-900 mb-6">Related Articles</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    @foreach($relatedPosts as $related)
-                        <a href="{{ route('blog.show', $related->slug) }}" class="group">
-                            <div class="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-lg transition">
-                                @if($related->featured_image)
-                                    <div class="aspect-video overflow-hidden bg-gray-100">
-                                        <img src="{{ Storage::url($related->featured_image) }}" 
-                                             alt="{{ $related->title }}"
-                                             class="w-full h-full object-cover group-hover:scale-110 transition-transform">
-                                    </div>
-                                @endif
-                                <div class="p-4">
-                                    <h3 class="font-bold text-gray-900 group-hover:text-[#005366] line-clamp-2 mb-2">
-                                        {{ $related->title }}
-                                    </h3>
-                                    <p class="text-sm text-gray-500">{{ $related->published_at ? $related->published_at->format('M d, Y') : 'Draft' }}</p>
-                                </div>
-                            </div>
-                        </a>
-                    @endforeach
-                </div>
-            </div>
-        @endif
+        @include('partials.recently-viewed-section', ['recentlyViewedId' => 'blog-show-recently-viewed'])
     </div>
-</div>
+</section>
 @endsection
-

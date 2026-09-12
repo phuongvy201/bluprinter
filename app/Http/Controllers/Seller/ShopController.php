@@ -143,9 +143,12 @@ class ShopController extends Controller
             'website_url' => 'nullable|url|max:255',
             'return_policy' => 'nullable|string|max:2000',
             'shipping_policy' => 'nullable|string|max:2000',
+            'flash_deal_auto_enroll' => 'nullable|boolean',
+            'flash_deal_max_discount_percent' => 'nullable|integer|min:5|max:90',
         ]);
 
         $data = $validated;
+        $data['flash_deal_auto_enroll'] = $request->boolean('flash_deal_auto_enroll');
 
         // Update slug if name changed
         if ($validated['shop_name'] !== $shop->shop_name) {

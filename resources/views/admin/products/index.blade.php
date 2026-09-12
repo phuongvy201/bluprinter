@@ -10,7 +10,7 @@
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Products</h1>
             <p class="mt-1 text-sm text-gray-600">Manage products created from templates</p>
         </div>
-        <div class="mt-4 sm:mt-0 flex items-center space-x-3">
+        <div class="mt-4 sm:mt-0 flex flex-wrap items-center gap-3">
             <!-- Bulk Delete Button (Hidden by default) -->
             <button id="bulkDeleteBtn" onclick="confirmBulkDelete()" 
                     style="display: none;"
@@ -31,17 +31,38 @@
                 Feed to GMC (<span id="gmcSelectedCount">0</span>)
             </button>
             
-            <!-- Export to Meta Button (Hidden by default) -->
-            <button id="exportToMetaBtn" onclick="exportToMeta()" 
+            <!-- Export to Meta (selected only, hidden until checked) -->
+            <button type="button" id="exportToMetaBtn" onclick="exportSelectedCatalog('meta')"
                     style="display: none;"
                     class="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors shadow-md"
-                    title="Export selected products to Meta Commerce Catalog format (CSV)">
+                    title="Export selected products to Meta Commerce Catalog CSV">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
                 Export to Meta (<span id="metaSelectedCount">0</span>)
             </button>
-            
+
+            <!-- Export to TikTok (selected only, hidden until checked) -->
+            <button type="button" id="exportToTikTokBtn" onclick="exportSelectedCatalog('tiktok')"
+                    style="display: none;"
+                    class="inline-flex items-center px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 transition-colors shadow-md"
+                    title="Export selected products to TikTok Catalog CSV">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-2v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"></path>
+                </svg>
+                Export to TikTok (<span id="tiktokSelectedCount">0</span>)
+            </button>
+
+            <!-- Export to Pinterest (selected only, hidden until checked) -->
+            <button type="button" id="exportToPinterestBtn" onclick="exportSelectedCatalog('pinterest')"
+                    style="display: none;"
+                    class="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors shadow-md"
+                    title="Export selected products to Pinterest Catalog CSV">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.477 2 2 6.477 2 12c0 4.237 2.636 7.855 6.356 9.312-.088-.791-.167-2.005.035-2.868.182-.78 1.172-4.97 1.172-4.97s-.299-.598-.299-1.482c0-1.388.806-2.425 1.81-2.425.853 0 1.264.64 1.264 1.408 0 .858-.546 2.14-.828 3.33-.236.995.5 1.807 1.48 1.807 1.778 0 3.144-1.874 3.144-4.58 0-2.395-1.72-4.068-4.177-4.068-2.845 0-4.515 2.135-4.515 4.34 0 .859.331 1.781.745 2.281a.3.3 0 01.069.288l-.278 1.133c-.044.183-.145.223-.335.134-1.249-.581-2.03-2.407-2.03-3.874 0-3.154 2.292-6.052 6.608-6.052 3.469 0 6.165 2.473 6.165 5.776 0 3.447-2.173 6.22-5.19 6.22-1.013 0-1.966-.527-2.292-1.148l-.623 2.378c-.226.869-.835 1.958-1.244 2.621A10 10 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/>
+                </svg>
+                Export to Pinterest (<span id="pinterestSelectedCount">0</span>)
+            </button>
             <a href="{{ route('admin.products.import') }}" 
                class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-md">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -62,16 +83,16 @@
     <!-- Filters Section - Compact -->
     <div class="bg-white rounded-lg border border-gray-200 shadow-sm">
         <form method="GET" action="{{ route('admin.products.index') }}" id="filterForm">
-            <div class="flex items-center gap-3 p-3">
+            <div class="flex flex-wrap items-center gap-3 p-3">
                 <!-- Search -->
-                <div class="flex-1 min-w-[200px]">
+                <div class="grow basis-full sm:basis-[220px] min-w-[180px] max-w-full">
                     <input type="text" name="search" value="{{ request('search') }}" 
                            placeholder="Search..."
                            class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                 </div>
 
                 <!-- Per Page -->
-                <div class="w-28">
+                <div class="w-28 shrink-0">
                     <select name="per_page" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         @foreach([12,25,50,100] as $size)
                             <option value="{{ $size }}" {{ (int)request('per_page', $perPage ?? 12) === $size ? 'selected' : '' }}>
@@ -82,7 +103,7 @@
                 </div>
 
                 <!-- Category -->
-                <div class="w-48">
+                <div class="w-full sm:w-48 max-w-full">
                     <select name="category_id" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         <option value="">All Categories</option>
                         @foreach($categories as $category)
@@ -94,7 +115,7 @@
                 </div>
 
                 <!-- Template -->
-                <div class="w-48">
+                <div class="w-full sm:w-48 max-w-full">
                     <select name="template_id" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         <option value="">All Templates</option>
                         @foreach($templates as $template)
@@ -107,7 +128,7 @@
 
                 <!-- Shop (Admin only) -->
                 @if(auth()->user()->hasRole('admin') && $shops)
-                <div class="w-48">
+                <div class="w-full sm:w-48 max-w-full">
                     <select name="shop_id" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         <option value="">All Shops</option>
                         @foreach($shops as $shop)
@@ -120,7 +141,7 @@
                 @endif
 
                 <!-- Collection -->
-                <div class="w-48">
+                <div class="w-full sm:w-48 max-w-full">
                     <select name="collection_id" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         <option value="">All Collections</option>
                         @foreach($collections as $collection)
@@ -132,7 +153,7 @@
                 </div>
 
                 <!-- Buttons -->
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 shrink-0">
                     <button type="submit" 
                             class="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors">
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -152,6 +173,35 @@
                 </div>
             </div>
         </form>
+
+        @php
+            $catalogExportQuery = request()->except(['page', 'per_page', 'product_ids', 'ids']);
+            $catalogExportCount = $products->total();
+            $metaExportAllUrl = route('admin.products.export.meta', $catalogExportQuery);
+            $tiktokExportAllUrl = route('admin.products.export.tiktok', $catalogExportQuery);
+            $pinterestExportAllUrl = route('admin.products.export.pinterest', $catalogExportQuery);
+        @endphp
+        <div class="px-3 pb-3 pt-0 border-t border-gray-100">
+            <p class="text-sm text-gray-600 pt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>Xuất <strong>tất cả</strong> khớp bộ lọc (bỏ qua tick chọn, không giới hạn trang):</span>
+                <a href="{{ $metaExportAllUrl }}"
+                   class="font-semibold text-purple-700 hover:text-purple-900 hover:underline"
+                   onclick="return confirm('Export TẤT CẢ {{ number_format($catalogExportCount) }} sản phẩm khớp bộ lọc (không theo tick chọn)?');">
+                    Meta — {{ number_format($catalogExportCount) }} SP
+                </a>
+                <a href="{{ $tiktokExportAllUrl }}"
+                   class="font-semibold text-gray-900 hover:text-black hover:underline"
+                   onclick="return confirm('Export TẤT CẢ {{ number_format($catalogExportCount) }} sản phẩm khớp bộ lọc (không theo tick chọn)?');">
+                    TikTok — {{ number_format($catalogExportCount) }} SP
+                </a>
+                <a href="{{ $pinterestExportAllUrl }}"
+                   class="font-semibold text-red-700 hover:text-red-900 hover:underline"
+                   onclick="return confirm('Export TẤT CẢ {{ number_format($catalogExportCount) }} sản phẩm khớp bộ lọc (không theo tick chọn)?');">
+                    Pinterest — {{ number_format($catalogExportCount) }} SP
+                </a>
+            </p>
+            <p class="text-xs text-gray-500 mt-1">Muốn xuất đúng sản phẩm đã tick: dùng nút Export to Meta / TikTok / Pinterest phía trên (hiện khi đã chọn).</p>
+        </div>
     </div>
 
     <!-- Active Filters Display - Compact -->
@@ -370,9 +420,13 @@
                                 
                                 <!-- Info -->
                                 <div class="min-w-0 flex-1" style="max-width: 250px;">
-                                    <p class="text-sm font-bold text-gray-900 truncate" title="{{ $product->name }}">
+                                    <a href="{{ route('products.show', $product->slug) }}"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="text-sm font-bold text-gray-900 truncate hover:text-[#005366] block"
+                                       title="{{ $product->name }}">
                                         {{ Str::limit($product->name, 30) }}
-                                    </p>
+                                    </a>
                                     <p class="text-xs text-gray-500 truncate" title="{{ $product->description ?? $product->template->description }}">
                                         {{ Str::limit($product->description ?? $product->template->description, 40) }}
                                     </p>
@@ -515,9 +569,11 @@
                         <td class="px-6 py-4 whitespace-nowrap text-center">
                             <div class="flex items-center justify-center space-x-2">
                                 <!-- View -->
-                                <a href="{{ route('admin.products.show', $product) }}" 
-                                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                                   title="View Details">
+                                <a href="{{ route('products.show', $product->slug) }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-[#005366] bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                   title="View on storefront">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
@@ -837,22 +893,32 @@ function updateBulkDeleteButton() {
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     const feedToGMCBtn = document.getElementById('feedToGMCBtn');
     const exportToMetaBtn = document.getElementById('exportToMetaBtn');
+    const exportToTikTokBtn = document.getElementById('exportToTikTokBtn');
+    const exportToPinterestBtn = document.getElementById('exportToPinterestBtn');
     const selectedCount = document.getElementById('selectedCount');
     const gmcSelectedCount = document.getElementById('gmcSelectedCount');
     const metaSelectedCount = document.getElementById('metaSelectedCount');
+    const tiktokSelectedCount = document.getElementById('tiktokSelectedCount');
+    const pinterestSelectedCount = document.getElementById('pinterestSelectedCount');
     const selectAllCheckbox = document.getElementById('selectAll');
     
     if (checkedBoxes.length > 0) {
         bulkDeleteBtn.style.display = 'inline-flex';
         feedToGMCBtn.style.display = 'inline-flex';
         exportToMetaBtn.style.display = 'inline-flex';
+        exportToTikTokBtn.style.display = 'inline-flex';
+        exportToPinterestBtn.style.display = 'inline-flex';
         selectedCount.textContent = checkedBoxes.length;
         gmcSelectedCount.textContent = checkedBoxes.length;
         metaSelectedCount.textContent = checkedBoxes.length;
+        tiktokSelectedCount.textContent = checkedBoxes.length;
+        pinterestSelectedCount.textContent = checkedBoxes.length;
     } else {
         bulkDeleteBtn.style.display = 'none';
         feedToGMCBtn.style.display = 'none';
         exportToMetaBtn.style.display = 'none';
+        exportToTikTokBtn.style.display = 'none';
+        exportToPinterestBtn.style.display = 'none';
     }
     
     // Update "Select All" checkbox state
@@ -1280,25 +1346,28 @@ async function downloadGMCXML(productIds) {
     }, 1000);
 }
 
-// Export to Meta function
-function exportToMeta() {
+function exportSelectedCatalog(channel) {
     const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
-    const productIds = Array.from(checkedBoxes).map(cb => cb.value);
-    
+    const productIds = Array.from(checkedBoxes).map(cb => cb.value).filter(Boolean);
     if (productIds.length === 0) {
         alert('Vui lòng chọn ít nhất một sản phẩm để export.');
         return;
     }
-    
-    // Build URL with product_ids
-    const baseUrl = '{{ route("admin.products.export.meta") }}';
-    const params = new URLSearchParams();
-    productIds.forEach(id => {
-        params.append('product_ids[]', id);
-    });
-    
-    // Open in new window to download CSV
-    window.location.href = baseUrl + '?' + params.toString();
+
+    const actions = {
+        meta: '{{ route("admin.products.export.meta") }}',
+        tiktok: '{{ route("admin.products.export.tiktok") }}',
+        pinterest: '{{ route("admin.products.export.pinterest") }}',
+    };
+    const action = actions[channel];
+    if (!action) {
+        return;
+    }
+
+    // GET + product_ids trên query để không mất body khi redirect / CSRF
+    const url = new URL(action, window.location.origin);
+    url.searchParams.set('product_ids', productIds.join(','));
+    window.location.href = url.toString();
 }
 </script>
 @endsection

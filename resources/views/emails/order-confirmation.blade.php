@@ -275,6 +275,18 @@
                     <span>Subtotal:</span>
                     <span>${{ number_format($order->subtotal, 2) }}</span>
                 </div>
+                @if((float) $order->discount_amount > 0)
+                <div class="total-row" style="color:#059669;">
+                    <span>
+                        @if($order->discount_type === 'volume')
+                            Volume discount ({{ $order->volume_discount_percent }}%)
+                        @else
+                            Promo ({{ $order->promo_code }})
+                        @endif
+                    </span>
+                    <span>-${{ number_format($order->discount_amount, 2) }}</span>
+                </div>
+                @endif
                 <div class="total-row">
                     <span>Shipping:</span>
                     <span>${{ number_format($order->shipping_cost, 2) }}</span>
@@ -311,6 +323,17 @@
                 </div>
                 @endif
             </div>
+
+            @if(!empty($thankYouPromo))
+            <div class="section" style="background:#f0fdf4;border:2px dashed #059669;padding:20px;border-radius:8px;margin:20px 0;text-align:center;">
+                <h3 style="margin:0 0 8px;color:#059669;">🎁 A thank-you gift for your next order</h3>
+                <p style="margin:0 0 12px;color:#333;">Use code <strong style="font-family:monospace;font-size:18px;">{{ $thankYouPromo->code }}</strong>
+                    for {{ rtrim(rtrim(number_format((float) $thankYouPromo->value, 2), '0'), '.') }}% off your next purchase.</p>
+                @if($thankYouPromo->expires_at)
+                    <p style="margin:0;font-size:12px;color:#666;">Valid until {{ $thankYouPromo->expires_at->format('M j, Y') }}</p>
+                @endif
+            </div>
+            @endif
 
             <!-- What's Next -->
             <div class="section" style="background: #e3f2fd; padding: 20px; border-radius: 8px;">

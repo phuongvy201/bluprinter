@@ -9,7 +9,7 @@
         <p class="text-gray-600">Edit: {{ $page->title }}</p>
     </div>
 
-    <form action="{{ route('admin.pages.update', $page) }}" method="POST" enctype="multipart/form-data" class="max-w-4xl">
+    <form action="{{ route('admin.pages.update', $page) }}" method="POST" enctype="multipart/form-data" class="max-w-5xl">
         @csrf
         @method('PUT')
         
@@ -47,6 +47,13 @@
                        class="w-full px-4 py-2 border border-gray-300 rounded-lg">
             </div>
 
+            @include('admin.partials.template-picker', [
+                'selected' => old('template', $page->template ?: 'default'),
+                'existingImageUrl' => $page->featuredImageUrl(),
+                'entityLabel' => 'page',
+                'pickerId' => 'page-template-picker',
+            ])
+
             <div class="grid grid-cols-2 gap-6">
                 <!-- Status -->
                 <div>
@@ -55,16 +62,6 @@
                         <option value="draft" {{ old('status', $page->status) == 'draft' ? 'selected' : '' }}>Draft</option>
                         <option value="published" {{ old('status', $page->status) == 'published' ? 'selected' : '' }}>Published</option>
                         <option value="scheduled" {{ old('status', $page->status) == 'scheduled' ? 'selected' : '' }}>Scheduled</option>
-                    </select>
-                </div>
-
-                <!-- Template -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Template</label>
-                    <select name="template" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
-                        <option value="default" {{ old('template', $page->template) == 'default' ? 'selected' : '' }}>Default</option>
-                        <option value="fullwidth" {{ old('template', $page->template) == 'fullwidth' ? 'selected' : '' }}>Full Width</option>
-                        <option value="sidebar" {{ old('template', $page->template) == 'sidebar' ? 'selected' : '' }}>With Sidebar</option>
                     </select>
                 </div>
 

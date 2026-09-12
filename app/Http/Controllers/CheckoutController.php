@@ -11,7 +11,10 @@ use App\Services\PayPalService;
 use App\Services\ShippingCalculator;
 use App\Services\TikTokEventsService;
 use App\Services\CurrencyService;
+use App\Services\CheckoutDiscountService;
+use App\Services\VolumeDiscountService;
 use App\Mail\OrderConfirmation;
+use App\Support\CheckoutSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +22,7 @@ use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class CheckoutController extends Controller
@@ -58,6 +62,22 @@ class CheckoutController extends Controller
                 'total' => $itemTotal
             ];
         }
+
+        $discountResult = app(CheckoutDiscountService::class)->resolve(
+            $cartItems,
+            Auth::user(),
+            Auth::user()?->email
+        );
+        $discountAmount = (float) $discountResult['discount_amount'];
+        $discountedSubtotal = (float) $discountResult['discounted_subtotal'];
+        $discountType = $discountResult['discount_type'];
+        $appliedPromoCode = $discountResult['promo_code'];
+        $volumeDiscountPercent = (int) ($discountResult['volume_discount_percent'] ?? 0);
+        $volumeEligible = (bool) $discountResult['volume_eligible'];
+        $volumePreview = $discountResult['volume_preview'];
+        $volumeTiers = app(VolumeDiscountService::class)->tiers();
+        $totalCartQuantity = (int) $cartItems->sum('quantity');
+        $discountHoldRemaining = (int) ($discountResult['hold_remaining_seconds'] ?? 0);
 
         // Get currency and rate first for shipping conversion
         $currency = CurrencyService::getCurrencyForDomain();
@@ -164,14 +184,14 @@ class CheckoutController extends Controller
         $originalShippingCostUSD = $shippingCostUSD ?? 0;
 
         // Apply freeship logic in checkout index view as well
-        // Check freeship based on base USD amount (100 USD)
-        $baseSubtotal = $currency !== 'USD' ? $subtotal / $currencyRate : $subtotal;
+        // Check freeship based on base USD amount (100 USD) after discounts
+        $baseSubtotal = $currency !== 'USD' ? $discountedSubtotal / $currencyRate : $discountedSubtotal;
         $qualifiesForFreeShipping = $baseSubtotal >= 100;
         $originalShippingCost = $shippingCost;
         $shippingCost = $qualifiesForFreeShipping ? 0 : $originalShippingCost;
 
         $taxAmount = 0; // No tax
-        $total = $subtotal + $shippingCost;
+        $total = $discountedSubtotal + $shippingCost;
 
         // Nếu domain không có currency config, lấy từ country
         $currencyChanged = false;
@@ -213,7 +233,7 @@ class CheckoutController extends Controller
 
         // Subtotal is already in current currency (prices in cart are already converted)
         // If currency changed, convert shipping from USD again, otherwise use already converted shippingCost
-        $convertedSubtotal = $subtotal; // Already converted
+        $convertedSubtotal = $discountedSubtotal;
         if ($currencyChanged && $originalShippingCostUSD > 0) {
             // Currency changed, convert from USD again
             $convertedShipping = $currency !== 'USD'
@@ -272,14 +292,7 @@ class CheckoutController extends Controller
             $defaultZone = $availableZones->first();
         }
 
-        $eventItems = collect($products)->map(function ($item) {
-            return [
-                'id' => $item['product']->id,
-                'name' => $item['product']->name,
-                'quantity' => $item['quantity'],
-                'price' => $item['cart_item']->getUnitPriceWithCustomizations(),
-            ];
-        })->values()->toArray();
+        $eventItems = $this->checkoutTrackingItems($products);
 
         $this->trackTikTokCheckoutEvent(
             $request,
@@ -291,10 +304,25 @@ class CheckoutController extends Controller
             ]
         );
 
+        $paymentMethods = CheckoutSettings::paymentMethods();
+        $defaultPaymentMethod = $paymentMethods['stripe']
+            ? 'stripe'
+            : ($paymentMethods['lianlian'] ? 'lianlian_pay' : 'paypal');
+
         return view('checkout.index', compact(
             'products',
             'cartItems', // Add cartItems for shipping calculation in delivery modal
             'subtotal',
+            'discountAmount',
+            'discountedSubtotal',
+            'discountType',
+            'appliedPromoCode',
+            'volumeDiscountPercent',
+            'volumeEligible',
+            'volumePreview',
+            'volumeTiers',
+            'totalCartQuantity',
+            'discountHoldRemaining',
             'shippingCost',
             'taxAmount',
             'total',
@@ -308,7 +336,9 @@ class CheckoutController extends Controller
             'availableZones',
             'currentDomain',
             'defaultZone',
-            'defaultCountry'
+            'defaultCountry',
+            'paymentMethods',
+            'defaultPaymentMethod'
         ));
     }
 
@@ -372,7 +402,9 @@ class CheckoutController extends Controller
             'state' => 'nullable|string|max:100',
             'postal_code' => 'required|string|max:20',
             'country' => 'required|string|max:100',
-            'payment_method' => 'required|in:paypal,lianlian_pay,stripe',
+            'payment_method' => ['required', Rule::in(CheckoutSettings::allowedPaymentMethodValues())],
+            'discount_type' => 'nullable|in:none,promo,volume',
+            'promo_code' => 'nullable|string|max:64',
         ];
 
         // Add PayPal SDK specific validation if present
@@ -535,7 +567,7 @@ class CheckoutController extends Controller
                     foreach ($cartItems as $cartItem) {
                         $shippingDetails['items'][] = [
                             'product_id' => $cartItem->product_id,
-                            'product_name' => $cartItem->product->name ?? 'Unknown',
+                            'product_name' => $cartItem->resolveDisplayName(),
                             'quantity' => $cartItem->quantity,
                             'shipping_cost' => $costPerItem * $cartItem->quantity,
                             'total_item_shipping' => $costPerItem * $cartItem->quantity,
@@ -592,9 +624,33 @@ class CheckoutController extends Controller
                 ];
             }
 
-            // Check freeship based on base USD amount (100 USD)
-            // Convert subtotal back to USD to check freeship threshold
-            $baseSubtotalUSD = $orderCurrency !== 'USD' ? ($subtotal / $currencyRate) : $subtotal;
+            $discountTypeInput = $request->input('discount_type', session('checkout.discount_type', CheckoutDiscountService::TYPE_NONE));
+            $promoCodeInput = $request->input('promo_code', session('checkout.promo_code'));
+            $discountResult = app(CheckoutDiscountService::class)->resolve(
+                $cartItems,
+                Auth::user(),
+                $request->customer_email,
+                $discountTypeInput,
+                $promoCodeInput,
+            );
+
+            if ($discountTypeInput === CheckoutDiscountService::TYPE_PROMO && $promoCodeInput && $discountResult['discount_type'] !== CheckoutDiscountService::TYPE_PROMO) {
+                $message = $discountResult['message'] ?? 'Invalid promo code.';
+                if ($isAjaxRequest) {
+                    return response()->json(['success' => false, 'message' => $message, 'errors' => ['promo_code' => [$message]]], 422);
+                }
+
+                return back()->withInput()->withErrors(['promo_code' => $message]);
+            }
+
+            $discountAmount = (float) $discountResult['discount_amount'];
+            $discountedSubtotal = (float) $discountResult['discounted_subtotal'];
+            $appliedPromo = $discountResult['promo_code'];
+            $orderDiscountType = $discountResult['discount_type'];
+            $volumeDiscountPercent = $discountResult['volume_discount_percent'];
+
+            // Check freeship based on base USD amount (100 USD) after discounts
+            $baseSubtotalUSD = $orderCurrency !== 'USD' ? ($discountedSubtotal / $currencyRate) : $discountedSubtotal;
             $qualifiesForFreeShipping = $baseSubtotalUSD >= 100;
 
             // Convert shipping cost from USD to order currency
@@ -613,7 +669,7 @@ class CheckoutController extends Controller
                 ? CurrencyService::convertFromUSDWithRate($tipAmount, $orderCurrency, $currencyRate)
                 : $tipAmount;
 
-            $total = $subtotal + $shippingCost + $convertedTipAmount;
+            $total = $discountedSubtotal + $shippingCost + $convertedTipAmount;
 
             // Log freeship application and currency conversion for debugging
             Log::info('🚚 CHECKOUT PROCESS - Shipping & Currency Conversion', [
@@ -632,14 +688,7 @@ class CheckoutController extends Controller
                 'note' => 'All amounts in order currency except baseSubtotalUSD and originalShippingCostUSD'
             ]);
 
-            $eventItems = collect($products)->map(function ($item) {
-                return [
-                    'id' => $item['product']->id,
-                    'name' => $item['product']->name,
-                    'quantity' => $item['quantity'],
-                    'price' => $item['cart_item']->getUnitPriceWithCustomizations(),
-                ];
-            })->values()->toArray();
+            $eventItems = $this->checkoutTrackingItems($products);
 
             $this->trackTikTokCheckoutEvent(
                 $request,
@@ -668,7 +717,12 @@ class CheckoutController extends Controller
                 'state' => $request->state,
                 'postal_code' => $request->postal_code,
                 'country' => $request->country,
-                'subtotal' => $subtotal, // Already in order currency
+                'subtotal' => $subtotal,
+                'discount_type' => $orderDiscountType,
+                'discount_amount' => $discountAmount,
+                'volume_discount_percent' => $volumeDiscountPercent,
+                'promo_code_id' => $appliedPromo?->id,
+                'promo_code' => $appliedPromo?->code,
                 'tax_amount' => $taxAmount,
                 'shipping_cost' => $shippingCost, // Converted to order currency
                 'tip_amount' => $convertedTipAmount, // Converted to order currency
@@ -703,10 +757,16 @@ class CheckoutController extends Controller
                 ? ($originalShippingCostUSD / $calculatedTotalShipping) 
                 : 1.0;
 
+            $shippingQueue = collect($shippingDetails['items'] ?? [])->values();
+
             // Create order items with shipping details
             foreach ($products as $item) {
-                // Find shipping details for this product
-                $itemShipping = collect($shippingDetails['items'] ?? [])->firstWhere('product_id', $item['product']->id);
+                $cartLine = $item['cart_item'];
+                $productId = $cartLine->product_id;
+                $matchIndex = $shippingQueue->search(function ($row) use ($productId) {
+                    return ($row['product_id'] ?? null) == $productId;
+                });
+                $itemShipping = $matchIndex !== false ? $shippingQueue->pull($matchIndex) : null;
 
                 // Get item shipping cost in USD
                 // Apply adjustment ratio if using shipping cost from request
@@ -730,9 +790,9 @@ class CheckoutController extends Controller
 
                 OrderItem::create([
                     'order_id' => $order->id,
-                    'product_id' => $item['product']->id,
-                    'product_name' => $item['product']->name,
-                    'product_description' => $item['product']->description,
+                    'product_id' => $item['product']?->id,
+                    'product_name' => $item['cart_item']->resolveDisplayName(),
+                    'product_description' => $item['product']?->description,
                     'unit_price' => $item['cart_item']->getUnitPriceWithCustomizations(), // Use unit price with customizations
                     'quantity' => $item['quantity'],
                     'total_price' => $item['total'],
@@ -741,7 +801,7 @@ class CheckoutController extends Controller
                         'customizations' => $item['cart_item']->customizations,
                     ],
                     'shipping_cost' => $itemShippingCost, // Converted to order currency
-                    'is_first_item' => $itemShipping['is_first_item'] ?? false,
+                    'is_first_item' => (bool) data_get($itemShipping, 'is_first_item', false),
                     'shipping_notes' => $shippingNotes,
                 ]);
             }
@@ -2486,5 +2546,23 @@ class CheckoutController extends Controller
         ]);
 
         return $updateSuccess;
+    }
+
+    /**
+     * @param  array<int, array{product: ?Product, cart_item: Cart, quantity: int, total: float}>  $products
+     * @return array<int, array{id: int|string, name: string, quantity: int, price: float}>
+     */
+    protected function checkoutTrackingItems(array $products): array
+    {
+        return collect($products)->map(function ($item) {
+            $cart = $item['cart_item'];
+
+            return [
+                'id' => $item['product']?->id ?? ('studio-'.$cart->id),
+                'name' => $cart->resolveDisplayName(),
+                'quantity' => $item['quantity'],
+                'price' => $cart->getUnitPriceWithCustomizations(),
+            ];
+        })->values()->toArray();
     }
 }

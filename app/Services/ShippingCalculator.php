@@ -45,8 +45,10 @@ class ShippingCalculator
         $isFirstItemProcessed = false;
 
         foreach ($sortedItems as $index => $item) {
-            $product = Product::with('template.category')->find($item['product_id']);
-            $categoryId = $product->template->category_id ?? null;
+            $product = ! empty($item['product_id'])
+                ? Product::with(['category', 'template.category'])->find($item['product_id'])
+                : null;
+            $categoryId = $product?->resolvedCategoryId();
 
             // Find applicable shipping rate (with domain priority)
             $shippingRate = $this->findApplicableRate($zone->id, $categoryId, $totalItems, $totalValue, $domain);
@@ -54,7 +56,9 @@ class ShippingCalculator
             if (!$shippingRate) {
                 // Get zone name for better error message
                 $zoneName = $zone->name ?? 'this zone';
-                $categoryName = $product->template->category->name ?? 'this category';
+                $categoryName = $product?->category?->name
+                    ?? $product?->template?->category?->name
+                    ?? 'custom products';
 
                 return [
                     'success' => false,
@@ -129,14 +133,15 @@ class ShippingCalculator
     protected function prepareItems(Collection $cartItems): Collection
     {
         return $cartItems->map(function ($item) {
-            $product = Product::find($item['product_id']);
+            $product = ! empty($item['product_id']) ? Product::find($item['product_id']) : null;
+            $unitPrice = $item['price'] ?? $product?->price ?? 0;
 
             return [
-                'product_id' => $item['product_id'],
-                'product_name' => $product->name ?? 'Unknown Product',
+                'product_id' => $item['product_id'] ?? null,
+                'product_name' => $item['product_name'] ?? $product?->name ?? 'Custom product',
                 'quantity' => $item['quantity'] ?? 1,
-                'unit_price' => $item['price'] ?? $product->price ?? 0,
-                'total_price' => ($item['price'] ?? $product->price ?? 0) * ($item['quantity'] ?? 1),
+                'unit_price' => $unitPrice,
+                'total_price' => $unitPrice * ($item['quantity'] ?? 1),
             ];
         });
     }

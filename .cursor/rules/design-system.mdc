@@ -1,0 +1,19 @@
+---
+description: Bluprinter storefront design system — tokens, components, review checklist
+globs: resources/views/**/*.blade.php, resources/css/**/*.{css,scss}, resources/js/**/*.{js,ts,tsx,vue}, public/css/**/*.css
+alwaysApply: false
+---
+
+# Design system (bắt buộc khi sửa UI)
+
+Trước khi tạo hoặc chỉnh bất kỳ UI storefront nào:
+
+1. Đọc và tuân thủ **`DESIGN.md`** ở root project (design tokens, spacing, typography, patterns, đúng/sai).
+2. Ưu tiên copy pattern từ component chuẩn:
+   - Header: `resources/views/components/header.blade.php`
+   - Product card: `.product-card` trong `resources/views/home.blade.php`
+   - Buttons: `.btn-cta`, `.btn-outline-petrol` trong `resources/views/layouts/app.blade.php`
+3. Không invent màu hex / font-size / spacing ngoài bảng trong `DESIGN.md`.
+4. Sau khi xong: tự đối chiếu checklist mục 8 trong `DESIGN.md` và sửa chỗ lệch trước khi kết thúc turn.
+
+Admin UI (`resources/views/admin/**`) linh hoạt hơn nhưng vẫn tránh status badge một màu cho nhiều ý nghĩa khác nhau.

@@ -47,13 +47,39 @@
                     @enderror
                 </div>
 
+                <!-- Keywords (auto-match products) -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Keywords</label>
+                    <input type="text" name="keywords" value="{{ old('keywords', $collection->keywords_text) }}"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                           placeholder="e.g: summer, beach, vacation">
+                    <p class="text-xs text-gray-500 mt-1">Comma-separated. Products with any matching keyword are added automatically. Shared by all shops.</p>
+                    @error('keywords')
+                        <p class="text-red-600 text-sm mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="flex items-start space-x-3 p-4 border border-indigo-200 rounded-lg bg-indigo-50 cursor-pointer">
+                        <input type="checkbox"
+                               name="ai_match_products"
+                               value="1"
+                               class="mt-1 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                               {{ old('ai_match_products') ? 'checked' : '' }}>
+                        <span>
+                            <span class="block text-sm font-semibold text-gray-900">Re-run AI matching</span>
+                            <span class="block text-xs text-gray-600 mt-1">Studio AI scans the catalog and attaches products that fit this collection. Existing manual/keyword products are kept.</span>
+                        </span>
+                    </label>
+                </div>
+
                 <!-- Type -->
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Collection Type <span class="text-red-500">*</span></label>
                     <select name="type" required
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                         <option value="manual" {{ old('type', $collection->type) == 'manual' ? 'selected' : '' }}>📝 Manual - Add products manually</option>
-                        <option value="automatic" {{ old('type', $collection->type) == 'automatic' ? 'selected' : '' }}>🤖 Automatic - Auto-generate based on rules</option>
+                        <option value="automatic" {{ old('type', $collection->type) == 'automatic' ? 'selected' : '' }}>🤖 Automatic - Match by keywords</option>
                     </select>
                     @error('type')
                         <p class="text-red-600 text-sm mt-1">{{ $message }}</p>

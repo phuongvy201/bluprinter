@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Order extends Model
 {
@@ -24,6 +23,11 @@ class Order extends Model
         'tax_amount',
         'shipping_cost',
         'tip_amount',
+        'promo_code_id',
+        'promo_code',
+        'discount_type',
+        'discount_amount',
+        'volume_discount_percent',
         'total_amount',
         'currency',
         'status',
@@ -45,6 +49,8 @@ class Order extends Model
         'tax_amount' => 'decimal:2',
         'shipping_cost' => 'decimal:2',
         'tip_amount' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'volume_discount_percent' => 'integer',
         'total_amount' => 'decimal:2',
         'refund_amount' => 'decimal:2',
         'paid_at' => 'datetime',
@@ -53,6 +59,11 @@ class Order extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function promoCode(): BelongsTo
+    {
+        return $this->belongsTo(PromoCode::class);
     }
 
     public function items(): HasMany

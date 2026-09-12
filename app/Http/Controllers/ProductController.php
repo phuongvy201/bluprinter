@@ -3,12 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Services\CollectionRelatedProductsService;
+use App\Services\FrequentlyBoughtTogetherService;
 use App\Models\Category;
+use App\Models\Review;
 use App\Models\Shop;
 use App\Models\ShippingRate;
 use App\Models\ShippingZone;
 use App\Services\TikTokEventsService;
 use App\Services\CurrencyService;
+use App\Support\CatalogPageSettings;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 
@@ -109,7 +113,9 @@ class ProductController extends Controller
             }
         }
 
-        return view('products.index', compact('products', 'categories', 'shops', 'breadcrumbs'));
+        $catalogPage = config('catalog.products_index', []);
+
+        return view('products.index', compact('products', 'categories', 'shops', 'breadcrumbs', 'catalogPage'));
     }
 
     /**
@@ -123,7 +129,9 @@ class ProductController extends Controller
         // Get product and require all display conditions
         $product = Product::where('slug', $slug)
             ->availableForDisplay()
-            ->with(['shop', 'template.category', 'variants', 'approvedReviews' => function ($query) {
+            ->with(['shop' => function ($query) {
+                $query->withCount('followers');
+            }, 'activeFlashDeal', 'template.category', 'variants', 'approvedReviews' => function ($query) {
                 $query->orderBy('created_at', 'desc')->limit(10);
             }])
             ->firstOrFail();
@@ -131,15 +139,22 @@ class ProductController extends Controller
         // Shop is available and active if we reach here
         $shopAvailable = true;
 
-        // Get related products from the same category (chỉ lấy đủ điều kiện hiển thị)
-        $relatedProducts = Product::whereHas('template', function ($q) use ($product) {
-            $q->where('category_id', $product->template->category_id);
-        })
-            ->where('id', '!=', $product->id)
-            ->availableForDisplay()
-            ->with(['shop', 'template'])
-            ->limit(8)
-            ->get();
+        $fbtService = app(FrequentlyBoughtTogetherService::class);
+        $previousProductId = (int) $request->session()->get('last_viewed_product_id', 0);
+        if ($previousProductId > 0 && $previousProductId !== $product->id) {
+            try {
+                $fbtService->recordCoView($previousProductId, $product->id);
+            } catch (\Throwable) {
+                // Tables may not be migrated yet.
+            }
+        }
+        $request->session()->put('last_viewed_product_id', $product->id);
+
+        $fbtLimit = (int) config('catalog.product_show.fbt_limit', 32);
+        $fbtProducts = $fbtService->getProducts($product, $fbtLimit);
+
+        $collectionLimit = (int) config('catalog.product_show.collection_related_limit', 32);
+        $collectionProducts = app(CollectionRelatedProductsService::class)->getProducts($product, $collectionLimit);
 
         // Get breadcrumb data
         $breadcrumbs = [
@@ -147,8 +162,12 @@ class ProductController extends Controller
             ['name' => 'Products', 'url' => route('products.index')]
         ];
 
-        if ($product->template->category) {
-            $breadcrumbs[] = ['name' => $product->template->category->name, 'url' => route('products.index', ['category' => $product->template->category->id])];
+        $displayCategory = $product->resolveDisplayCategory();
+        if (! empty($displayCategory['category'])) {
+            $breadcrumbs[] = [
+                'name' => $displayCategory['name'] ?? $displayCategory['category']->name,
+                'url' => route('products.index', ['category' => $displayCategory['category']->id]),
+            ];
         }
         $breadcrumbs[] = ['name' => $product->name, 'url' => ''];
 
@@ -157,7 +176,7 @@ class ProductController extends Controller
 
         // Get shipping zones that have rates for this product's category
         // PRIORITY: Pass domain to prioritize zones for current domain
-        $categoryId = $product->template->category_id ?? null;
+        $categoryId = $product->resolvedCategoryId();
         $shippingZones = ShippingRate::getZonesForCategory($categoryId, $currentDomain);
 
         // Get default zone for current domain (PRIORITY: zone matching current domain)
@@ -213,16 +232,51 @@ class ProductController extends Controller
 
         $this->trackTikTokViewContent($request, $product);
 
+        $productShowSettings = CatalogPageSettings::productShow();
+
+        $shopReviews = collect();
+        $shopReviewsAverage = 0;
+        $shopReviewsTotal = 0;
+
+        if ($product->shop_id) {
+            $shopReviewsQuery = Review::query()
+                ->approved()
+                ->whereHas('product', function ($query) use ($product) {
+                    $query->where('shop_id', $product->shop_id)
+                        ->availableForDisplay();
+                });
+
+            $shopReviewsTotal = (clone $shopReviewsQuery)->count();
+            $shopReviewsAverage = (float) ((clone $shopReviewsQuery)->avg('rating') ?? 0);
+
+            $shopReviews = $shopReviewsQuery
+                ->with([
+                    'product' => function ($query) {
+                        $query->select('id', 'name', 'slug', 'media', 'shop_id', 'template_id')
+                            ->with('template:id,media');
+                    },
+                    'user:id,name',
+                ])
+                ->orderByDesc('created_at')
+                ->limit(20)
+                ->get();
+        }
+
         return view('products.show', compact(
             'product',
-            'relatedProducts',
+            'fbtProducts',
+            'collectionProducts',
             'breadcrumbs',
             'shopAvailable',
             'shippingZones',
             'defaultZone',
             'availableZones',
             'currentDomain',
-            'categoryId'
+            'categoryId',
+            'productShowSettings',
+            'shopReviews',
+            'shopReviewsAverage',
+            'shopReviewsTotal'
         ));
     }
 
@@ -326,6 +380,48 @@ class ProductController extends Controller
             'first_item_cost' => $shippingRate->first_item_cost,
             'additional_item_cost' => $shippingRate->additional_item_cost,
         ]);
+    }
+
+    /**
+     * Render product-card components for recently viewed items (localStorage).
+     */
+    public function recentlyViewedCards(Request $request)
+    {
+        $ids = collect($request->input('ids', []))
+            ->filter(fn ($id) => is_numeric($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->take((int) config('catalog.product_show.recently_viewed_limit', 6))
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return response()->json(['html' => '']);
+        }
+
+        $productsById = Product::query()
+            ->with(['template.category', 'shop'])
+            ->withSum('orderItems as order_items_sum_quantity', 'quantity')
+            ->withAvg('approvedReviews as approved_reviews_avg_rating', 'rating')
+            ->withCount(['approvedReviews', 'variants'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+
+        $products = $ids
+            ->map(fn (int $id) => $productsById->get($id))
+            ->filter()
+            ->values();
+
+        if ($products->isEmpty()) {
+            return response()->json(['html' => '']);
+        }
+
+        $html = view('partials.recently-viewed-product-cards', [
+            'products' => $products,
+            'variant' => $request->input('variant', 'default'),
+        ])->render();
+
+        return response()->json(['html' => $html]);
     }
 
     private function trackTikTokViewContent(Request $request, Product $product): void

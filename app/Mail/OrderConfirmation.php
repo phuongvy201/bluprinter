@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\Order;
+use App\Services\PromoCodeService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -16,12 +17,18 @@ class OrderConfirmation extends Mailable
 
     public $order;
 
+    public $thankYouPromo;
+
     /**
      * Create a new message instance.
      */
     public function __construct(Order $order)
     {
         $this->order = $order;
+
+        if ($order->payment_status === 'paid') {
+            $this->thankYouPromo = app(PromoCodeService::class)->finalizePaidOrder($order);
+        }
     }
 
     /**

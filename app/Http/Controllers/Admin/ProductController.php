@@ -11,9 +11,10 @@ use App\Models\Category;
 use App\Models\Collection;
 use App\Models\GmcConfig;
 use App\Services\GoogleMerchantCenterService;
+use App\Support\S3Media;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Response;
 
@@ -36,9 +37,7 @@ class ProductController extends Controller
 
         // Apply filters
         if ($request->filled('category_id')) {
-            $productsQuery->whereHas('template', function ($q) use ($request) {
-                $q->where('category_id', $request->category_id);
-            });
+            $productsQuery->inCategoryIds([(int) $request->category_id]);
         }
 
         if ($request->filled('template_id')) {
@@ -145,7 +144,12 @@ class ProductController extends Controller
                 ->get();
         }
 
-        return view('admin.products.create', compact('templates', 'shops'));
+        $categories = Category::with('parent')
+            ->orderBy('parent_id', 'asc')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        return view('admin.products.create', compact('templates', 'shops', 'categories'));
     }
 
     /**
@@ -161,7 +165,10 @@ class ProductController extends Controller
                 'name' => 'required|string|max:255',
                 'price_type' => 'required|in:template,override,add',
                 'price' => 'nullable|numeric',
+                'list_price' => 'nullable|numeric|min:0',
+                'category_id' => 'nullable|exists:categories,id',
                 'description' => 'nullable|string',
+                'keywords' => 'nullable|string|max:2000',
                 'quantity' => 'required|integer|min:0',
                 'status' => 'required|in:active,inactive,draft',
                 'shop_id' => $user->hasRole('admin') ? 'nullable|exists:shops,id' : 'nullable',
@@ -170,7 +177,8 @@ class ProductController extends Controller
                 'variants.*.variant_name' => 'nullable|string',
                 'variants.*.variant_key' => 'nullable|string',
                 'variants.*.attributes' => 'nullable|string',
-                'variants.*.price' => 'nullable|numeric|min:0',
+                'variants.*.price' => 'required_with:variants.*.variant_name|numeric|min:0',
+                'variants.*.list_price' => 'nullable|numeric|min:0',
                 'variants.*.quantity' => 'nullable|integer|min:0',
             ]);
 
@@ -180,10 +188,30 @@ class ProductController extends Controller
                     ->with('warning', 'You need to create a shop first before adding products!');
             }
 
-            $data = $request->all();
+            $template = ProductTemplate::with('variants')->findOrFail($request->template_id);
+
+            $data = $request->only([
+                'template_id',
+                'name',
+                'quantity',
+                'status',
+                'shop_id',
+            ]);
+            $data = array_merge($template->snapshotForProduct(), $data);
+            if ($request->filled('list_price')) {
+                $data['list_price'] = $request->input('list_price');
+            }
+            $data['category_id'] = $request->filled('category_id')
+                ? $request->input('category_id')
+                : ($data['category_id'] ?? null);
             $data['slug'] = $this->generateUniqueSlug($request->name);
             $data['sku'] = $this->generateUniqueSKU();
             $data['user_id'] = auth()->id(); // Set product owner
+            $data['keywords'] = app(\App\Services\CollectionKeywordSyncService::class)
+                ->normalize($request->input('keywords'));
+            if (empty($data['keywords'])) {
+                $data['keywords'] = null;
+            }
 
             // Set shop_id based on user role
             if ($user->hasRole('admin')) {
@@ -193,9 +221,6 @@ class ProductController extends Controller
                 // Seller uses their own shop
                 $data['shop_id'] = $user->shop->id;
             }
-
-            // Calculate final price based on price_type
-            $template = ProductTemplate::find($request->template_id);
 
             if ($request->price_type === 'template') {
                 // Use template price - save the actual template price to database
@@ -209,15 +234,9 @@ class ProductController extends Controller
                 $data['price'] = $template->base_price + $addAmount;
             }
 
-
-            // Handle description logic
             $customDescription = trim($request->description ?? '');
-            if (!empty($customDescription)) {
-                // Seller provided custom description - use it
+            if ($customDescription !== '') {
                 $data['description'] = $customDescription;
-            } else {
-                // No custom description - use template description
-                $data['description'] = $template->description;
             }
 
             Log::info('Price calculation', [
@@ -252,29 +271,26 @@ class ProductController extends Controller
                 }
 
                 foreach ($mediaFiles as $file) {
-                    try {
-                        // Validate file
-                        if (!$file->isValid()) {
+                    if (!$file instanceof UploadedFile || !$file->isValid()) {
+                        if ($file instanceof UploadedFile) {
                             Log::error('Invalid file uploaded', ['file' => $file->getClientOriginalName()]);
-                            continue;
                         }
+                        continue;
+                    }
 
-                        $fileName = time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
-                        $filePath = Storage::disk('s3')->putFileAs('products', $file, $fileName);
-
-                        if ($filePath) {
-                            // Create the correct S3 URL format
-                            $mediaUrls[] = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $filePath;
-                            Log::info('File uploaded successfully', ['file' => $fileName, 'path' => $filePath, 'url' => $mediaUrls[count($mediaUrls) - 1]]);
-                        } else {
-                            Log::error('Failed to upload file to S3', ['file' => $fileName]);
-                        }
-                    } catch (Exception $e) {
-                        Log::error('Error uploading file', [
+                    // Copy to a real local path first — putFileAs(UploadedFile)
+                    // uses getRealPath() which is empty on Windows.
+                    $url = S3Media::upload($file, 'products');
+                    if ($url) {
+                        $mediaUrls[] = $url;
+                        Log::info('File uploaded successfully', [
                             'file' => $file->getClientOriginalName(),
-                            'error' => $e->getMessage()
+                            'url' => $url,
                         ]);
-                        // Continue with other files instead of failing completely
+                    } else {
+                        Log::error('Failed to upload file to S3', [
+                            'file' => $file->getClientOriginalName(),
+                        ]);
                     }
                 }
 
@@ -285,62 +301,35 @@ class ProductController extends Controller
 
             $product = Product::create($data);
 
-            // Note: Variants and shop products count are automatically handled by Product model's created event
-
-            // Create product variants from template variants
+            // Variants are auto-created from the template; apply the form's base price / quantity.
             if ($request->has('variants')) {
                 foreach ($request->variants as $variantData) {
                     $variantName = $variantData['variant_name'] ?? '';
+                    if ($variantName === '') {
+                        continue;
+                    }
 
-                    // Get attributes from form or parse from variant_name
-                    $attributes = [];
+                    $price = $variantData['price'] ?? null;
+                    $listPrice = $variantData['list_price'] ?? null;
+                    $quantity = $variantData['quantity'] ?? null;
+                    $templateVariant = $template?->variants?->firstWhere('variant_name', $variantName);
+                    $fallbackPrice = $templateVariant?->price ?? $template?->base_price;
+                    $fallbackListPrice = $templateVariant?->list_price ?? $template?->list_price;
 
-                    // Get attributes from template variant first (preferred method)
-                    $templateVariant = \App\Models\TemplateVariant::where('template_id', $request->template_id)
-                        ->where('variant_name', $variantName)
-                        ->first();
+                    $existing = $product->variants()->where('variant_name', $variantName)->first();
+                    if ($existing) {
+                        $existing->update([
+                            'price' => ($price === '' || $price === null) ? $existing->price : $price,
+                            'list_price' => ($listPrice === '' || $listPrice === null) ? $existing->list_price : $listPrice,
+                            'quantity' => ($quantity === '' || $quantity === null) ? $existing->quantity : $quantity,
+                        ]);
 
-                    if ($templateVariant && !empty($templateVariant->attributes)) {
-                        $attributes = $templateVariant->attributes;
-                    } else {
-                        // Try to get attributes from form
-                        if (isset($variantData['attributes']) && !empty($variantData['attributes'])) {
-                            $attributes = is_string($variantData['attributes'])
-                                ? json_decode($variantData['attributes'], true)
-                                : $variantData['attributes'];
-                        }
+                        continue;
+                    }
 
-                        // If still no attributes, try to parse from variant_name (fallback)
-                        if (empty($attributes)) {
-                            // Common size patterns
-                            $sizePatterns = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Small', 'Medium', 'Large', '11oz', '12oz', '15oz'];
-                            $colorPatterns = ['Black', 'White', 'Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Pink', 'Gray', 'Grey', 'Brown', 'Orange', 'Navy', 'Maroon', 'Teal'];
-
-                            // Handle format like "Black/S" or "Black S" or "Black-S"
-                            $variantName = str_replace(['/', '-'], ' ', $variantName);
-                            $nameParts = array_filter(explode(' ', trim($variantName)));
-
-                            foreach ($nameParts as $part) {
-                                $part = trim($part);
-                                if (in_array($part, $sizePatterns)) {
-                                    $attributes['Size'] = $part;
-                                } elseif (in_array($part, $colorPatterns)) {
-                                    $attributes['Color'] = $part;
-                                } else {
-                                    // If it's not a common size/color, treat as additional attribute
-                                    if (!isset($attributes['Material'])) {
-                                        $attributes['Material'] = $part;
-                                    } elseif (!isset($attributes['Style'])) {
-                                        $attributes['Style'] = $part;
-                                    }
-                                }
-                            }
-                        }
-
-                        // If still no attributes, create a generic one
-                        if (empty($attributes)) {
-                            $attributes['Variant'] = $variantName;
-                        }
+                    $attributes = $variantData['attributes'] ?? [];
+                    if (is_string($attributes)) {
+                        $attributes = json_decode($attributes, true) ?: [];
                     }
 
                     ProductVariant::create([
@@ -348,9 +337,10 @@ class ProductController extends Controller
                         'template_id' => $request->template_id,
                         'variant_name' => $variantName,
                         'attributes' => $attributes,
-                        'price' => $variantData['price'] ?? null,
+                        'price' => ($price === '' || $price === null) ? $fallbackPrice : $price,
+                        'list_price' => ($listPrice === '' || $listPrice === null) ? $fallbackListPrice : $listPrice,
                         'sku' => 'SKU-' . strtoupper(Str::random(8)),
-                        'quantity' => $variantData['quantity'] ?? 0,
+                        'quantity' => ($quantity === '' || $quantity === null) ? 100 : $quantity,
                         'media' => null,
                     ]);
                 }
@@ -414,13 +404,17 @@ class ProductController extends Controller
             // Create new product data
             $newProductData = [
                 'template_id' => $product->template_id,
+                'category_id' => $product->category_id ?? $product->template?->category_id,
                 'user_id' => $user->id,
                 'shop_id' => $product->shop_id,
                 'name' => $product->name . ' (Copy)',
                 'slug' => $this->generateUniqueSlug($product->name . ' (Copy)'),
                 'sku' => $this->generateUniqueSKU(),
                 'price' => $product->price,
+                'list_price' => $product->list_price,
                 'description' => $product->description,
+                'allow_customization' => $product->getAttributes()['allow_customization'] ?? $product->allow_customization,
+                'customizations' => $product->getAttributes()['customizations'] ?? $product->customizations,
                 'media' => $product->media, // Copy media array
                 'quantity' => $product->quantity,
                 'status' => 'draft', // Set to draft by default
@@ -438,6 +432,7 @@ class ProductController extends Controller
                         'variant_name' => $variant->variant_name,
                         'attributes' => $variant->attributes,
                         'price' => $variant->price,
+                        'list_price' => $variant->list_price,
                         'quantity' => $variant->quantity,
                         'sku' => 'SKU-' . strtoupper(Str::random(8)), // Generate new unique SKU
                         'media' => $variant->media,
@@ -487,8 +482,14 @@ class ProductController extends Controller
                 ->get();
         }
 
-        $product->load(['template.variants', 'variants']);
-        return view('admin.products.edit', compact('product', 'shops'));
+        $product->load(['template.variants', 'template.attributes', 'variants']);
+
+        $categories = Category::with('parent')
+            ->orderBy('parent_id', 'asc')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        return view('admin.products.edit', compact('product', 'shops', 'categories'));
     }
 
     /**
@@ -507,7 +508,10 @@ class ProductController extends Controller
             $request->validate([
                 'name' => 'required|string|max:255',
                 'price' => 'nullable|numeric|min:0',
+                'list_price' => 'nullable|numeric|min:0',
+                'category_id' => 'nullable|exists:categories,id',
                 'description' => 'nullable|string',
+                'keywords' => 'nullable|string|max:2000',
                 'quantity' => 'required|integer|min:0',
                 'status' => 'required|in:active,inactive,draft',
                 'shop_id' => $user->hasRole('admin') ? 'nullable|exists:shops,id' : 'nullable',
@@ -516,18 +520,27 @@ class ProductController extends Controller
                 'variants' => 'nullable|array',
                 'variants.*.id' => 'nullable|exists:product_variants,id',
                 'variants.*.variant_name' => 'nullable|string',
-                'variants.*.price' => 'nullable|numeric|min:0',
+                'variants.*.price' => 'required_with:variants.*.variant_name|numeric|min:0',
+                'variants.*.list_price' => 'nullable|numeric|min:0',
                 'variants.*.quantity' => 'nullable|integer|min:0',
             ]);
 
             $data = $request->only([
                 'name',
                 'price',
+                'list_price',
                 'description',
                 'quantity',
                 'status',
                 'shop_id',
             ]);
+            $data['category_id'] = $request->filled('category_id')
+                ? $request->input('category_id')
+                : null;
+
+            $keywords = app(\App\Services\CollectionKeywordSyncService::class)
+                ->normalize($request->input('keywords'));
+            $data['keywords'] = $keywords ?: null;
 
             // Chỉ tạo slug mới nếu tên sản phẩm thay đổi
             if ($request->name !== $product->name) {
@@ -560,15 +573,13 @@ class ProductController extends Controller
             // Handle uploaded media
             if ($request->hasFile('media')) {
                 foreach ($request->file('media') as $file) {
-                    if (!$file->isValid()) {
+                    if (!$file instanceof UploadedFile || !$file->isValid()) {
                         continue;
                     }
 
-                    $fileName = time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
-                    $filePath = Storage::disk('s3')->putFileAs('products', $file, $fileName);
-
-                    if ($filePath) {
-                        $orderedExistingMedia[] = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $filePath;
+                    $url = S3Media::upload($file, 'products');
+                    if ($url) {
+                        $orderedExistingMedia[] = $url;
                     }
                 }
             }
@@ -594,6 +605,7 @@ class ProductController extends Controller
                         if ($variant) {
                             $variant->update([
                                 'price' => $variantData['price'] ?? $variant->price,
+                                'list_price' => $variantData['list_price'] ?? $variant->list_price,
                                 'quantity' => $variantData['quantity'] ?? $variant->quantity,
                             ]);
                         }
@@ -1840,78 +1852,8 @@ class ProductController extends Controller
      */
     public function exportToMeta(Request $request)
     {
-        $user = auth()->user();
-
-        // Nếu có product_ids từ request (selected products), chỉ export những sản phẩm đó
-        if ($request->filled('product_ids')) {
-            $productIds = is_array($request->product_ids)
-                ? $request->product_ids
-                : explode(',', $request->product_ids);
-
-            $productsQuery = Product::with(['template.category', 'template.user', 'user', 'shop', 'variants', 'collections'])
-                ->whereIn('id', $productIds);
-
-            // Apply user filter (chỉ export sản phẩm của user hoặc admin có thể export tất cả)
-            if (!$user->hasRole('admin')) {
-                $productsQuery->where('user_id', $user->id);
-            }
-
-            $products = $productsQuery->get();
-        } else {
-            // Nếu không có product_ids, export tất cả (giữ nguyên logic cũ để tương thích)
-            $productsQuery = Product::with(['template.category', 'template.user', 'user', 'shop', 'variants', 'collections']);
-
-            // Apply user filter
-            if (!$user->hasRole('admin')) {
-                $productsQuery->where('user_id', $user->id);
-            }
-
-            // Apply filters from request
-            if ($request->filled('category_id')) {
-                $productsQuery->whereHas('template', function ($q) use ($request) {
-                    $q->where('category_id', $request->category_id);
-                });
-            }
-
-            if ($request->filled('template_id')) {
-                $productsQuery->where('template_id', $request->template_id);
-            }
-
-            if ($request->filled('shop_id')) {
-                $productsQuery->where('shop_id', $request->shop_id);
-            }
-
-            if ($request->filled('collection_id')) {
-                $productsQuery->whereHas('collections', function ($q) use ($request) {
-                    $q->where('collections.id', $request->collection_id);
-                });
-            }
-
-            if ($request->filled('search')) {
-                $search = $request->search;
-                $productsQuery->where(function ($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                        ->orWhere('sku', 'like', "%{$search}%")
-                        ->orWhere('description', 'like', "%{$search}%")
-                        ->orWhereHas('template', function ($templateQuery) use ($search) {
-                            $templateQuery->where('name', 'like', "%{$search}%");
-                        });
-                });
-            }
-
-            // Only export active products
-            $productsQuery->where('status', 'active');
-
-            $products = $productsQuery->get();
-        }
-
-        // Get base URL for product links
-        $baseUrl = config('app.url');
-
-        // Prepare CSV data
-        $csvData = [];
-
-        // Header - PHẢI CHÍNH XÁC 100% về chữ hoa/thường, dấu gạch dưới, dấu ngoặc vuông
+        $products = $this->productsForCatalogExport($request);
+        $baseUrl = rtrim((string) config('app.url'), '/');
         $header = [
             'id',
             'title',
@@ -1941,280 +1883,840 @@ class ProductController extends Controller
             'gtin',
             'product_tags[0]',
             'product_tags[1]',
-            'style[0]'
+            'style[0]',
         ];
 
-        $csvData[] = $header;
+        $csvData = [$header];
+        $saleWindow = $this->catalogSaleWindow();
 
-        // Helper function to validate and format fields
-        $formatField = function ($value, $maxLength = null) {
-            if (empty($value)) return '';
-            $value = trim((string) $value);
-            if ($maxLength) {
-                $value = mb_substr($value, 0, $maxLength);
-            }
-            return $value;
-        };
-
-        // Helper function to validate gender
-        $validateGender = function ($gender) {
-            $gender = strtolower(trim($gender));
-            $validGenders = ['female', 'male', 'unisex'];
-            return in_array($gender, $validGenders) ? $gender : '';
-        };
-
-        // Helper function to validate age_group
-        $validateAgeGroup = function ($ageGroup) {
-            $ageGroup = strtolower(trim($ageGroup));
-            $validAgeGroups = ['newborn', 'infant', 'toddler', 'kids', 'teen', 'adult', 'all ages'];
-            return in_array($ageGroup, $validAgeGroups) ? $ageGroup : '';
-        };
-
-        // Process each product
         foreach ($products as $product) {
-            // Get product media
-            $media = $product->getEffectiveMedia();
-            $imageLink = !empty($media) ? (is_string($media[0]) ? $media[0] : ($media[0]['url'] ?? $media[0]['path'] ?? '')) : '';
-
-            // Convert relative URL to absolute URL
-            if ($imageLink && !filter_var($imageLink, FILTER_VALIDATE_URL)) {
-                if (strpos($imageLink, '/storage/') === 0 || strpos($imageLink, '/') === 0) {
-                    $imageLink = $baseUrl . $imageLink;
-                } else {
-                    $imageLink = $baseUrl . '/storage/' . $imageLink;
-                }
+            foreach ($this->metaCatalogRowsForProduct($product, $baseUrl, $saleWindow) as $row) {
+                $csvData[] = $row;
             }
-
-            // Validate image_link is required
-            if (empty($imageLink)) {
-                continue; // Skip products without images
-            }
-
-            // Get product link
-            $productLink = $baseUrl . '/products/' . ($product->slug ?? $product->id);
-
-            // Get price (in USD format for Meta) - Bắt buộc
-            $basePrice = $product->price ?? $product->template->base_price ?? 0;
-            if ($basePrice <= 0) {
-                continue; // Skip products without price
-            }
-            $price = number_format($basePrice, 2, '.', '') . ' USD';
-
-            // Get description (strip HTML tags) - Bắt buộc, giới hạn 9999 ký tự, chỉ chữ thường
-            $description = strip_tags($product->description ?? $product->template->description ?? '');
-            if (empty($description)) {
-                $description = $product->name; // Fallback to name if no description
-            }
-            $description = str_replace(["\r\n", "\r", "\n"], ' ', $description);
-            $description = mb_strtolower($description, 'UTF-8'); // Chỉ dùng chữ thường
-            $description = $formatField($description, 9999);
-
-            // Get title - Bắt buộc, giới hạn 200 ký tự
-            $title = $formatField($product->name, 200);
-
-            // Get brand - Bắt buộc, giới hạn 100 ký tự
-            $brand = $formatField('Bluprinter', 100);
-
-            // Get category IDs - mặc định theo yêu cầu nail box
-            $googleCategory = $product->google_product_category
-                ?? 'health & beauty > beauty > nail care > artificial nails & accessories > manicure tool sets';
-            $fbCategory = $product->fb_product_category
-                ?? 'health & beauty > beauty > nail care > artificial nails & accessories > manicure tool sets';
-
-            // Get quantity - ưu tiên từ product, sau đó từ quantity
-            $quantity = max(1, (int)($product->quantity_to_sell_on_facebook ?? $product->quantity ?? 100));
-
-            // Get video if exists - chỉ lấy video file, không lấy video player URL
-            $videoUrl = '';
-            $videoTag = '';
-
-            // Danh sách các định dạng video được hỗ trợ bởi Meta
-            $supportedVideoFormats = [
-                '.3g2',
-                '.3gp',
-                '.3gpp',
-                '.asf',
-                '.avi',
-                '.dat',
-                '.divx',
-                '.dv',
-                '.f4v',
-                '.flv',
-                '.gif',
-                '.m2ts',
-                '.m4v',
-                '.mkv',
-                '.mod',
-                '.mov',
-                '.mp4',
-                '.mpe',
-                '.mpeg',
-                '.mpeg4',
-                '.mpg',
-                '.mts',
-                '.nsv',
-                '.ogm',
-                '.ogv',
-                '.qt',
-                '.tod',
-                '.ts',
-                '.vob',
-                '.wmv'
-            ];
-
-            // Danh sách các domain video player cần loại bỏ (YouTube, Vimeo, etc.)
-            $videoPlayerDomains = [
-                'youtube.com',
-                'youtu.be',
-                'vimeo.com',
-                'dailymotion.com',
-                'facebook.com',
-                'instagram.com',
-                'tiktok.com',
-                'twitch.tv'
-            ];
-
-            if (!empty($media)) {
-                foreach ($media as $mediaItem) {
-                    $mediaUrl = is_string($mediaItem) ? $mediaItem : ($mediaItem['url'] ?? $mediaItem['path'] ?? '');
-
-                    if (empty($mediaUrl)) {
-                        continue;
-                    }
-
-                    // Kiểm tra xem URL có phải là video player không
-                    $isVideoPlayer = false;
-                    foreach ($videoPlayerDomains as $domain) {
-                        if (str_contains(strtolower($mediaUrl), $domain)) {
-                            $isVideoPlayer = true;
-                            break;
-                        }
-                    }
-
-                    // Bỏ qua nếu là video player URL
-                    if ($isVideoPlayer) {
-                        continue;
-                    }
-
-                    // Kiểm tra định dạng video được hỗ trợ
-                    $hasSupportedFormat = false;
-                    $lowerUrl = strtolower($mediaUrl);
-                    foreach ($supportedVideoFormats as $format) {
-                        if (str_ends_with($lowerUrl, $format)) {
-                            $hasSupportedFormat = true;
-                            break;
-                        }
-                    }
-
-                    // Nếu có định dạng được hỗ trợ, xử lý URL
-                    if ($hasSupportedFormat) {
-                        if (!filter_var($mediaUrl, FILTER_VALIDATE_URL)) {
-                            // Relative URL - cần thêm base URL
-                            if (strpos($mediaUrl, '/storage/') === 0 || strpos($mediaUrl, '/') === 0) {
-                                $videoUrl = $baseUrl . $mediaUrl;
-                            } else {
-                                $videoUrl = $baseUrl . '/storage/' . $mediaUrl;
-                            }
-                        } else {
-                            // Absolute URL - sử dụng trực tiếp
-                            $videoUrl = $mediaUrl;
-                        }
-                        break; // Chỉ lấy video đầu tiên tìm thấy
-                    }
-                }
-            }
-
-            // Get product tags/collections - giới hạn 110 ký tự mỗi tag
-            $productTags = $product->collections->pluck('name')->take(2)->toArray();
-            $productTag0 = $formatField($productTags[0] ?? '', 110);
-            $productTag1 = $formatField($productTags[1] ?? '', 110);
-
-            // Mỗi sản phẩm chỉ tạo 1 dòng, không quan tâm đến variants
-            // item_group_id để trống theo yêu cầu
-
-            // Product ID - Bắt buộc, giới hạn 100 ký tự, nên dùng SKU
-            $productId = '';
-            if ($product->sku) {
-                $productId = $formatField($product->sku, 100);
-            } else {
-                $productId = $formatField('PROD_' . $product->id, 100);
-            }
-
-            // Set các giá trị mặc định
-            $gender = $product->gender ? $validateGender($product->gender) : 'female';
-            $color = ''; // Để trống theo yêu cầu
-            $size = 'S (15/11/12/11/9mm)'; // Mặc định theo yêu cầu
-            $ageGroup = $product->age_group ? $validateAgeGroup($product->age_group) : 'adult';
-            $material = $product->material ?? 'stainless steel';
-            $pattern = $product->pattern ?? 'graphic';
-
-            // Create single row for product
-            $row = [
-                $productId, // id (Bắt buộc, max 100)
-                $title, // title (Bắt buộc, max 200)
-                $description, // description (Bắt buộc, max 9999, chữ thường)
-                $quantity > 0 ? 'in stock' : 'out of stock', // availability (Bắt buộc)
-                'new', // condition (Bắt buộc)
-                $price, // price (Bắt buộc)
-                $productLink, // link (Bắt buộc)
-                $imageLink, // image_link (Bắt buộc)
-                $brand, // brand (Bắt buộc, max 100)
-                $googleCategory, // google_product_category
-                $fbCategory, // fb_product_category
-                max(1, (int)($product->quantity_to_sell_on_facebook ?? $quantity)), // quantity_to_sell_on_facebook (ưu tiên từ product, mặc định 100)
-                '', // sale_price
-                '', // sale_price_effective_date
-                '', // item_group_id (để trống theo yêu cầu)
-                $gender, // gender (mặc định female)
-                $color, // color (để trống theo yêu cầu)
-                $size, // size (mặc định theo yêu cầu)
-                $ageGroup, // age_group (mặc định adult)
-                $material, // material (mặc định stainless steel)
-                $pattern, // pattern (mặc định graphic)
-                $formatField($product->shipping ?? 'US::USPS:5.99 USD', 200), // shipping (mặc định US::USPS:5.99 USD)
-                $formatField($product->shipping_weight ?? '200g', 50), // shipping_weight (mặc định 200g)
-                $videoUrl, // video[0].url
-                '', // video[0].tag[0] (bỏ trống theo yêu cầu)
-                '', // gtin (bỏ trống theo yêu cầu)
-                '', // product_tags[0] (bỏ trống theo yêu cầu)
-                '', // product_tags[1] (bỏ trống theo yêu cầu)
-                '' // style[0] (bỏ trống theo yêu cầu)
-            ];
-
-            $csvData[] = $row;
         }
 
-        // Generate filename
-        $filename = 'meta_products_export_' . date('Y-m-d_His') . '.csv';
+        return $this->downloadCatalogCsv($csvData, 'meta_products_export_' . date('Y-m-d_His') . '.csv');
+    }
 
-        // Build CSV content
-        $csvContent = '';
+    /**
+     * Export products to TikTok Catalog CSV format.
+     */
+    public function exportToTikTok(Request $request)
+    {
+        $products = $this->productsForCatalogExport($request);
+        $baseUrl = rtrim((string) config('app.url'), '/');
+        $header = [
+            'sku_id',
+            'title',
+            'description',
+            'availability',
+            'condition',
+            'price',
+            'link',
+            'image_link',
+            'video_link',
+            'brand',
+            'additional_image_link',
+            'age_group',
+            'color',
+            'gender',
+            'item_group_id',
+            'google_product_category',
+            'material',
+            'pattern',
+            'product_type',
+            'sale_price',
+            'sale_price_effective_date',
+            'shipping',
+            'shipping_weight',
+            'gtin',
+            'mpn',
+            'size',
+            'tax',
+            'ios_url',
+            'ios_app_store_id',
+            'ios_app_name',
+            'iPhone_url',
+            'iPhone_app_store_id',
+            'iPhone_app_name',
+            'iPad_url',
+            'iPad_app_store_id',
+            'iPad_app_name',
+            'android_url',
+            'android_package',
+            'android_app_name',
+            'custom_label_0',
+            'custom_label_1',
+            'custom_label_2',
+            'custom_label_3',
+            'custom_label_4',
+        ];
 
-        // Add BOM for UTF-8 (Excel compatibility)
-        $csvContent .= "\xEF\xBB\xBF";
+        $csvData = [$header];
+        $saleWindow = $this->catalogSaleWindow();
 
-        // Write CSV data
+        foreach ($products as $product) {
+            foreach ($this->tiktokCatalogRowsForProduct($product, $baseUrl, $saleWindow) as $row) {
+                $csvData[] = $row;
+            }
+        }
+
+        return $this->downloadCatalogCsv($csvData, 'tiktok_products_export_' . date('Y-m-d_His') . '.csv');
+    }
+
+    /**
+     * Export products to Pinterest Catalog CSV format.
+     */
+    public function exportToPinterest(Request $request)
+    {
+        $products = $this->productsForCatalogExport($request);
+        $baseUrl = rtrim((string) config('app.url'), '/');
+        $header = [
+            'id',
+            'item_group_id',
+            'title',
+            'description',
+            'link',
+            'image_link',
+            'price',
+            'availability',
+            'condition',
+            'google_product_category',
+            'product_type',
+            'additional_image_link',
+            'sale_price',
+            'brand',
+            'gender',
+            'age_group',
+            'size',
+            'size_type',
+            'shipping',
+            'custom_label_0',
+            'adwords_redirect',
+        ];
+
+        $csvData = [$header];
+
+        foreach ($products as $product) {
+            foreach ($this->pinterestCatalogRowsForProduct($product, $baseUrl) as $row) {
+                $csvData[] = $row;
+            }
+        }
+
+        return $this->downloadCatalogCsv($csvData, 'pinterest_products_export_' . date('Y-m-d_His') . '.csv');
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, Product>
+     */
+    private function productsForCatalogExport(Request $request)
+    {
+        $user = auth()->user();
+        $productIds = $this->catalogExportProductIds($request);
+
+        if ($productIds !== null) {
+            if ($productIds === []) {
+                return collect();
+            }
+
+            $productsQuery = Product::with(['template.category', 'template.user', 'user', 'shop', 'variants', 'collections', 'category'])
+                ->whereIn('id', $productIds);
+
+            if (!$user->hasRole('admin')) {
+                $productsQuery->where('user_id', $user->id);
+            }
+
+            return $productsQuery->get();
+        }
+
+        $productsQuery = Product::with(['template.category', 'template.user', 'user', 'shop', 'variants', 'collections', 'category']);
+
+        if (!$user->hasRole('admin')) {
+            $productsQuery->where('user_id', $user->id);
+        }
+
+        if ($request->filled('category_id')) {
+            $productsQuery->inCategoryIds([(int) $request->category_id]);
+        }
+
+        if ($request->filled('template_id')) {
+            $productsQuery->where('template_id', $request->template_id);
+        }
+
+        if ($request->filled('shop_id')) {
+            $productsQuery->where('shop_id', $request->shop_id);
+        }
+
+        if ($request->filled('collection_id')) {
+            $productsQuery->whereHas('collections', function ($q) use ($request) {
+                $q->where('collections.id', $request->collection_id);
+            });
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $productsQuery->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('template', function ($templateQuery) use ($search) {
+                        $templateQuery->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        return $productsQuery->orderByDesc('id')->get();
+    }
+
+    /**
+     * @return array<int, int>|null Null = export by filters / all; empty array = no matching selection.
+     */
+    private function catalogExportProductIds(Request $request): ?array
+    {
+        if (!$request->exists('product_ids') && !$request->exists('ids')) {
+            return null;
+        }
+
+        $raw = $request->input('product_ids', $request->input('ids'));
+
+        if (is_string($raw)) {
+            $raw = explode(',', $raw);
+        }
+
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        return collect($raw)
+            ->flatten()
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function catalogSaleWindow(): string
+    {
+        $saleStart = now()->timezone('America/Los_Angeles')->startOfDay();
+        $saleEnd = now()->timezone('America/Los_Angeles')->addDays(30)->endOfDay();
+
+        return $saleStart->format('Y-m-d\TH:iP') . '/' . $saleEnd->format('Y-m-d\TH:iP');
+    }
+
+    /**
+     * @param  array<int, array<int, string|int>>  $csvData
+     */
+    private function downloadCatalogCsv(array $csvData, string $filename)
+    {
+        $csvContent = "\xEF\xBB\xBF";
+
         foreach ($csvData as $row) {
-            // Escape fields that contain commas, quotes, or newlines
             $escapedRow = array_map(function ($field) {
-                // Convert to string and handle null/empty
                 $field = (string) $field;
 
                 if (strpos($field, ',') !== false || strpos($field, '"') !== false || strpos($field, "\n") !== false || strpos($field, "\r") !== false) {
                     return '"' . str_replace('"', '""', $field) . '"';
                 }
+
                 return $field;
             }, $row);
 
             $csvContent .= implode(',', $escapedRow) . "\n";
         }
 
-        // Return CSV file download
         return Response::make($csvContent, 200, [
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
             'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
             'Expires' => '0',
         ]);
+    }
+
+    /**
+     * @return array<int, array<int, string|int>>
+     */
+    private function metaCatalogRowsForProduct(Product $product, string $baseUrl, string $saleWindow): array
+    {
+        $media = $product->getEffectiveMedia();
+        $imageLink = $this->absoluteMediaUrl($this->firstImageUrl($media), $baseUrl);
+        if ($imageLink === '') {
+            return [];
+        }
+
+        $videoUrl = $this->firstVideoUrl($media, $baseUrl);
+        $description = strip_tags($product->getEffectiveDescription() ?: $product->name);
+        $description = trim(preg_replace('/\s+/', ' ', $description) ?? '');
+        $description = mb_substr($description !== '' ? $description : $product->name, 0, 9999);
+        $title = mb_substr((string) $product->name, 0, 200);
+        $categoryName = $product->category?->name ?? $product->template?->category?->name ?? 'T-Shirt';
+        $fbCategory = $product->fb_product_category
+            ?: ('clothing > unisex clothing > ' . mb_strtolower($categoryName));
+        $googleCategory = $product->google_product_category ?: '212';
+        $gender = $this->normalizeMetaGender($product->gender);
+        $ageGroup = $this->normalizeMetaAgeGroup($product->age_group);
+        $material = $product->material ?: 'Cotton';
+        $pattern = $product->pattern ?: 'graphic';
+        $shipping = $product->shipping ?: 'US::Standard:6.99 USD,GB::Standard:9.99 USD,CA::Standard:9.99 USD,AU::Standard:9.99 USD,DE::Standard:9.99 USD';
+        $weight = $product->shipping_weight ?: '0.4 lb';
+        $link = $baseUrl . '/products/' . ($product->slug ?: $product->id);
+        $collectionTags = $product->collections->pluck('name')->filter()->values();
+        $tag0 = mb_substr((string) ($collectionTags[0] ?? ''), 0, 110);
+        $tag1 = mb_substr((string) ($collectionTags[1] ?? ''), 0, 110);
+        $facebookQty = max(1, (int) ($product->quantity_to_sell_on_facebook ?? 100));
+
+        $variants = $product->variants;
+        if ($variants->isEmpty()) {
+            $selling = (float) $product->getEffectivePrice();
+            if ($selling <= 0) {
+                return [];
+            }
+
+            return [$this->metaCatalogRow([
+                'id' => (string) $product->id,
+                'title' => $title,
+                'description' => $description,
+                'quantity' => (int) ($product->quantity ?? 0),
+                'facebook_qty' => $facebookQty,
+                'selling' => $selling,
+                'compare' => (float) $product->getCompareAtPrice(),
+                'link' => $link,
+                'image' => $imageLink,
+                'google' => $googleCategory,
+                'fb' => $fbCategory,
+                'sale_window' => $saleWindow,
+                'group_id' => (string) $product->id,
+                'gender' => $gender,
+                'color' => $product->color ?? '',
+                'size' => '',
+                'age' => $ageGroup,
+                'material' => $material,
+                'pattern' => $pattern,
+                'shipping' => $shipping,
+                'weight' => $weight,
+                'video' => $videoUrl,
+                'video_tag' => $videoUrl !== '' ? 'product' : '',
+                'gtin' => '',
+                'tag0' => $tag0,
+                'tag1' => $tag1,
+                'style' => '',
+            ])];
+        }
+
+        $rows = [];
+        foreach ($variants->values() as $index => $variant) {
+            $selling = (float) $variant->getFinalPrice();
+            if ($selling <= 0) {
+                continue;
+            }
+            $attrs = is_array($variant->attributes) ? $variant->attributes : [];
+            $variantMedia = is_array($variant->media) ? $variant->media : [];
+            $variantImage = $this->absoluteMediaUrl($this->firstImageUrl($variantMedia), $baseUrl) ?: $imageLink;
+
+            $rows[] = $this->metaCatalogRow([
+                'id' => $product->id . '-' . ($index + 1),
+                'title' => $title,
+                'description' => $description,
+                'quantity' => (int) ($variant->quantity ?? $product->quantity ?? 0),
+                'facebook_qty' => $facebookQty,
+                'selling' => $selling,
+                'compare' => (float) $variant->getCompareAtPrice(),
+                'link' => $link,
+                'image' => $variantImage,
+                'google' => $googleCategory,
+                'fb' => $fbCategory,
+                'sale_window' => $saleWindow,
+                'group_id' => (string) $product->id,
+                'gender' => $gender,
+                'color' => $this->variantAttribute($attrs, ['color', 'Colour']),
+                'size' => $this->variantAttribute($attrs, ['size']),
+                'age' => $ageGroup,
+                'material' => $material,
+                'pattern' => $pattern,
+                'shipping' => $shipping,
+                'weight' => $weight,
+                'video' => $videoUrl,
+                'video_tag' => $videoUrl !== '' ? 'product' : '',
+                'gtin' => '',
+                'tag0' => $tag0,
+                'tag1' => $tag1,
+                'style' => '',
+            ]);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, string|int>
+     */
+    private function metaCatalogRow(array $data): array
+    {
+        $selling = (float) $data['selling'];
+        $compare = (float) $data['compare'];
+        $hasSale = $compare > $selling && $selling > 0;
+        $price = number_format($hasSale ? $compare : $selling, 2, '.', '') . ' USD';
+        $salePrice = $hasSale ? number_format($selling, 2, '.', '') . ' USD' : '';
+        $qty = (int) $data['quantity'];
+
+        return [
+            mb_substr((string) $data['id'], 0, 100),
+            $data['title'],
+            $data['description'],
+            $qty > 0 ? 'in stock' : 'out of stock',
+            'new',
+            $price,
+            $data['link'],
+            $data['image'],
+            'Bluprinter',
+            $data['google'],
+            $data['fb'],
+            max(1, (int) $data['facebook_qty']),
+            $salePrice,
+            $hasSale ? $data['sale_window'] : '',
+            $data['group_id'],
+            $data['gender'],
+            $data['color'],
+            $data['size'],
+            $data['age'],
+            $data['material'],
+            $data['pattern'],
+            mb_substr((string) $data['shipping'], 0, 200),
+            mb_substr((string) $data['weight'], 0, 50),
+            $data['video'],
+            $data['video_tag'],
+            $data['gtin'],
+            $data['tag0'],
+            $data['tag1'],
+            $data['style'],
+        ];
+    }
+
+    /**
+     * @return array<int, array<int, string|int>>
+     */
+    private function tiktokCatalogRowsForProduct(Product $product, string $baseUrl, string $saleWindow): array
+    {
+        $media = $product->getEffectiveMedia();
+        $imageLink = $this->absoluteMediaUrl($this->firstImageUrl($media), $baseUrl);
+        if ($imageLink === '') {
+            return [];
+        }
+
+        $additionalImages = $this->additionalImageLinks($media, $baseUrl, $imageLink);
+        $videoUrl = $this->firstVideoUrl($media, $baseUrl);
+        $description = strip_tags($product->getEffectiveDescription() ?: $product->name);
+        $description = trim(preg_replace('/\s+/', ' ', $description) ?? '');
+        $description = mb_substr($description !== '' ? $description : $product->name, 0, 9999);
+        $title = mb_substr((string) $product->name, 0, 200);
+        $categoryName = $product->category?->name ?? $product->template?->category?->name ?? 'T-Shirt';
+        $productType = $product->template?->name ?: $categoryName;
+        $googleCategory = $product->google_product_category ?: '212';
+        $gender = $this->normalizeMetaGender($product->gender);
+        $ageGroup = $this->normalizeMetaAgeGroup($product->age_group);
+        $material = $product->material ?: 'Cotton';
+        $pattern = $product->pattern ?: 'graphic';
+        $shipping = $product->shipping ?: 'US::Standard:6.99 USD';
+        $weight = $product->shipping_weight ?: '0.4 lb';
+        $link = $baseUrl . '/products/' . ($product->slug ?: $product->id);
+        $collections = $product->collections->pluck('name')->filter()->values();
+
+        $variants = $product->variants;
+        if ($variants->isEmpty()) {
+            $selling = (float) $product->getEffectivePrice();
+            if ($selling <= 0) {
+                return [];
+            }
+
+            return [$this->tiktokCatalogRow([
+                'sku_id' => (string) ($product->sku ?: $product->id),
+                'title' => $title,
+                'description' => $description,
+                'quantity' => (int) ($product->quantity ?? 0),
+                'selling' => $selling,
+                'compare' => (float) $product->getCompareAtPrice(),
+                'link' => $link,
+                'image' => $imageLink,
+                'video' => $videoUrl,
+                'additional_images' => $additionalImages,
+                'age' => $ageGroup,
+                'color' => $product->color ?? '',
+                'gender' => $gender,
+                'group_id' => (string) $product->id,
+                'google' => $googleCategory,
+                'material' => $material,
+                'pattern' => $pattern,
+                'type' => $productType,
+                'sale_window' => $saleWindow,
+                'shipping' => $shipping,
+                'weight' => $weight,
+                'gtin' => '',
+                'mpn' => (string) ($product->sku ?: $product->id),
+                'size' => '',
+                'tax' => '',
+                'label0' => (string) $product->id,
+                'label1' => (string) ($collections[0] ?? ''),
+                'label2' => (string) ($collections[1] ?? ''),
+                'label3' => (string) ($product->template?->name ?? ''),
+                'label4' => (string) $categoryName,
+            ])];
+        }
+
+        $rows = [];
+        foreach ($variants->values() as $index => $variant) {
+            $selling = (float) $variant->getFinalPrice();
+            if ($selling <= 0) {
+                continue;
+            }
+            $attrs = is_array($variant->attributes) ? $variant->attributes : [];
+            $variantMedia = is_array($variant->media) ? $variant->media : [];
+            $variantImage = $this->absoluteMediaUrl($this->firstImageUrl($variantMedia), $baseUrl) ?: $imageLink;
+            $variantAdditional = $variantImage !== $imageLink
+                ? $this->additionalImageLinks(array_merge($variantMedia, $media), $baseUrl, $variantImage)
+                : $additionalImages;
+            $skuId = $variant->sku ?: ($product->id . '-' . ($index + 1));
+
+            $rows[] = $this->tiktokCatalogRow([
+                'sku_id' => (string) $skuId,
+                'title' => $title,
+                'description' => $description,
+                'quantity' => (int) ($variant->quantity ?? $product->quantity ?? 0),
+                'selling' => $selling,
+                'compare' => (float) $variant->getCompareAtPrice(),
+                'link' => $link,
+                'image' => $variantImage,
+                'video' => $videoUrl,
+                'additional_images' => $variantAdditional,
+                'age' => $ageGroup,
+                'color' => $this->variantAttribute($attrs, ['color', 'Colour']),
+                'gender' => $gender,
+                'group_id' => (string) $product->id,
+                'google' => $googleCategory,
+                'material' => $material,
+                'pattern' => $pattern,
+                'type' => $productType,
+                'sale_window' => $saleWindow,
+                'shipping' => $shipping,
+                'weight' => $weight,
+                'gtin' => '',
+                'mpn' => (string) $skuId,
+                'size' => $this->variantAttribute($attrs, ['size']),
+                'tax' => '',
+                'label0' => (string) $product->id,
+                'label1' => (string) ($collections[0] ?? ''),
+                'label2' => (string) ($collections[1] ?? ''),
+                'label3' => (string) ($product->template?->name ?? ''),
+                'label4' => (string) $categoryName,
+            ]);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, string|int>
+     */
+    private function tiktokCatalogRow(array $data): array
+    {
+        $selling = (float) $data['selling'];
+        $compare = (float) $data['compare'];
+        $hasSale = $compare > $selling && $selling > 0;
+        $price = number_format($hasSale ? $compare : $selling, 2, '.', '') . ' USD';
+        $salePrice = $hasSale ? number_format($selling, 2, '.', '') . ' USD' : '';
+        $qty = (int) $data['quantity'];
+
+        return [
+            mb_substr((string) $data['sku_id'], 0, 100),
+            $data['title'],
+            $data['description'],
+            $qty > 0 ? 'in stock' : 'out of stock',
+            'new',
+            $price,
+            $data['link'],
+            $data['image'],
+            $data['video'],
+            'Bluprinter',
+            $data['additional_images'],
+            $data['age'],
+            $data['color'],
+            $data['gender'],
+            $data['group_id'],
+            $data['google'],
+            $data['material'],
+            $data['pattern'],
+            mb_substr((string) $data['type'], 0, 100),
+            $salePrice,
+            $hasSale ? $data['sale_window'] : '',
+            mb_substr((string) $data['shipping'], 0, 200),
+            mb_substr((string) $data['weight'], 0, 50),
+            $data['gtin'],
+            mb_substr((string) $data['mpn'], 0, 100),
+            $data['size'],
+            $data['tax'],
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            $data['label0'],
+            mb_substr((string) $data['label1'], 0, 100),
+            mb_substr((string) $data['label2'], 0, 100),
+            mb_substr((string) $data['label3'], 0, 100),
+            mb_substr((string) $data['label4'], 0, 100),
+        ];
+    }
+
+    /**
+     * @return array<int, array<int, string|int>>
+     */
+    private function pinterestCatalogRowsForProduct(Product $product, string $baseUrl): array
+    {
+        $media = $product->getEffectiveMedia();
+        $imageLink = $this->absoluteMediaUrl($this->firstImageUrl($media), $baseUrl);
+        if ($imageLink === '') {
+            return [];
+        }
+
+        $additionalImages = $this->additionalImageLinks($media, $baseUrl, $imageLink);
+        $description = strip_tags($product->getEffectiveDescription() ?: $product->name);
+        $description = trim(preg_replace('/\s+/', ' ', $description) ?? '');
+        $description = mb_substr($description !== '' ? $description : $product->name, 0, 9999);
+        $title = mb_substr((string) $product->name, 0, 200);
+        $categoryName = $product->category?->name ?? $product->template?->category?->name ?? 'T-Shirt';
+        $productType = $product->template?->name ?: $categoryName;
+        $googleCategory = $product->google_product_category ?: '212';
+        $gender = $this->normalizeMetaGender($product->gender);
+        $ageGroup = $this->normalizeMetaAgeGroup($product->age_group);
+        $shipping = $product->shipping ?: 'US::Standard:6.99 USD';
+        $link = $baseUrl . '/products/' . ($product->slug ?: $product->id);
+
+        $variants = $product->variants;
+        if ($variants->isEmpty()) {
+            $selling = (float) $product->getEffectivePrice();
+            if ($selling <= 0) {
+                return [];
+            }
+
+            return [$this->pinterestCatalogRow([
+                'id' => (string) $product->id,
+                'group_id' => (string) $product->id,
+                'title' => $title,
+                'description' => $description,
+                'link' => $link,
+                'image' => $imageLink,
+                'selling' => $selling,
+                'compare' => (float) $product->getCompareAtPrice(),
+                'quantity' => (int) ($product->quantity ?? 0),
+                'google' => $googleCategory,
+                'type' => $productType,
+                'additional_images' => $additionalImages,
+                'gender' => $gender,
+                'age' => $ageGroup,
+                'size' => '',
+                'size_type' => 'regular',
+                'shipping' => $shipping,
+                'label0' => (string) $product->id,
+                'adwords_redirect' => $link,
+            ])];
+        }
+
+        $rows = [];
+        foreach ($variants->values() as $index => $variant) {
+            $selling = (float) $variant->getFinalPrice();
+            if ($selling <= 0) {
+                continue;
+            }
+            $attrs = is_array($variant->attributes) ? $variant->attributes : [];
+            $variantMedia = is_array($variant->media) ? $variant->media : [];
+            $variantImage = $this->absoluteMediaUrl($this->firstImageUrl($variantMedia), $baseUrl) ?: $imageLink;
+            $variantAdditional = $variantImage !== $imageLink
+                ? $this->additionalImageLinks(array_merge($variantMedia, $media), $baseUrl, $variantImage)
+                : $additionalImages;
+
+            $rows[] = $this->pinterestCatalogRow([
+                'id' => $product->id . '-' . ($index + 1),
+                'group_id' => (string) $product->id,
+                'title' => $title,
+                'description' => $description,
+                'link' => $link,
+                'image' => $variantImage,
+                'selling' => $selling,
+                'compare' => (float) $variant->getCompareAtPrice(),
+                'quantity' => (int) ($variant->quantity ?? $product->quantity ?? 0),
+                'google' => $googleCategory,
+                'type' => $productType,
+                'additional_images' => $variantAdditional,
+                'gender' => $gender,
+                'age' => $ageGroup,
+                'size' => $this->variantAttribute($attrs, ['size']),
+                'size_type' => 'regular',
+                'shipping' => $shipping,
+                'label0' => (string) $product->id,
+                'adwords_redirect' => $link,
+            ]);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, string|int>
+     */
+    private function pinterestCatalogRow(array $data): array
+    {
+        $selling = (float) $data['selling'];
+        $compare = (float) $data['compare'];
+        $hasSale = $compare > $selling && $selling > 0;
+        $price = number_format($hasSale ? $compare : $selling, 2, '.', '') . ' USD';
+        $salePrice = $hasSale ? number_format($selling, 2, '.', '') . ' USD' : '';
+        $qty = (int) $data['quantity'];
+
+        return [
+            mb_substr((string) $data['id'], 0, 100),
+            $data['group_id'],
+            $data['title'],
+            $data['description'],
+            $data['link'],
+            $data['image'],
+            $price,
+            $qty > 0 ? 'in stock' : 'out of stock',
+            'new',
+            $data['google'],
+            mb_substr((string) $data['type'], 0, 100),
+            $data['additional_images'],
+            $salePrice,
+            'Bluprinter',
+            $data['gender'],
+            $data['age'],
+            $data['size'],
+            $data['size_type'],
+            mb_substr((string) $data['shipping'], 0, 200),
+            $data['label0'],
+            $data['adwords_redirect'],
+        ];
+    }
+
+    /**
+     * @param  array<int, mixed>  $media
+     */
+    private function additionalImageLinks(array $media, string $baseUrl, string $primaryImage): string
+    {
+        $urls = [];
+        foreach ($media as $item) {
+            $url = is_string($item) ? $item : (string) ($item['url'] ?? $item['path'] ?? '');
+            if ($url === '' || $this->isVideoMediaUrl($url)) {
+                continue;
+            }
+            $absolute = $this->absoluteMediaUrl($url, $baseUrl);
+            if ($absolute === '' || $absolute === $primaryImage) {
+                continue;
+            }
+            $urls[$absolute] = $absolute;
+            if (count($urls) >= 10) {
+                break;
+            }
+        }
+
+        return implode(',', array_values($urls));
+    }
+
+    /**
+     * @param  array<int, mixed>  $media
+     */
+    private function firstImageUrl(array $media): string
+    {
+        foreach ($media as $item) {
+            $url = is_string($item) ? $item : (string) ($item['url'] ?? $item['path'] ?? '');
+            if ($url === '' || $this->isVideoMediaUrl($url)) {
+                continue;
+            }
+
+            return $url;
+        }
+
+        return '';
+    }
+
+    /**
+     * @param  array<int, mixed>  $media
+     */
+    private function firstVideoUrl(array $media, string $baseUrl): string
+    {
+        foreach ($media as $item) {
+            $url = is_string($item) ? $item : (string) ($item['url'] ?? $item['path'] ?? '');
+            if ($url === '' || ! $this->isVideoMediaUrl($url)) {
+                continue;
+            }
+            if (str_contains(strtolower($url), 'youtube.com') || str_contains(strtolower($url), 'youtu.be') || str_contains(strtolower($url), 'vimeo.com')) {
+                continue;
+            }
+
+            return $this->absoluteMediaUrl($url, $baseUrl);
+        }
+
+        return '';
+    }
+
+    private function isVideoMediaUrl(string $url): bool
+    {
+        return (bool) preg_match('/\.(3g2|3gp|3gpp|asf|avi|dat|divx|dv|f4v|flv|m2ts|m4v|mkv|mod|mov|mp4|mpe|mpeg|mpeg4|mpg|mts|nsv|ogm|ogv|qt|tod|ts|vob|wmv)(\?|$)/i', $url);
+    }
+
+    private function absoluteMediaUrl(string $url, string $baseUrl): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+        if (filter_var($url, FILTER_VALIDATE_URL)) {
+            return $url;
+        }
+        if (str_starts_with($url, '/')) {
+            return $baseUrl . $url;
+        }
+
+        return $baseUrl . '/storage/' . ltrim($url, '/');
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @param  array<int, string>  $keys
+     */
+    private function variantAttribute(array $attributes, array $keys): string
+    {
+        foreach ($attributes as $name => $value) {
+            foreach ($keys as $key) {
+                if (strcasecmp((string) $name, $key) === 0) {
+                    return trim((string) $value);
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizeMetaGender(?string $gender): string
+    {
+        $gender = strtolower(trim((string) $gender));
+
+        return in_array($gender, ['female', 'male', 'unisex'], true) ? $gender : 'unisex';
+    }
+
+    private function normalizeMetaAgeGroup(?string $ageGroup): string
+    {
+        $ageGroup = strtolower(trim((string) $ageGroup));
+        $valid = ['newborn', 'infant', 'toddler', 'kids', 'teen', 'adult', 'all ages'];
+
+        return in_array($ageGroup, $valid, true) ? $ageGroup : 'adult';
     }
 }

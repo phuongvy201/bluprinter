@@ -81,7 +81,7 @@ class BlogController extends Controller
         $categories = PostCategory::withCount(['posts' => function ($q) {
             $q->published();
         }])
-            ->having('posts_count', '>', 0)
+            ->whereHas('posts', fn ($q) => $q->published())
             ->orderBy('name')
             ->get();
 

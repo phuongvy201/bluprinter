@@ -128,8 +128,13 @@ class WishlistManager {
                         button.style.opacity = "1";
                     }, 200);
 
-                    // Dispatch custom event for other components
-                    window.dispatchEvent(new CustomEvent("wishlistUpdated"));
+                    window.dispatchEvent(new CustomEvent("wishlistUpdated", {
+                        detail: {
+                            productId: String(productId),
+                            action: data.action,
+                            count: data.wishlist_count,
+                        },
+                    }));
                 } else {
                     this.showMessage(data.message, "error");
                     button.disabled = false;

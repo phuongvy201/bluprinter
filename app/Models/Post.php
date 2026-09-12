@@ -25,6 +25,7 @@ class Post extends Model
         'status',
         'published_at',
         'type',
+        'template',
         'featured',
         'sticky',
         'allow_comments',
@@ -179,6 +180,41 @@ class Post extends Model
     public function incrementShares(): void
     {
         $this->increment('shares');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function templateOptions(): array
+    {
+        return Page::templateOptions();
+    }
+
+    /**
+     * @return array<string, array{label: string, blurb: string}>
+     */
+    public static function templateMeta(): array
+    {
+        return Page::templateMeta();
+    }
+
+    public function resolveTemplateView(): string
+    {
+        $template = $this->template ?: 'default';
+
+        if ($template === 'default' || !array_key_exists($template, static::templateOptions())) {
+            return 'posts.show';
+        }
+
+        return "pages.templates.{$template}";
+    }
+
+    /**
+     * Alias used by shared page layout templates.
+     */
+    public function featuredImageUrl(): ?string
+    {
+        return $this->featured_image_url;
     }
 
     /**

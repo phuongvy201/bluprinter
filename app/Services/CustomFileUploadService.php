@@ -13,14 +13,18 @@ class CustomFileUploadService
 {
     protected $allowedMimeTypes = [
         'image/jpeg',
+        'image/jpg',
+        'image/pjpeg',
         'image/png',
         'image/gif',
         'image/webp',
         'image/svg+xml',
         'video/mp4',
         'video/avi',
+        'video/quicktime',
         'video/mov',
         'video/wmv',
+        'video/x-msvideo',
         'application/pdf',
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -247,6 +251,8 @@ class CustomFileUploadService
 
         switch ($mimeType) {
             case 'image/jpeg':
+            case 'image/jpg':
+            case 'image/pjpeg':
                 if (!str_starts_with($header, "\xFF\xD8\xFF")) {
                     throw new Exception('Invalid JPEG file format');
                 }
@@ -277,7 +283,8 @@ class CustomFileUploadService
 
     protected function getStoragePath(string $filename): string
     {
-        return "custom_files/{$filename}";
+        // generateFilename() already includes the custom_files/ prefix
+        return ltrim($filename, '/');
     }
 
     protected function formatBytes(int $bytes): string

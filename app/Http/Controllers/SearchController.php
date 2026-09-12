@@ -63,6 +63,7 @@ class SearchController extends Controller
             // Search Collections
             if ($type === 'all' || $type === 'collections') {
                 $collections = Collection::with(['shop'])
+                    ->withDisplayableProductsCount()
                     ->active()
                     ->approved()
                     ->where(function ($q) use ($query) {
@@ -81,6 +82,9 @@ class SearchController extends Controller
             // Search Shops
             if ($type === 'all' || $type === 'shops') {
                 $shops = Shop::where('shop_status', 'active')
+                    ->withCount(['products as products_count' => function ($q) {
+                        $q->availableForDisplay();
+                    }])
                     ->where(function ($q) use ($query) {
                         $q->where('shop_name', 'like', "%{$query}%")
                             ->orWhere('shop_description', 'like', "%{$query}%");

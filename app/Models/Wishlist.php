@@ -102,7 +102,12 @@ class Wishlist extends Model
      */
     public static function getWishlistItems($userId = null, $sessionId = null, $perPage = 12)
     {
-        $query = static::with('product');
+        $query = static::with(['product' => function ($q) {
+            $q->with(['template.category', 'shop'])
+                ->withSum('orderItems as order_items_sum_quantity', 'quantity')
+                ->withAvg('approvedReviews as approved_reviews_avg_rating', 'rating')
+                ->withCount(['approvedReviews', 'variants']);
+        }]);
 
         if ($userId) {
             $query->where('user_id', $userId);
@@ -110,7 +115,7 @@ class Wishlist extends Model
             $query->where('session_id', $sessionId);
         }
 
-        return $query->paginate($perPage);
+        return $query->latest()->paginate($perPage);
     }
 
     /**

@@ -1,195 +1,406 @@
 @extends('layouts.app')
 
-@section('title', 'Blog')
+@section('title', 'Blog - Bluprinter')
+@section('meta_description', 'Stories, tips, and insights from our print-on-demand community')
 
 @section('content')
-<!-- Blog Header -->
-<div class="bg-gradient-to-r from-[#005366] to-[#003d4d] text-white">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div class="text-center">
-            <h1 class="text-4xl md:text-5xl font-bold mb-4">Our Blog</h1>
-            <p class="text-xl text-gray-100 max-w-2xl mx-auto">
-                Stories, tips, and insights from our community
-            </p>
+@php
+    $hero = config('catalog.blog_index.hero', []);
+    $currentSort = request('sort', 'latest');
+    $currentCategory = request('category');
+    $hasFilters = filled(request('search'))
+        || filled($currentCategory)
+        || filled(request('tag'))
+        || ($currentSort !== 'latest');
+    $activeFilterCount = collect([request('search'), $currentCategory, request('tag')])->filter(fn ($v) => filled($v))->count();
+    $showCategoryTabs = $categories->isNotEmpty();
+
+    $breadcrumbs = [
+        ['name' => 'Home', 'url' => route('home')],
+        ['name' => 'Blog', 'url' => null],
+    ];
+
+    $tabQuery = collect(request()->only(['search', 'sort', 'tag']))->filter(fn ($v) => filled($v));
+@endphp
+
+<section class="catalog-page catalog-page--blog" aria-labelledby="catalog-heading">
+    <div class="catalog-collections-hero scroll-reveal">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <nav class="catalog-breadcrumb catalog-breadcrumb--hero" aria-label="Breadcrumb">
+                @foreach ($breadcrumbs as $index => $breadcrumb)
+                    @if ($index > 0)
+                        <span class="catalog-breadcrumb__sep" aria-hidden="true">/</span>
+                    @endif
+                    @if ($breadcrumb['url'])
+                        <a href="{{ $breadcrumb['url'] }}">{{ $breadcrumb['name'] }}</a>
+                    @else
+                        <span class="catalog-breadcrumb__current">{{ $breadcrumb['name'] }}</span>
+                    @endif
+                @endforeach
+            </nav>
+
+            <div class="catalog-collections-hero__body">
+                <header class="catalog-collections-hero__head">
+                    @if ($hero['eyebrow'] ?? null)
+                        <p class="catalog-collections-hero__eyebrow">{{ $hero['eyebrow'] }}</p>
+                    @endif
+                    <h1 id="catalog-heading" class="catalog-collections-hero__title">
+                        {{ $hero['title'] ?? 'Our' }}
+                        <span class="gradient-text">{{ $hero['title_accent'] ?? 'Blog' }}</span>
+                    </h1>
+                    @if ($hero['subtitle'] ?? null)
+                        <p class="catalog-collections-hero__sub">{{ $hero['subtitle'] }}</p>
+                    @endif
+                </header>
+
+                <form method="GET"
+                      action="{{ route('blog.index') }}"
+                      class="catalog-collections-hero__search"
+                      id="catalog-blog-search-form">
+                    @if (filled($currentCategory))
+                        <input type="hidden" name="category" value="{{ $currentCategory }}">
+                    @endif
+                    @if (filled(request('tag')))
+                        <input type="hidden" name="tag" value="{{ request('tag') }}">
+                    @endif
+                    <label class="catalog-collections-hero__search-field">
+                        <span class="sr-only">Search articles</span>
+                        <svg class="catalog-collections-hero__search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <input type="search"
+                               name="search"
+                               value="{{ request('search') }}"
+                               class="catalog-collections-hero__search-input"
+                               placeholder="Search articles…"
+                               aria-label="Search articles">
+                    </label>
+                    <select id="catalog-sort" name="sort" class="catalog-collections-hero__sort" aria-label="Sort by">
+                        <option value="latest" {{ $currentSort === 'latest' ? 'selected' : '' }}>Latest</option>
+                        <option value="popular" {{ $currentSort === 'popular' ? 'selected' : '' }}>Most viewed</option>
+                        <option value="trending" {{ $currentSort === 'trending' ? 'selected' : '' }}>Trending</option>
+                        <option value="oldest" {{ $currentSort === 'oldest' ? 'selected' : '' }}>Oldest</option>
+                    </select>
+                    <button type="submit" class="btn-cta catalog-collections-hero__apply">Apply</button>
+                </form>
+
+                @if ($hasFilters)
+                    <p class="catalog-collections-hero__clear-wrap">
+                        <a href="{{ route('blog.index') }}" class="catalog-collections-hero__clear">Clear filters</a>
+                    </p>
+                @endif
+            </div>
         </div>
     </div>
-</div>
 
-<div class="bg-gray-50 py-12">
+    @if ($showCategoryTabs)
+        <div class="catalog-collections-tabs">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="catalog-collections-tabs__track mobile-scroll-hide">
+                    @foreach ($categories as $category)
+                        @php
+                            $categoryParams = $tabQuery->merge(['category' => $category->slug])->all();
+                        @endphp
+                        <a href="{{ route('blog.index', $categoryParams) }}"
+                           class="catalog-collections-tab {{ $currentCategory === $category->slug ? 'is-active' : '' }}">
+                            {{ $category->name }}
+                            <span class="catalog-collections-tab__count">({{ number_format($category->posts_count) }})</span>
+                        </a>
+                    @endforeach
+                    <a href="{{ route('blog.index', $tabQuery->all()) }}"
+                       class="catalog-collections-tab catalog-collections-tab--all {{ blank($currentCategory) ? 'is-active' : '' }}">
+                        All
+                    </a>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Main Content -->
-            <div class="lg:col-span-2">
-                <!-- Filter Bar -->
-                <div class="bg-white rounded-2xl shadow-sm p-4 mb-8">
-                    <form method="GET" class="flex flex-col md:flex-row gap-4">
-                        <input type="text" 
-                               name="search" 
-                               value="{{ request('search') }}"
-                               placeholder="Search articles..." 
-                               class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#005366]">
-                        <select name="sort" 
-                                onchange="this.form.submit()"
-                                class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#005366]">
-                            <option value="latest" {{ request('sort') == 'latest' ? 'selected' : '' }}>Latest</option>
-                            <option value="popular" {{ request('sort') == 'popular' ? 'selected' : '' }}>Most Viewed</option>
-                            <option value="trending" {{ request('sort') == 'trending' ? 'selected' : '' }}>Trending</option>
-                        </select>
-                        <button type="submit" class="px-6 py-2 bg-[#005366] text-white rounded-lg hover:bg-[#003d4d] transition">
-                            Apply
-                        </button>
-                    </form>
+        <div class="catalog-blog-layout">
+            <div class="catalog-blog-main">
+                <div class="catalog-toolbar">
+                    <div class="catalog-toolbar__desktop">
+                        <p class="catalog-toolbar__summary">
+                            <span class="catalog-toolbar__summary-count">{{ number_format($posts->total()) }}</span>
+                            {{ Str::plural('article', $posts->total()) }}
+                            @if ($posts->total() > 0 && $posts->hasPages())
+                                <span class="catalog-toolbar__summary-dot" aria-hidden="true">·</span>
+                                <span class="catalog-toolbar__summary-range">{{ $posts->firstItem() }}–{{ $posts->lastItem() }}</span>
+                            @endif
+                        </p>
+
+                        <div class="catalog-toolbar__actions">
+                            @if ($hasFilters)
+                                <a href="{{ route('blog.index') }}" class="catalog-toolbar__clear">Clear</a>
+                            @endif
+                            <div class="catalog-view-toggle" role="group" aria-label="Article view mode">
+                                <button type="button" class="catalog-view-toggle__btn is-active" data-catalog-view="grid" aria-pressed="true" aria-label="Grid view">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                                </button>
+                                <button type="button" class="catalog-view-toggle__btn" data-catalog-view="list" aria-pressed="false" aria-label="List view">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="catalog-toolbar__mobile">
+                        <div class="catalog-toolbar__mobile-head">
+                            <p class="catalog-toolbar__summary">
+                                <span class="catalog-toolbar__summary-count">{{ number_format($posts->total()) }}</span>
+                                {{ Str::plural('article', $posts->total()) }}
+                                @if ($posts->total() > 0 && $posts->hasPages())
+                                    <span class="catalog-toolbar__summary-dot">·</span>
+                                    <span class="catalog-toolbar__summary-range">{{ $posts->firstItem() }}–{{ $posts->lastItem() }}</span>
+                                @endif
+                            </p>
+                            <div class="catalog-view-toggle" role="group" aria-label="Article view mode">
+                                <button type="button" class="catalog-view-toggle__btn is-active" data-catalog-view="grid" aria-pressed="true" aria-label="Grid view">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                                </button>
+                                <button type="button" class="catalog-view-toggle__btn" data-catalog-view="list" aria-pressed="false" aria-label="List view">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="catalog-toolbar__mobile-actions">
+                            <button type="button" class="catalog-mobile-btn" data-catalog-sheet-open="filter" aria-haspopup="dialog">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M6 12h12M10 20h4"/></svg>
+                                Filter
+                                @if ($activeFilterCount > 0)
+                                    <span class="catalog-mobile-btn__badge">{{ $activeFilterCount }}</span>
+                                @endif
+                            </button>
+                            <button type="button" class="catalog-mobile-btn" data-catalog-sheet-open="sort" aria-haspopup="dialog">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 12h9M3 20h5M16 6l4 4m0 0l-4 4m4-4H10"/></svg>
+                                Sort
+                            </button>
+                            @if ($hasFilters)
+                                <a href="{{ route('blog.index') }}" class="catalog-mobile-btn catalog-mobile-btn--ghost">Clear</a>
+                            @endif
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Posts Grid -->
-                @if($posts->isEmpty())
-                    <div class="bg-white rounded-2xl shadow-sm p-12 text-center">
-                        <svg class="w-24 h-24 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                @if ($posts->isEmpty())
+                    <div class="catalog-empty">
+                        <svg class="catalog-empty__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                         </svg>
-                        <h2 class="text-2xl font-bold text-gray-900 mb-2">No posts found</h2>
-                        <p class="text-gray-600">Check back later for new content!</p>
+                        <h2 class="catalog-empty__title">No posts found</h2>
+                        <p class="catalog-empty__sub">Try adjusting your search or browse all articles again.</p>
+                        <a href="{{ route('blog.index') }}" class="btn-cta">View all posts</a>
                     </div>
                 @else
-                    <div class="space-y-8">
-                        @foreach($posts as $post)
-                            <article class="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-xl transition-all">
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <!-- Post Image -->
-                                    @if($post->featured_image)
-                                        <a href="{{ route('blog.show', $post->slug) }}" class="md:col-span-1">
-                                            <div class="aspect-[4/3] overflow-hidden bg-gray-100">
-                                                <img src="{{ $post->featured_image_url }}" 
-                                                     alt="{{ $post->title }}"
-                                                     class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
-                                            </div>
-                                        </a>
-                                    @endif
-
-                                    <!-- Post Content -->
-                                    <div class="md:col-span-2 p-6">
-                                        @if($post->sticky)
-                                            <span class="inline-block px-3 py-1 bg-yellow-400 text-gray-900 text-xs font-semibold rounded-full mb-3">
-                                                📌 Pinned
-                                            </span>
-                                        @endif
-
-                                        <div class="flex items-center space-x-3 text-sm text-gray-500 mb-3">
-                                            @if($post->category)
-                                                <a href="{{ route('blog.category', $post->category->slug) }}" class="text-[#005366] hover:text-[#003d4d] font-semibold">
-                                                    {{ $post->category->name }}
-                                                </a>
-                                            @endif
-                                            @if($post->published_at)
-                                                <span>•</span>
-                                                <span>{{ $post->published_at->format('M d, Y') }}</span>
-                                            @endif
-                                            <span>•</span>
-                                            <span>{{ $post->reading_time ?? 1 }} min read</span>
-                                        </div>
-
-                                        <h2 class="text-2xl font-bold text-gray-900 mb-3 hover:text-[#005366] transition">
-                                            <a href="{{ route('blog.show', $post->slug) }}">{{ $post->title }}</a>
-                                        </h2>
-
-                                        @if($post->excerpt)
-                                            <p class="text-gray-600 mb-4">{{ $post->excerpt }}</p>
-                                        @endif
-
-                                        <div class="flex items-center justify-between">
-                                            <div class="flex items-center space-x-4 text-sm text-gray-500">
-                                                @if($post->shop)
-                                                    <a href="{{ route('shops.show', $post->shop->shop_slug) }}" class="flex items-center hover:text-[#005366]">
-                                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                                                        </svg>
-                                                        {{ $post->shop->shop_name }}
-                                                    </a>
-                                                @endif
-                                                <span class="flex items-center">
-                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                                    </svg>
-                                                    {{ number_format($post->views) }}
-                                                </span>
-                                            </div>
-
-                                            <a href="{{ route('blog.show', $post->slug) }}" class="text-[#005366] hover:text-[#003d4d] font-semibold text-sm flex items-center">
-                                                Read More
-                                                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                                </svg>
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </article>
+                    <div class="catalog-blog-grid" id="catalog-blog-grid">
+                        @foreach ($posts as $post)
+                            <x-catalog-blog-post-item :post="$post" class="scroll-reveal" />
                         @endforeach
                     </div>
 
-                    <!-- Pagination -->
-                    <div class="mt-8">
-                        {{ $posts->links() }}
-                    </div>
+                    @if ($posts->hasPages())
+                        <div class="catalog-pagination">
+                            {{ $posts->onEachSide(1)->links('vendor.pagination.catalog') }}
+                        </div>
+                    @endif
                 @endif
             </div>
 
-            <!-- Sidebar -->
-            <div class="lg:col-span-1 space-y-8">
-                <!-- Featured Posts -->
-                @if($featuredPosts->isNotEmpty())
-                    <div class="bg-white rounded-2xl shadow-sm p-6">
-                        <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                            <svg class="w-5 h-5 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                            </svg>
-                            Featured
-                        </h3>
-                        <div class="space-y-4">
-                            @foreach($featuredPosts as $featured)
-                                <a href="{{ route('blog.show', $featured->slug) }}" class="block group">
-                                    <h4 class="font-semibold text-gray-900 group-hover:text-[#005366] mb-1 line-clamp-2">
-                                        {{ $featured->title }}
-                                    </h4>
-                                    <p class="text-xs text-gray-500">{{ $featured->published_at ? $featured->published_at->format('M d, Y') : 'Draft' }}</p>
-                                </a>
+            <aside class="catalog-blog-sidebar" aria-label="Blog sidebar">
+                @if ($featuredPosts->isNotEmpty())
+                    <div class="catalog-blog-widget scroll-reveal">
+                        <p class="catalog-blog-widget__eyebrow">Featured</p>
+                        <h2 class="catalog-blog-widget__title">Top stories</h2>
+                        <ul class="catalog-blog-widget__list">
+                            @foreach ($featuredPosts as $featured)
+                                <li>
+                                    <a href="{{ route('blog.show', $featured->slug) }}" class="catalog-blog-widget__link">
+                                        <span class="catalog-blog-widget__link-title">{{ $featured->title }}</span>
+                                        <span class="catalog-blog-widget__link-meta">
+                                            {{ $featured->published_at ? $featured->published_at->format('M d, Y') : 'Draft' }}
+                                        </span>
+                                    </a>
+                                </li>
                             @endforeach
-                        </div>
+                        </ul>
                     </div>
                 @endif
 
-                <!-- Categories -->
-                @if($categories->isNotEmpty())
-                    <div class="bg-white rounded-2xl shadow-sm p-6">
-                        <h3 class="text-xl font-bold text-gray-900 mb-4">Categories</h3>
-                        <div class="space-y-2">
-                            @foreach($categories as $category)
-                                <a href="{{ route('blog.category', $category->slug) }}" class="flex items-center justify-between text-gray-700 hover:text-[#005366] transition">
-                                    <span>{{ $category->name }}</span>
-                                    <span class="text-sm text-gray-500">({{ $category->posts_count }})</span>
-                                </a>
+                @if ($categories->isNotEmpty())
+                    <div class="catalog-blog-widget scroll-reveal">
+                        <p class="catalog-blog-widget__eyebrow">Browse</p>
+                        <h2 class="catalog-blog-widget__title">Categories</h2>
+                        <ul class="catalog-blog-widget__chips">
+                            @foreach ($categories as $category)
+                                <li>
+                                    <a href="{{ route('blog.index', ['category' => $category->slug]) }}"
+                                       class="catalog-blog-widget__chip {{ $currentCategory === $category->slug ? 'is-active' : '' }}">
+                                        {{ $category->name }}
+                                        <span>({{ number_format($category->posts_count) }})</span>
+                                    </a>
+                                </li>
                             @endforeach
-                        </div>
+                        </ul>
                     </div>
                 @endif
 
-                <!-- Tags -->
-                @if($popularTags->isNotEmpty())
-                    <div class="bg-white rounded-2xl shadow-sm p-6">
-                        <h3 class="text-xl font-bold text-gray-900 mb-4">Popular Tags</h3>
-                        <div class="flex flex-wrap gap-2">
-                            @foreach($popularTags as $tag)
-                                <a href="{{ route('blog.tag', $tag->slug) }}" class="inline-block px-3 py-1 bg-gray-100 hover:bg-[#005366] hover:text-white text-gray-700 text-sm rounded-full transition">
-                                    #{{ $tag->name }}
-                                </a>
+                @if ($popularTags->isNotEmpty())
+                    <div class="catalog-blog-widget scroll-reveal">
+                        <p class="catalog-blog-widget__eyebrow">Discover</p>
+                        <h2 class="catalog-blog-widget__title">Popular tags</h2>
+                        <div class="catalog-blog-widget__tags">
+                            @foreach ($popularTags as $tag)
+                                <a href="{{ route('blog.tag', $tag->slug) }}" class="catalog-blog-widget__tag">#{{ $tag->name }}</a>
                             @endforeach
                         </div>
                     </div>
                 @endif
-            </div>
+            </aside>
         </div>
+
+        @include('partials.recently-viewed-section', ['recentlyViewedId' => 'blog-recently-viewed'])
+    </div>
+</section>
+
+<div class="catalog-sheet" id="catalog-sheet-filter" hidden aria-hidden="true">
+    <div class="catalog-sheet__backdrop" data-catalog-sheet-close></div>
+    <div class="catalog-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="catalog-sheet-filter-title">
+        <div class="catalog-sheet__head">
+            <h2 id="catalog-sheet-filter-title" class="catalog-sheet__title">Filter articles</h2>
+            <button type="button" class="catalog-sheet__close" data-catalog-sheet-close aria-label="Close">&times;</button>
+        </div>
+        <form method="GET" action="{{ route('blog.index') }}" class="catalog-sheet__body">
+            @if ($currentSort !== 'latest')
+                <input type="hidden" name="sort" value="{{ $currentSort }}">
+            @endif
+            <label class="catalog-sheet__label" for="sheet-search">Search</label>
+            <input type="search"
+                   id="sheet-search"
+                   name="search"
+                   value="{{ request('search') }}"
+                   class="catalog-filters__select catalog-sheet__select"
+                   placeholder="Search articles…">
+            @if ($categories->isNotEmpty())
+                <label class="catalog-sheet__label" for="sheet-category">Category</label>
+                <select id="sheet-category" name="category" class="catalog-filters__select catalog-sheet__select">
+                    <option value="">All categories</option>
+                    @foreach ($categories as $category)
+                        <option value="{{ $category->slug }}" {{ $currentCategory === $category->slug ? 'selected' : '' }}>
+                            {{ $category->name }} ({{ number_format($category->posts_count) }})
+                        </option>
+                    @endforeach
+                </select>
+            @endif
+            <div class="catalog-sheet__foot">
+                <a href="{{ route('blog.index') }}" class="catalog-sheet__btn catalog-sheet__btn--ghost">Reset</a>
+                <button type="submit" class="catalog-sheet__btn catalog-sheet__btn--primary">Apply</button>
+            </div>
+        </form>
     </div>
 </div>
-@endsection
 
+<div class="catalog-sheet" id="catalog-sheet-sort" hidden aria-hidden="true">
+    <div class="catalog-sheet__backdrop" data-catalog-sheet-close></div>
+    <div class="catalog-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="catalog-sheet-sort-title">
+        <div class="catalog-sheet__head">
+            <h2 id="catalog-sheet-sort-title" class="catalog-sheet__title">Sort by</h2>
+            <button type="button" class="catalog-sheet__close" data-catalog-sheet-close aria-label="Close">&times;</button>
+        </div>
+        <form method="GET" action="{{ route('blog.index') }}" class="catalog-sheet__body">
+            @if (request('search'))
+                <input type="hidden" name="search" value="{{ request('search') }}">
+            @endif
+            @if (filled($currentCategory))
+                <input type="hidden" name="category" value="{{ $currentCategory }}">
+            @endif
+            @if (filled(request('tag')))
+                <input type="hidden" name="tag" value="{{ request('tag') }}">
+            @endif
+            @php
+                $sortOptions = [
+                    'latest' => 'Latest first',
+                    'popular' => 'Most viewed',
+                    'trending' => 'Trending',
+                    'oldest' => 'Oldest first',
+                ];
+            @endphp
+            <ul class="catalog-sort-options">
+                @foreach ($sortOptions as $value => $label)
+                    <li>
+                        <label class="catalog-sort-option {{ $currentSort === $value ? 'is-selected' : '' }}">
+                            <input type="radio" name="sort" value="{{ $value }}" {{ $currentSort === $value ? 'checked' : '' }}>
+                            <span>{{ $label }}</span>
+                        </label>
+                    </li>
+                @endforeach
+            </ul>
+            <div class="catalog-sheet__foot">
+                <button type="submit" class="catalog-sheet__btn catalog-sheet__btn--primary catalog-sheet__btn--full">Apply sort</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var grid = document.getElementById('catalog-blog-grid');
+    var viewButtons = document.querySelectorAll('[data-catalog-view]');
+    var storageKey = 'bluprinter_catalog_view';
+
+    function setView(mode) {
+        if (!grid) return;
+        var isList = mode === 'list';
+        grid.classList.toggle('catalog-blog-grid--list', isList);
+        viewButtons.forEach(function (btn) {
+            var active = btn.getAttribute('data-catalog-view') === mode;
+            btn.classList.toggle('is-active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        try { localStorage.setItem(storageKey, mode); } catch (e) {}
+    }
+
+    if (grid) {
+        var savedView = 'grid';
+        try { savedView = localStorage.getItem(storageKey) || 'grid'; } catch (e) {}
+        setView(savedView === 'list' ? 'list' : 'grid');
+
+        viewButtons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                setView(btn.getAttribute('data-catalog-view'));
+            });
+        });
+    }
+
+    function openSheet(id) {
+        var sheet = document.getElementById('catalog-sheet-' + id);
+        if (!sheet) return;
+        sheet.hidden = false;
+        sheet.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('catalog-sheet-open');
+    }
+
+    function closeSheets() {
+        document.querySelectorAll('.catalog-sheet').forEach(function (sheet) {
+            sheet.hidden = true;
+            sheet.setAttribute('aria-hidden', 'true');
+        });
+        document.body.classList.remove('catalog-sheet-open');
+    }
+
+    document.querySelectorAll('[data-catalog-sheet-open]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openSheet(btn.getAttribute('data-catalog-sheet-open'));
+        });
+    });
+
+    document.querySelectorAll('[data-catalog-sheet-close]').forEach(function (el) {
+        el.addEventListener('click', closeSheets);
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeSheets();
+    });
+});
+</script>
+@endsection

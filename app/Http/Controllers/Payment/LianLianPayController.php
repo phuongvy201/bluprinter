@@ -1100,21 +1100,16 @@ class LianLianPayController extends Controller
             $orderItems = [];
 
             foreach ($cartItems as $item) {
-                $product = $item->product;
-                if (!$product) {
-                    continue;
-                }
-
-                $price = $item->price;
+                $price = $item->getEffectiveUnitPrice();
                 $quantity = $item->quantity;
                 $total = $price * $quantity;
 
                 $subtotal += $total;
 
                 $orderItems[] = [
-                    'product_id' => $product->id,
-                    'product_name' => $product->name,
-                    'product_description' => $product->description,
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->resolveDisplayName(),
+                    'product_description' => $item->product?->description,
                     'unit_price' => $price,
                     'quantity' => $quantity,
                     'total_price' => $total,

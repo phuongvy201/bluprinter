@@ -84,38 +84,14 @@
                         onchange="loadTemplateData(this.value)">
                     <option value="">-- Select a Template --</option>
                     @foreach($templates as $template)
-                        <option value="{{ $template->id }}" 
-                                data-name="{{ $template->name }}"
-                                data-price="{{ $template->base_price }}"
-                                data-description="{{ $template->description }}"
-                                data-variants='@json($template->variants)'
-                                {{ old('template_id') == $template->id ? 'selected' : '' }}>
-                            #{{ $template->id }} - {{ $template->name }} ({{ $template->category->name }}) - ${{ number_format($template->base_price, 2) }}
+                        <option value="{{ $template->id }}" {{ old('template_id') == $template->id ? 'selected' : '' }}>
+                            #{{ $template->id }} - {{ $template->name }} ({{ $template->category->name ?? 'Uncategorized' }}) - ${{ number_format($template->base_price, 2) }}
                         </option>
                     @endforeach
                 </select>
                 @error('template_id')
                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                 @enderror
-                
-                <!-- Template Preview -->
-                <div id="template-preview" class="hidden mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h4 class="text-sm font-semibold text-gray-900 mb-3">Template Preview:</h4>
-                    <div class="grid grid-cols-2 gap-4 text-sm mb-3">
-                        <div>
-                            <span class="text-gray-600">Base Price:</span>
-                            <span class="font-semibold text-gray-900" id="preview-price">$0.00</span>
-                        </div>
-                        <div>
-                            <span class="text-gray-600">Variants:</span>
-                            <span class="font-semibold text-gray-900" id="preview-variants-count">0</span>
-                        </div>
-                    </div>
-                    <div class="border-t border-blue-200 pt-3">
-                        <span class="text-gray-600 text-sm">Template Description:</span>
-                        <div id="preview-description" class="mt-1 text-sm text-gray-700 bg-white p-2 rounded border max-h-20 overflow-y-auto"></div>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -140,8 +116,25 @@
                     @enderror
                 </div>
 
+                <div>
+                    <label for="category_id" class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                    <select id="category_id"
+                            name="category_id"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('category_id') border-red-500 @enderror">
+                        <option value="">Select a category</option>
+                        @foreach($categories as $category)
+                            <option value="{{ $category->id }}" {{ (string) old('category_id') === (string) $category->id ? 'selected' : '' }}>
+                                {{ $category->parent_id ? '├─ ' : '' }}{{ $category->name }}{{ $category->parent ? ' (Child of ' . $category->parent->name . ')' : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('category_id')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
                 <!-- Price & Quantity -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <!-- Price -->
                     <div>
                         <label for="price" class="block text-sm font-medium text-gray-700 mb-2">
@@ -215,16 +208,37 @@
                         @enderror
                     </div>
 
+                    <!-- List Price -->
+                    <div>
+                        <label for="list_price" class="block text-sm font-medium text-gray-700 mb-2">List Price</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 font-medium">$</span>
+                            </div>
+                            <input type="number"
+                                   id="list_price"
+                                   name="list_price"
+                                   value="{{ old('list_price') }}"
+                                   step="0.01"
+                                   min="0"
+                                   class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('list_price') border-red-500 @enderror"
+                                   placeholder="0.00">
+                        </div>
+                        @error('list_price')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
                     <!-- Quantity -->
                     <div>
                         <label for="quantity" class="block text-sm font-medium text-gray-700 mb-2">Total Quantity *</label>
                         <input type="number" 
                                id="quantity" 
                                name="quantity" 
-                               value="{{ old('quantity', 0) }}"
+                               value="{{ old('quantity', 100) }}"
                                min="0"
                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('quantity') border-red-500 @enderror"
-                               placeholder="0"
+                               placeholder="100"
                                required>
                         @error('quantity')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -315,6 +329,49 @@
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
                 </div>
+
+                <!-- Keywords -->
+                <div>
+                    <label for="keywords" class="block text-sm font-medium text-gray-700 mb-2">
+                        Keywords (for collections)
+                    </label>
+                    <input type="text" id="keywords" name="keywords" value="{{ old('keywords') }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('keywords') border-red-500 @enderror"
+                           placeholder="e.g: summer, beach, vacation">
+                    <p class="text-xs text-gray-500 mt-1">Comma-separated. Product also joins collections that Studio AI judges as a thematic fit.</p>
+                    @error('keywords')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+            </div>
+        </div>
+
+        <!-- Attributes from Template -->
+        <div id="attributes-section" class="bg-white shadow rounded-lg hidden">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Template Attributes</h3>
+                <p class="text-sm text-gray-600">Copied from the selected template</p>
+            </div>
+            <div class="p-6">
+                <div id="attributes-container" class="space-y-4"></div>
+            </div>
+        </div>
+
+        <!-- Customization from Template -->
+        <div id="customization-card" class="bg-white shadow rounded-lg hidden">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Product Customization</h3>
+                <p class="text-sm text-gray-600">Copied from the selected template</p>
+            </div>
+            <div class="p-6 space-y-6">
+                <label class="flex items-center space-x-3">
+                    <input type="checkbox"
+                           id="allow_customization"
+                           disabled
+                           class="h-5 w-5 text-indigo-600 border-gray-300 rounded">
+                    <span class="text-lg font-semibold text-gray-900">Allow customers to customize products</span>
+                </label>
+                <div id="customization-types-container" class="space-y-4"></div>
             </div>
         </div>
 
@@ -330,6 +387,10 @@
                 <p class="text-sm text-gray-600">Upload custom media or leave empty to use template media</p>
             </div>
             <div class="p-6">
+                <div id="inherited-media" class="hidden mb-6">
+                    <h5 class="text-sm font-semibold text-gray-700 mb-3">Template media (used if you do not upload files)</h5>
+                    <div id="inherited-media-list" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+                </div>
                 <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-purple-400 transition-colors bg-gray-50" 
                      id="product-media-drop-zone"
                      ondrop="handleMediaDrop(event)" 
@@ -398,59 +459,218 @@
 </div>
 
 <script>
+@php
+    $mediaUrlFn = static function ($item) {
+        if (is_string($item) && $item !== '') {
+            return $item;
+        }
+        if (is_array($item)) {
+            $url = $item['url'] ?? $item['path'] ?? (reset($item) ?: null);
+            return is_string($url) && $url !== '' ? $url : null;
+        }
+        return null;
+    };
+    $templatesCatalog = $templates->mapWithKeys(function ($template) use ($mediaUrlFn) {
+        return [$template->id => [
+            'id' => $template->id,
+            'name' => $template->name,
+            'category' => optional($template->category)->name,
+            'category_id' => $template->category_id,
+            'base_price' => (float) $template->base_price,
+            'list_price' => (float) ($template->list_price ?? 0),
+            'description' => $template->description ?? '',
+            'media' => collect($template->media ?? [])->map($mediaUrlFn)->filter()->values()->all(),
+            'allow_customization' => (bool) $template->allow_customization,
+            'customizations' => $template->getNormalizedCustomizations(),
+            'attributes' => $template->attributes->map(fn ($attr) => [
+                'attribute_name' => $attr->attribute_name,
+                'attribute_value' => $attr->attribute_value,
+            ])->values()->all(),
+            'variants' => $template->variants->map(function ($variant) {
+                $attrs = $variant->getAttribute('attributes');
+                return [
+                    'variant_name' => $variant->variant_name,
+                    'attributes' => is_array($attrs) ? $attrs : [],
+                    'price' => $variant->price,
+                    'list_price' => $variant->list_price,
+                    'quantity' => $variant->quantity,
+                ];
+            })->values()->all(),
+        ]];
+    });
+@endphp
+const TEMPLATE_CATALOG = @json($templatesCatalog);
 let templateVariants = [];
 let selectedMediaFiles = [];
+let currentTemplatePrice = 0;
 
-// Load template data when template is selected
-function loadTemplateData(templateId) {
-    if (!templateId) {
-        document.getElementById('template-preview').classList.add('hidden');
-        document.getElementById('variants-section').classList.add('hidden');
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, function (char) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
+    });
+}
+
+function isVideoUrl(url) {
+    return /\.(mp4|mov|avi|webm)(\?|$)/i.test(url || '');
+}
+
+function money(value) {
+    const amount = parseFloat(value);
+    return '$' + (Number.isFinite(amount) ? amount : 0).toFixed(2);
+}
+
+function fillInheritedMedia(media) {
+    const wrap = document.getElementById('inherited-media');
+    const list = document.getElementById('inherited-media-list');
+    if (!wrap || !list) {
         return;
     }
-    
-    const select = document.getElementById('template_id');
-    const selectedOption = select.options[select.selectedIndex];
-    
-    // Get template data from option attributes
-    const templateName = selectedOption.dataset.name;
-    const templatePrice = selectedOption.dataset.price;
-    const templateDescription = selectedOption.dataset.description || '';
-    const variants = JSON.parse(selectedOption.dataset.variants || '[]');
-    
-    // Update preview
-    document.getElementById('preview-price').textContent = '$' + parseFloat(templatePrice).toFixed(2);
-    document.getElementById('preview-variants-count').textContent = variants.length;
-    document.getElementById('preview-description').textContent = templateDescription || 'No description available';
-    document.getElementById('template-preview').classList.remove('hidden');
-    
-    // Auto-fill product name if empty
-    const nameInput = document.getElementById('name');
-    if (!nameInput.value) {
-        nameInput.value = templateName;
+    if (!media.length) {
+        wrap.classList.add('hidden');
+        list.innerHTML = '';
+        return;
     }
-    
-    // Load variants
+    list.innerHTML = media.map(function (url) {
+        if (isVideoUrl(url)) {
+            return '<div class="aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200"><video src="' + escapeHtml(url) + '" class="w-full h-full object-cover" muted></video></div>';
+        }
+        return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" class="aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 block"><img src="' + escapeHtml(url) + '" alt="" class="w-full h-full object-cover"></a>';
+    }).join('');
+    wrap.classList.remove('hidden');
+}
+
+function fillAttributes(attrs) {
+    const section = document.getElementById('attributes-section');
+    const container = document.getElementById('attributes-container');
+    const grouped = {};
+    (attrs || []).forEach(function (attr) {
+        const key = attr.attribute_name || 'Attribute';
+        grouped[key] = grouped[key] || [];
+        if (attr.attribute_value) {
+            grouped[key].push(attr.attribute_value);
+        }
+    });
+    const keys = Object.keys(grouped);
+    if (!keys.length) {
+        section.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+    container.innerHTML = keys.map(function (key) {
+        return '<div class="attribute-row border border-gray-200 rounded-lg p-4">' +
+            '<div class="flex space-x-4">' +
+            '<div class="flex-1"><label class="block text-sm font-medium text-gray-700 mb-2">Attribute Name</label>' +
+            '<input type="text" value="' + escapeHtml(key) + '" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"></div>' +
+            '<div class="flex-1"><label class="block text-sm font-medium text-gray-700 mb-2">Attribute Values (comma separated)</label>' +
+            '<input type="text" value="' + escapeHtml(grouped[key].join(', ')) + '" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"></div>' +
+            '</div></div>';
+    }).join('');
+    section.classList.remove('hidden');
+}
+
+function formatCustomizationOptions(item) {
+    const options = item.options || [];
+    if (typeof options === 'string') {
+        return options;
+    }
+    return options.map(function (option) {
+        if (option && typeof option === 'object') {
+            return option.label || option.value || '';
+        }
+        return String(option ?? '');
+    }).filter(Boolean).join('\n');
+}
+
+function fillCustomizations(tpl) {
+    const card = document.getElementById('customization-card');
+    const checkbox = document.getElementById('allow_customization');
+    const container = document.getElementById('customization-types-container');
+    const customs = tpl.customizations || [];
+    checkbox.checked = !!tpl.allow_customization;
+    if (!tpl.allow_customization && !customs.length) {
+        card.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+    container.innerHTML = customs.map(function (item) {
+        const type = item.type || item.input_type || 'text';
+        const price = item.price != null && item.price !== '' ? item.price : '';
+        const label = item.label || item.name || '';
+        const placeholder = item.placeholder || '';
+        const options = formatCustomizationOptions(item);
+        const required = item.required ? 'checked' : '';
+        return '<div class="customization-type-row border border-gray-200 rounded-lg p-4 bg-white">' +
+            '<div class="grid grid-cols-1 md:grid-cols-4 gap-4">' +
+            '<div><label class="block text-sm font-medium text-gray-700 mb-2">Type</label>' +
+            '<input type="text" value="' + escapeHtml(type) + '" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"></div>' +
+            '<div><label class="block text-sm font-medium text-gray-700 mb-2">Price (USD)</label>' +
+            '<input type="text" value="' + escapeHtml(price) + '" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"></div>' +
+            '<div><label class="block text-sm font-medium text-gray-700 mb-2">Display Label</label>' +
+            '<input type="text" value="' + escapeHtml(label) + '" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"></div>' +
+            '<div><label class="block text-sm font-medium text-gray-700 mb-2">Placeholder</label>' +
+            '<input type="text" value="' + escapeHtml(placeholder) + '" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"></div>' +
+            '</div>' +
+            (options ? '<div class="mt-4"><label class="block text-sm font-medium text-gray-700 mb-2">Options</label><textarea readonly rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">' + escapeHtml(options) + '</textarea></div>' : '') +
+            '<label class="mt-3 inline-flex items-center space-x-2 text-sm text-gray-700"><input type="checkbox" disabled ' + required + ' class="h-4 w-4 border-gray-300 rounded"><span>Required</span></label>' +
+            '</div>';
+    }).join('');
+    card.classList.remove('hidden');
+}
+
+function loadTemplateData(templateId) {
+    const variantsSection = document.getElementById('variants-section');
+    if (!templateId || !TEMPLATE_CATALOG[templateId]) {
+        variantsSection.classList.add('hidden');
+        document.getElementById('attributes-section').classList.add('hidden');
+        document.getElementById('customization-card').classList.add('hidden');
+        document.getElementById('inherited-media').classList.add('hidden');
+        document.getElementById('category_id').value = '';
+        return;
+    }
+
+    const tpl = TEMPLATE_CATALOG[templateId];
+    currentTemplatePrice = parseFloat(tpl.base_price) || 0;
+
+    document.getElementById('name').value = tpl.name || '';
+    document.getElementById('category_id').value = tpl.category_id || '';
+    document.getElementById('list_price').value = Number.isFinite(parseFloat(tpl.list_price)) ? parseFloat(tpl.list_price) : '';
+    document.getElementById('template-price-display').textContent = money(tpl.base_price);
+
+    const descHidden = document.getElementById('description');
+    const descEditor = document.getElementById('description-editor');
+    if (descHidden && descEditor) {
+        descEditor.innerHTML = tpl.description || '';
+        descHidden.value = tpl.description || '';
+    }
+
+    fillInheritedMedia(tpl.media || []);
+    fillAttributes(tpl.attributes || []);
+    fillCustomizations(tpl);
+    updatePriceType();
+
+    const variants = tpl.variants || [];
     if (variants.length > 0) {
-        loadVariants(variants);
-        document.getElementById('variants-section').classList.remove('hidden');
+        loadVariants(variants, tpl);
+        variantsSection.classList.remove('hidden');
     } else {
-        document.getElementById('variants-section').classList.add('hidden');
+        variantsSection.classList.add('hidden');
     }
 }
 
-function loadVariants(variants) {
+function loadVariants(variants, tpl) {
     templateVariants = variants;
     const container = document.getElementById('variants-container');
-    
+    const templateBasePrice = parseFloat(tpl?.base_price || 0);
+    const templateListPrice = parseFloat(tpl?.list_price || 0);
+
     let html = `
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Variant</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Template Price</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Override Price</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">List Price *</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Base Price *</th>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Quantity</th>
                     </tr>
                 </thead>
@@ -458,6 +678,15 @@ function loadVariants(variants) {
     `;
     
     variants.forEach((variant, index) => {
+        const inheritedPrice = (variant.price !== null && variant.price !== undefined && variant.price !== '')
+            ? parseFloat(variant.price)
+            : templateBasePrice;
+        const inheritedListPrice = (variant.list_price !== null && variant.list_price !== undefined && variant.list_price !== '')
+            ? parseFloat(variant.list_price)
+            : templateListPrice;
+        const inheritedQty = (variant.quantity !== null && variant.quantity !== undefined && variant.quantity !== '')
+            ? variant.quantity
+            : 100;
         html += `
             <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -475,24 +704,32 @@ function loadVariants(variants) {
                     <input type="hidden" name="variants[${index}][attributes]" value='${JSON.stringify(variant.attributes || {})}'>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="text-sm font-medium text-gray-900">$${parseFloat(variant.price || 0).toFixed(2)}</span>
+                    <input type="number"
+                           name="variants[${index}][list_price]"
+                           value="${Number.isFinite(inheritedListPrice) ? inheritedListPrice : ''}"
+                           step="0.01"
+                           min="0"
+                           required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="0.00">
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <input type="number" 
                            name="variants[${index}][price]" 
-                           value="${variant.price || ''}"
+                           value="${inheritedPrice}"
                            step="0.01" 
                            min="0"
+                           required
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                           placeholder="${parseFloat(variant.price || 0).toFixed(2)}">
+                           placeholder="${inheritedPrice.toFixed(2)}">
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <input type="number" 
                            name="variants[${index}][quantity]" 
-                           value="${variant.quantity || 0}"
+                           value="${inheritedQty}"
                            min="0"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                           placeholder="0"
+                           placeholder="100"
                            required>
                 </td>
             </tr>
@@ -670,8 +907,6 @@ function updateDescriptionValue() {
 }
 
 // Price Type Management
-let currentTemplatePrice = 0;
-
 function updatePriceType() {
     const priceType = document.querySelector('input[name="price_type"]:checked').value;
     const priceInputContainer = document.getElementById('price-input-container');
@@ -720,53 +955,6 @@ function updatePriceType() {
         const addAmount = parseFloat(priceInput.value) || 0;
         const finalPrice = currentTemplatePrice + addAmount;
         document.getElementById('final-price-value').textContent = '$' + finalPrice.toFixed(2);
-    }
-}
-
-// Update loadTemplateData to store template price
-function loadTemplateData(templateId) {
-    if (!templateId) {
-        document.getElementById('template-preview').classList.add('hidden');
-        document.getElementById('variants-section').classList.add('hidden');
-        return;
-    }
-    
-    const select = document.getElementById('template_id');
-    const selectedOption = select.options[select.selectedIndex];
-    
-    // Get template data from option attributes
-    const templateName = selectedOption.dataset.name;
-    const templatePrice = selectedOption.dataset.price;
-    const templateDescription = selectedOption.dataset.description || '';
-    const variants = JSON.parse(selectedOption.dataset.variants || '[]');
-    
-    // Store template price for calculations
-    currentTemplatePrice = parseFloat(templatePrice);
-    
-    // Update preview
-    document.getElementById('preview-price').textContent = '$' + parseFloat(templatePrice).toFixed(2);
-    document.getElementById('preview-variants-count').textContent = variants.length;
-    document.getElementById('preview-description').textContent = templateDescription || 'No description available';
-    document.getElementById('template-preview').classList.remove('hidden');
-    
-    // Update template price display in price section
-    document.getElementById('template-price-display').textContent = '$' + parseFloat(templatePrice).toFixed(2);
-    
-    // Update price type display
-    updatePriceType();
-    
-    // Auto-fill product name if empty
-    const nameInput = document.getElementById('name');
-    if (!nameInput.value) {
-        nameInput.value = templateName;
-    }
-    
-    // Load variants
-    if (variants.length > 0) {
-        loadVariants(variants);
-        document.getElementById('variants-section').classList.remove('hidden');
-    } else {
-        document.getElementById('variants-section').classList.add('hidden');
     }
 }
 

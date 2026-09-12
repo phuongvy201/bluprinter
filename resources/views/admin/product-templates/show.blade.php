@@ -51,6 +51,10 @@
                             <p class="mt-1 text-sm text-gray-900 font-semibold">${{ number_format($productTemplate->base_price, 2) }}</p>
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-gray-500">List Price</label>
+                            <p class="mt-1 text-sm text-gray-900 font-semibold">${{ number_format($productTemplate->list_price ?? 0, 2) }}</p>
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-gray-500">Products Count</label>
                             <p class="mt-1 text-sm text-gray-900">{{ $productTemplate->products->count() }} products</p>
                         </div>

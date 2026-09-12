@@ -50,7 +50,7 @@ class OrderController extends Controller
             'cancelled' => Order::where('user_id', $user->id)->where('status', 'cancelled')->count(),
         ];
 
-        return view('customer.orders.index', compact('orders', 'stats', 'status', 'search'));
+        return view('customer.orders.index', compact('orders', 'stats', 'status', 'search') + ['title' => 'My Orders']);
     }
 
     /**
@@ -71,7 +71,7 @@ class OrderController extends Controller
             ])
             ->firstOrFail();
 
-        return view('customer.orders.show', compact('order'));
+        return view('customer.orders.show', compact('order') + ['title' => 'Order '.$order->order_number]);
     }
 
     /**
@@ -83,7 +83,7 @@ class OrderController extends Controller
         $email = $request->get('email');
 
         if (!$orderNumber || !$email) {
-            return view('customer.orders.track');
+            return view('customer.orders.track', ['title' => 'Track order']);
         }
 
         // Find order by order number and email
@@ -93,11 +93,11 @@ class OrderController extends Controller
             ->first();
 
         if (!$order) {
-            return view('customer.orders.track')
+            return view('customer.orders.track', ['title' => 'Track order'])
                 ->with('error', 'Order not found. Please check your order number and email.');
         }
 
-        return view('customer.orders.track', compact('order'));
+        return view('customer.orders.track', compact('order') + ['title' => 'Track order']);
     }
 
     /**

@@ -22,6 +22,8 @@ class Shop extends Model
         'shop_city',
         'shop_country',
         'shop_status',
+        'flash_deal_auto_enroll',
+        'flash_deal_max_discount_percent',
         'verified',
         'rating',
         'total_ratings',
@@ -39,6 +41,8 @@ class Shop extends Model
 
     protected $casts = [
         'verified' => 'boolean',
+        'flash_deal_auto_enroll' => 'boolean',
+        'flash_deal_max_discount_percent' => 'integer',
         'rating' => 'decimal:2',
         'total_ratings' => 'integer',
         'total_products' => 'integer',

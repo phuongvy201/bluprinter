@@ -5,8 +5,10 @@
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
+@if(!empty($paymentMethods['paypal']))
 <!-- PayPal SDK - Currency from domain config -->
 <script src="https://www.paypal.com/sdk/js?client-id={{ config('services.paypal.client_id') }}&currency={{ $currency ?? 'USD' }}&intent=capture&components=buttons"></script>
+@endif
 
 <!-- Stripe JS SDK -->
 <script src="https://js.stripe.com/v3/"></script>
@@ -14,6 +16,11 @@
 @section('content')
 @php
     use Illuminate\Support\Collection;
+
+    $paymentMethods = $paymentMethods ?? ['stripe' => true, 'paypal' => false, 'lianlian' => false];
+    $defaultPaymentMethod = $defaultPaymentMethod ?? ($paymentMethods['stripe'] ? 'stripe' : ($paymentMethods['lianlian'] ? 'lianlian_pay' : 'paypal'));
+    $enabledPaymentCount = count(array_filter($paymentMethods));
+    $stripeOnlyCheckout = $enabledPaymentCount === 1 && !empty($paymentMethods['stripe']);
     
     // Get currency and rate using helper functions
     $currentCurrency = currency();
@@ -211,7 +218,10 @@
     foreach ($products as $item) {
         $product = $item['product'];
         $quantity = max(1, (int) ($item['quantity'] ?? 1));
-        $lineTotal = (float) ($item['total'] ?? ($product->price ?? $product->base_price ?? 0) * $quantity);
+        $lineTotal = (float) ($item['total'] ?? 0);
+        if ($lineTotal <= 0 && $product) {
+            $lineTotal = (float) ($product->price ?? $product->base_price ?? 0) * $quantity;
+        }
         
         // Convert to USD if needed
         $baseLineTotal = $currentCurrency !== 'USD' && $currentCurrencyRate > 0 
@@ -225,9 +235,23 @@
     $tiktokContents = [];
     foreach ($products as $index => $item) {
         $product = $item['product'];
+        $cartLine = $item['cart_item'];
         $quantity = max(1, (int) ($item['quantity'] ?? 1));
-        $lineTotal = (float) ($item['total'] ?? ($product->price ?? $product->base_price ?? 0) * $quantity);
+        $lineTotal = (float) ($item['total'] ?? 0);
+        if ($lineTotal <= 0 && $product) {
+            $lineTotal = (float) ($product->price ?? $product->base_price ?? 0) * $quantity;
+        }
         $unitPrice = $quantity > 0 ? $lineTotal / $quantity : 0;
+
+        if (!$product || $cartLine->isStudioCustom()) {
+            $gtagItems[] = [
+                'item_id' => 'studio-'.$cartLine->id,
+                'item_name' => $cartLine->resolveDisplayName(),
+                'quantity' => $quantity,
+                'price' => $unitPrice,
+            ];
+            continue;
+        }
 
         $categories = $product->categories ?? collect();
         if (!($categories instanceof Collection)) {
@@ -276,11 +300,18 @@
 // Global constants - must be declared before any code that uses them
 const TIKTOK_CHECKOUT_CONTENTS = {!! json_encode($tiktokContents, JSON_UNESCAPED_UNICODE) !!};
 const TIKTOK_CHECKOUT_VALUE = {{ $checkoutTotal }};
+const CHECKOUT_PAYMENT_METHODS = @json($paymentMethods);
+const CHECKOUT_DEFAULT_PAYMENT = @json($defaultPaymentMethod);
+const CHECKOUT_STRIPE_ONLY = @json($stripeOnlyCheckout);
 const CHECKOUT_CURRENCY = '{{ $currency ?? "USD" }}';
 const CHECKOUT_CURRENCY_RATE = {{ $currencyRate ?? 1.0 }};
 const CHECKOUT_BASE_TOTAL = {{ $total }};
-const CHECKOUT_CONVERTED_SUBTOTAL = {{ $convertedSubtotal ?? $subtotal }};
+let CHECKOUT_CONVERTED_SUBTOTAL = {{ $discountedSubtotal ?? $convertedSubtotal ?? $subtotal }};
+const CHECKOUT_RAW_SUBTOTAL = {{ $subtotal }};
+let CHECKOUT_DISCOUNT_AMOUNT = {{ $discountAmount ?? 0 }};
 const CHECKOUT_CONVERTED_TOTAL = {{ $convertedTotal ?? $total }};
+const CHECKOUT_CONVERTED_SHIPPING = {{ $convertedShipping ?? $shippingCost ?? 0 }};
+const CHECKOUT_FREE_SHIPPING_THRESHOLD_USD = 100;
 const CHECKOUT_CURRENCY_SYMBOL = @json(\App\Services\CurrencyService::getCurrencySymbol($currency ?? 'USD'));
 const CHECKOUT_CURRENT_DOMAIN = @json($currentDomain ?? null);
 const SHIPPING_RATES = @json($shippingRatesData);
@@ -290,7 +321,7 @@ const SHIPPING_ZONES_WITH_COUNTRIES = @json($zonesWithCountries);
 const COUNTRY_TO_ZONE_MAP = @json($countryToZoneMap);
 const DEFAULT_SHIPPING_RATE = @json($defaultShippingRateData);
 const DEFAULT_SHIPPING_ZONE_ID = @json($defaultShippingRate ? $defaultShippingRate->shipping_zone_id : null);
-const CHECKOUT_BASE_SUBTOTAL = {{ $baseSubtotal }};
+let CHECKOUT_BASE_SUBTOTAL = {{ $baseSubtotal }};
 
 document.addEventListener('DOMContentLoaded', function() {
     // Event tracking được xử lý bởi GTM thông qua dataLayer
@@ -328,22 +359,6 @@ document.addEventListener('DOMContentLoaded', function() {
     * {
         font-family: 'Inter', sans-serif;
     }
-
-function buildCheckoutCustomizationInputs(customizations) {
-    var html = '';
-    if (!customizations) return html;
-    Object.keys(customizations).forEach(function(k){
-        var v = customizations[k] || {};
-        var value = v && v.value ? String(v.value).replace(/"/g, '&quot;') : '';
-        html += '<div class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">'
-             + '<div class="sm:col-span-2"><span class="text-sm text-gray-600">' + k + '</span></div>'
-             + '<div class="sm:col-span-3">'
-             + '<input type="text" class="w-full border-2 border-gray-200 rounded-lg px-3 py-2 checkout-customization-input" data-label="' + k + '" value="' + value + '" oninput="updateCheckoutModalTotal()" title="' + value + '" />'
-             + '</div>'
-             + '</div>';
-    });
-    return html;
-}
 
     @keyframes fadeInUp {
         from {
@@ -404,7 +419,7 @@ function buildCheckoutCustomizationInputs(customizations) {
     }
 
     .gradient-text {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #005366 0%, #E2150C 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
@@ -417,40 +432,62 @@ function buildCheckoutCustomizationInputs(customizations) {
     }
 
     .payment-option:hover {
-        @apply border-blue-500 shadow-lg;
+        @apply border-[#005366] shadow-md;
     }
 
-    /* Radio button checked state styling - using sibling selector */
     input[type="radio"]:checked + * {
-        @apply border-blue-500 bg-blue-50;
+        @apply border-[#005366] bg-[#005366]/5;
     }
 
-    /* Style the label when radio is checked */
     label.payment-option:has(input[type="radio"]:checked) {
-        @apply border-blue-500 bg-blue-50;
+        @apply border-[#005366] bg-[#005366]/5;
     }
 
-    /* Fallback for browsers that don't support :has() */
     .payment-option input[type="radio"]:checked {
-        @apply text-blue-600 border-blue-600;
+        @apply text-[#005366] border-[#005366];
     }
     
-    /* Alternative approach using JavaScript classes */
     .payment-option.selected {
-        @apply border-blue-500 bg-blue-50;
+        @apply border-[#005366] bg-[#005366]/5;
     }
 
+    .payment-option--stripe.selected,
+    label.payment-option:has(#payment_stripe:checked) {
+        border-color: #005366;
+        background: linear-gradient(165deg, rgba(0, 83, 102, 0.08) 0%, #ffffff 55%);
+        box-shadow: 0 12px 32px rgba(0, 83, 102, 0.12);
+    }
+
+    #stripe-card-element {
+        min-height: 24px;
+    }
+
+    .stripe-card-shell {
+        min-height: 52px;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        background: #fff;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .stripe-card-shell:focus-within {
+        border-color: #005366;
+        box-shadow: 0 0 0 3px rgba(0, 83, 102, 0.15);
+    }
 
     .product-item {
         @apply transition-all duration-300 rounded-xl hover:shadow-lg hover:transform hover:translate-x-1;
     }
 
     .step-indicator {
-        @apply flex items-center justify-center w-10 h-10 rounded-full bg-blue-500 text-white font-semibold text-sm shadow-md;
+        @apply flex items-center justify-center w-10 h-10 rounded-full bg-[#005366] text-white font-semibold text-sm shadow-md;
     }
 
     .step-indicator.active {
-        @apply bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg;
+        @apply bg-[#005366] shadow-lg;
     }
 
     .step-indicator.completed {
@@ -464,7 +501,7 @@ function buildCheckoutCustomizationInputs(customizations) {
 
     .floating-label input:focus + label,
     .floating-label input:not(:placeholder-shown) + label {
-        @apply -translate-y-5 scale-90 text-blue-600;
+        @apply -translate-y-5 scale-90 text-[#005366];
     }
 
     .floating-label label {
@@ -520,7 +557,7 @@ function buildCheckoutCustomizationInputs(customizations) {
     }
     
     .StripeElement--focus {
-        @apply border-blue-500 shadow-lg ring-2 ring-blue-200;
+        @apply border-[#005366] shadow-md ring-2 ring-[#005366]/20;
     }
     
     .StripeElement--invalid {
@@ -599,7 +636,7 @@ function buildCheckoutCustomizationInputs(customizations) {
     /* Responsive tweaks for small screens */
     @media (max-width: 640px) {
         /* Reduce inner padding blocks */
-        .checkout-container .p-8 { padding: 1rem /* 16px */; }
+        .commerce-panel__body { padding: 1rem; }
         .order-summary-container { padding: 1rem /* 16px */; }
 
         /* Payment option card spacing */
@@ -633,51 +670,42 @@ function buildCheckoutCustomizationInputs(customizations) {
     }
 </style>
 
-<div class="min-h-screen bg-gray-50 py-8">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+<section class="commerce-page" aria-labelledby="checkout-heading">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+            <a href="{{ route('home') }}">Home</a>
+            <span class="catalog-breadcrumb__sep" aria-hidden="true">/</span>
+            <a href="{{ route('cart.index') }}">Cart</a>
+            <span class="catalog-breadcrumb__sep" aria-hidden="true">/</span>
+            <span class="catalog-breadcrumb__current">Checkout</span>
+        </nav>
 
-        <!-- Header -->
-
-        <!-- Breadcrumb -->
-        <div class="mb-6 sm:mb-8">
-            <nav class="text-xs sm:text-sm" aria-label="Breadcrumb">
-                <ol class="flex items-center space-x-2 overflow-x-auto whitespace-nowrap">
-                    <li>
-                        <a href="{{ route('cart.index') }}" class="text-[#005366] hover:underline font-medium">Cart</a>
-                    </li>
-                    <li class="text-gray-300">/</li>
-                    <li>
-                        <span class="text-gray-900 font-semibold">Order Information</span>
-                    </li>
-                    <li class="text-gray-300 hidden xs:inline sm:inline">/</li>
-                    <li class="hidden xs:inline sm:inline">
-                        <span class="text-gray-500">Complete</span>
-                    </li>
-                </ol>
-            </nav>
-        </div>
+        <header class="section-heading section-heading--catalog mb-6">
+            <p class="section-heading__eyebrow">Secure checkout</p>
+            <h1 id="checkout-heading" class="section-heading__title">
+                Order <span class="gradient-text">Information</span>
+            </h1>
+            <p class="section-heading__sub">Complete your shipping and payment details</p>
+        </header>
 
         <div class="flex flex-col lg:grid lg:grid-cols-3 gap-8">
-            <!-- Checkout Form -->
-            <div class="order-2 lg:order-1 lg:col-span-2 animate-slideInLeft">
-                <div class="bg-white rounded-2xl shadow-lg overflow-hidden checkout-container">
-                    <!-- Modern Header with Gradient -->
-                    <div class="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 p-6">
-                        <div class="flex items-center text-white">
-                            <div class="w-12 h-12 rounded-xl bg-white bg-opacity-20 backdrop-blur-sm flex items-center justify-center mr-4">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="order-2 lg:order-1 lg:col-span-2">
+                <div class="commerce-panel checkout-container">
+                    <div class="commerce-panel__head">
+                        <div class="flex items-center gap-4">
+                            <div class="commerce-section-icon bg-white/15 text-white">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
                                 </svg>
                             </div>
                             <div>
-                                <h2 class="text-2xl font-bold">Shipping Information</h2>
-                                <p class="text-blue-100 text-sm">Please provide your delivery details</p>
+                                <h2>Shipping Information</h2>
+                                <p>Please provide your delivery details</p>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="p-8">
+                    <div class="commerce-panel__body">
                     
                     <form id="checkout-form" method="POST" action="{{ route('checkout.process') }}" class="space-y-8">
                         @csrf
@@ -690,26 +718,26 @@ function buildCheckoutCustomizationInputs(customizations) {
                         
                         <!-- Contact Information -->
                         <div class="space-y-5">
-                            <div class="flex items-center space-x-3 pb-3 border-b-2 border-gray-100">
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="commerce-section-title">
+                                <div class="commerce-section-icon">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                     </svg>
                                 </div>
-                                <h3 class="text-lg font-bold text-gray-800">Contact Details</h3>
+                                <h3 class="text-lg font-bold text-gray-900">Contact Details</h3>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <div class="relative">
                                     <label for="customer_name" class="block text-sm font-semibold text-gray-700 mb-2">
                                         <span class="flex items-center">
-                                            <svg class="w-4 h-4 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg class="w-4 h-4 mr-1.5 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                             </svg>
                                             Full Name *
                                         </span>
                                     </label>
                                     <input type="text" id="customer_name" name="customer_name" 
-                                           class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5" required
+                                           class="commerce-field" required
                                            value="{{ auth()->user() ? auth()->user()->name : '' }}"
                                            placeholder="John Doe">
                                     @error('customer_name')
@@ -725,14 +753,14 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 <div class="relative">
                                     <label for="customer_email" class="block text-sm font-semibold text-gray-700 mb-2">
                                         <span class="flex items-center">
-                                            <svg class="w-4 h-4 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg class="w-4 h-4 mr-1.5 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                                             </svg>
                                             Email Address *
                                         </span>
                                     </label>
                                     <input type="email" id="customer_email" name="customer_email" 
-                                           class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5" required
+                                           class="commerce-field" required
                                            value="{{ auth()->user() ? auth()->user()->email : '' }}"
                                            placeholder="john@example.com">
                                     @error('customer_email')
@@ -749,14 +777,14 @@ function buildCheckoutCustomizationInputs(customizations) {
                             <div class="relative">
                                 <label for="customer_phone" class="block text-sm font-semibold text-gray-700 mb-2">
                                     <span class="flex items-center">
-                                        <svg class="w-4 h-4 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg class="w-4 h-4 mr-1.5 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
                                         </svg>
                                         Phone Number
                                     </span>
                                 </label>
                                 <input type="tel" id="customer_phone" name="customer_phone" 
-                                       class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5"
+                                       class="commerce-field"
                                        placeholder="+1 (555) 123-4567">
                                 @error('customer_phone')
                                     <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -771,27 +799,27 @@ function buildCheckoutCustomizationInputs(customizations) {
 
                         <!-- Shipping Address -->
                         <div class="space-y-5">
-                            <div class="flex items-center space-x-3 pb-3 border-b-2 border-gray-100">
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="commerce-section-title">
+                                <div class="commerce-section-icon">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                     </svg>
                                 </div>
-                                <h3 class="text-lg font-bold text-gray-800">Delivery Address</h3>
+                                <h3 class="text-lg font-bold text-gray-900">Delivery Address</h3>
                             </div>
                             
                             <div class="relative">
                                 <label for="shipping_address" class="block text-sm font-semibold text-gray-700 mb-2">
                                     <span class="flex items-center">
-                                        <svg class="w-4 h-4 mr-1.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg class="w-4 h-4 mr-1.5 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
                                         </svg>
                                         Street Address *
                                     </span>
                                 </label>
                                 <textarea id="shipping_address" name="shipping_address" 
-                                          class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5 resize-vertical min-h-[100px]" rows="3" required
+                                          class="commerce-field resize-vertical min-h-[100px]" rows="3" required
                                           placeholder="Street address, apartment, suite, unit, etc."></textarea>
                                 @error('shipping_address')
                                     <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -807,14 +835,14 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 <div class="relative">
                                     <label for="city" class="block text-sm font-semibold text-gray-700 mb-2">
                                         <span class="flex items-center">
-                                            <svg class="w-4 h-4 mr-1.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg class="w-4 h-4 mr-1.5 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                                             </svg>
                                             City *
                                         </span>
                                     </label>
                                     <input type="text" id="city" name="city" 
-                                           class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5" required
+                                           class="commerce-field" required
                                            placeholder="New York">
                                     @error('city')
                                         <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -829,14 +857,14 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 <div class="relative">
                                     <label for="state" class="block text-sm font-semibold text-gray-700 mb-2">
                                         <span class="flex items-center">
-                                            <svg class="w-4 h-4 mr-1.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg class="w-4 h-4 mr-1.5 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
                                             </svg>
                                             State/Province
                                         </span>
                                     </label>
                                     <input type="text" id="state" name="state" 
-                                           class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5"
+                                           class="commerce-field"
                                            placeholder="NY">
                                     @error('state')
                                         <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -851,14 +879,14 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 <div class="relative">
                                     <label for="postal_code" class="block text-sm font-semibold text-gray-700 mb-2">
                                         <span class="flex items-center">
-                                            <svg class="w-4 h-4 mr-1.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg class="w-4 h-4 mr-1.5 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                                             </svg>
                                             Postal Code *
                                         </span>
                                     </label>
                                     <input type="text" id="postal_code" name="postal_code" 
-                                           class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5" required
+                                           class="commerce-field" required
                                            placeholder="10001">
                                     @error('postal_code')
                                         <p class="text-red-500 text-xs mt-1.5 flex items-center">
@@ -874,13 +902,13 @@ function buildCheckoutCustomizationInputs(customizations) {
                             <div class="relative">
                                 <label for="country" class="block text-sm font-semibold text-gray-700 mb-2">
                                     <span class="flex items-center">
-                                        <svg class="w-4 h-4 mr-1.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg class="w-4 h-4 mr-1.5 text-[#005366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
                                         Country *
                                     </span>
                                 </label>
-                                <select id="country" name="country" class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5 cursor-pointer" required>
+                                <select id="country" name="country" class="commerce-field cursor-pointer" required>
                                     <option value="">Select Country</option>
                                     @if(count($zonesWithCountries) > 0)
                                         @foreach($zonesWithCountries as $zone)
@@ -964,13 +992,13 @@ function buildCheckoutCustomizationInputs(customizations) {
 
                         <!-- Notes -->
                         <div class="space-y-5">
-                            <div class="flex items-center space-x-3 pb-3 border-b-2 border-gray-100">
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="commerce-section-title">
+                                <div class="commerce-section-icon">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                     </svg>
                                 </div>
-                                <h3 class="text-lg font-bold text-gray-800">Additional Notes</h3>
+                                <h3 class="text-lg font-bold text-gray-900">Additional Notes</h3>
                             </div>
                             <div class="relative">
                                 <label for="notes" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -982,38 +1010,78 @@ function buildCheckoutCustomizationInputs(customizations) {
                                     </span>
                                 </label>
                                 <textarea id="notes" name="notes" 
-                                          class="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 shadow-sm hover:shadow-md focus:shadow-lg focus:-translate-y-0.5 resize-vertical min-h-[100px]" rows="3"
+                                          class="commerce-field resize-vertical min-h-[100px]" rows="3"
                                           placeholder="Any special instructions for your order..."></textarea>
                             </div>
                         </div>
 
                         <!-- Payment Method -->
                         <div class="space-y-5">
-                            <div class="flex items-center space-x-3 pb-3 border-b-2 border-gray-100">
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="commerce-section-title">
+                                <div class="commerce-section-icon">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
                                     </svg>
                                 </div>
-                                <h3 class="text-lg font-bold text-gray-800">Payment Method</h3>
+                                <h3 class="text-lg font-bold text-gray-900">Payment Method</h3>
                             </div>
                             <div class="space-y-4">
+                                @if(!empty($paymentMethods['stripe']))
                                 <!-- Stripe -->
                                 <div class="relative">
-                                    <label for="payment_stripe" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-blue-500 hover:shadow-xl transition-all duration-300 payment-option bg-white">
-                                        <input type="radio" id="payment_stripe" name="payment_method" value="stripe" class="w-6 h-6 text-blue-600 border-gray-300 focus:ring-blue-500 mr-5" checked>
+                                    @if($stripeOnlyCheckout)
+                                        <div class="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                                            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100 bg-gray-50">
+                                                <div class="flex items-center gap-3 min-w-0">
+                                                    <div class="commerce-section-icon shrink-0">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                                                        </svg>
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <p class="font-bold text-gray-900">Credit or debit card</p>
+                                                        <p class="text-sm text-gray-600 mt-0.5">Secured by Stripe</p>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center gap-1.5 shrink-0" aria-hidden="true">
+                                                    <span class="inline-flex h-7 min-w-[2.5rem] items-center justify-center rounded bg-[#1a1f71] px-2 text-[10px] font-bold tracking-wide text-white">VISA</span>
+                                                    <span class="inline-flex h-7 min-w-[2.5rem] items-center justify-center rounded bg-[#eb001b] px-2 text-[10px] font-bold tracking-wide text-white">MC</span>
+                                                    <span class="inline-flex h-7 min-w-[2.5rem] items-center justify-center rounded bg-[#006fcf] px-2 text-[10px] font-bold tracking-wide text-white">AMEX</span>
+                                                </div>
+                                            </div>
+
+                                            <div id="stripe-card-container" class="p-5">
+                                                <label for="stripe-card-element" class="block text-sm font-semibold text-gray-700 mb-2">Card details</label>
+                                                <div class="stripe-card-shell">
+                                                    <div id="stripe-card-element" class="w-full"></div>
+                                                </div>
+                                                <div id="stripe-card-errors" class="text-red-500 text-sm mt-2" role="alert"></div>
+                                                <p class="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                                                    <svg class="w-4 h-4 shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                                    </svg>
+                                                    <span>PCI-DSS encrypted checkout. We never store your card details.</span>
+                                                </p>
+                                            </div>
+
+                                            <input type="radio" id="payment_stripe" name="payment_method" value="stripe" class="sr-only" checked>
+                                        </div>
+                                    @else
+                                    <label for="payment_stripe" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-[#005366] hover:shadow-md transition-all duration-300 payment-option payment-option--stripe bg-white {{ $defaultPaymentMethod === 'stripe' ? 'selected' : '' }}">
+                                        <input type="radio" id="payment_stripe" name="payment_method" value="stripe" class="w-6 h-6 text-[#005366] border-gray-300 focus:ring-[#005366] mr-5" @checked($defaultPaymentMethod === 'stripe')>
                                         <div class="flex items-center flex-1">
-                                            <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-4 mr-5 shadow-lg">
-                                                <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                            <div class="commerce-section-icon mr-5">
+                                                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                     <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.274 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.386-2.061 1.386-1.705 0-3.888-.921-5.811-1.758L4.443 24c2.254.893 5.18 1.758 7.83 1.758 2.532 0 4.633-.624 6.123-1.844 1.543-1.271 2.346-3.116 2.346-5.342 0-3.896-2.467-5.76-6.476-7.219z"/>
                                                 </svg>
                                             </div>
                                             <div class="flex-1">
-                                                <div class="flex items-center space-x-3">
+                                                <div class="flex items-center flex-wrap gap-2">
                                                     <span class="font-bold text-gray-900 text-xl">Credit Card (Stripe)</span>
-                                                    <span class="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-bold rounded-full shadow-md">SECURE</span>
+                                                    <span class="commerce-badge bg-[#005366] text-white">Recommended</span>
+                                                    <span class="commerce-badge bg-[#e2150c] text-white">Secure</span>
                                                 </div>
-                                                <p class="text-sm text-gray-600 mt-2">Direct credit card processing</p>
+                                                <p class="text-sm text-gray-600 mt-2">Visa, Mastercard, Amex & more — encrypted checkout</p>
                                                 <div class="flex items-center mt-3 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
                                                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -1025,62 +1093,62 @@ function buildCheckoutCustomizationInputs(customizations) {
                                     </label>
                                     
                                     <!-- Stripe Card Element -->
-                                    <div id="stripe-card-container" class="mt-4 p-6 border-2 border-purple-200 rounded-xl bg-gradient-to-r from-purple-50 to-blue-50">
+                                    <div id="stripe-card-container" class="mt-4 p-6 border-2 border-[#005366]/20 rounded-xl bg-gradient-to-br from-[#005366]/5 to-white{{ $defaultPaymentMethod !== 'stripe' ? ' hidden' : '' }}">
                                         <div class="flex items-center mb-4">
-                                            <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mr-3">
-                                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <div class="commerce-section-icon mr-3">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
                                                 </svg>
                                             </div>
-                                            <h4 class="font-bold text-purple-900 text-lg">💳 Credit Card Details</h4>
+                                            <h4 class="font-bold text-gray-900 text-lg">Enter card details</h4>
                                         </div>
                                         
-                                        <!-- Card Type Logos -->
                                         <div class="flex gap-3 mb-4 justify-center">
-                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded text-white text-xs font-bold flex items-center justify-center">VISA</div>
-                                            <div class="w-12 h-8 bg-gradient-to-r from-red-500 to-red-700 rounded text-white text-xs font-bold flex items-center justify-center">MC</div>
-                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-400 to-blue-600 rounded text-white text-xs font-bold flex items-center justify-center">AMEX</div>
-                                            <div class="w-12 h-8 bg-gradient-to-r from-orange-400 to-orange-600 rounded text-white text-xs font-bold flex items-center justify-center">DISC</div>
+                                            <div class="w-12 h-8 bg-gray-800 rounded text-white text-xs font-bold flex items-center justify-center">VISA</div>
+                                            <div class="w-12 h-8 bg-gray-700 rounded text-white text-xs font-bold flex items-center justify-center">MC</div>
+                                            <div class="w-12 h-8 bg-gray-600 rounded text-white text-xs font-bold flex items-center justify-center">AMEX</div>
+                                            <div class="w-12 h-8 bg-gray-500 rounded text-white text-xs font-bold flex items-center justify-center">DISC</div>
                                         </div>
 
-                                        <!-- Stripe Card Element Container -->
-                                        <div id="stripe-card-element" class="p-4 border-2 border-gray-200 rounded-xl bg-white">
-                                            <!-- Stripe Elements will be inserted here -->
+                                        <div class="stripe-card-shell">
+                                            <div id="stripe-card-element" class="w-full"></div>
                                         </div>
                                         <div id="stripe-card-errors" class="text-red-500 text-sm mt-2" role="alert"></div>
 
-                                        <!-- Security Notice -->
-                                        <div class="mt-4 p-3 bg-white/60 rounded-lg border border-purple-200">
+                                        <div class="mt-4 p-3 bg-white rounded-lg border border-gray-200">
                                             <div class="flex items-start">
-                                                <svg class="w-5 h-5 text-green-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                <svg class="w-5 h-5 text-green-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                                                 </svg>
-                                                <div class="text-sm text-purple-800">
-                                                    <p class="font-semibold mb-1">🔒 100% Secure Payment</p>
+                                                <div class="text-sm text-gray-700">
+                                                    <p class="font-semibold mb-1">100% Secure Payment</p>
                                                     <p>Your payment information is encrypted and processed securely by Stripe. We never store your card details.</p>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
+                                    @endif
                                 </div>
+                                @endif
 
+                                @if(!empty($paymentMethods['lianlian']))
                                 <!-- LianLian Pay -->
                                 <div class="relative">
-                                    <label for="payment_lianlian" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-blue-500 hover:shadow-xl transition-all duration-300 payment-option bg-white">
-                                        <input type="radio" id="payment_lianlian" name="payment_method" value="lianlian_pay" class="w-6 h-6 text-blue-600 border-gray-300 focus:ring-blue-500 mr-5">
+                                    <label for="payment_lianlian" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-[#005366] hover:shadow-md transition-all duration-300 payment-option bg-white">
+                                        <input type="radio" id="payment_lianlian" name="payment_method" value="lianlian_pay" class="w-6 h-6 text-[#005366] border-gray-300 focus:ring-[#005366] mr-5" @checked($defaultPaymentMethod === 'lianlian_pay')>
                                         <div class="flex items-center flex-1">
-                                            <div class="bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl p-4 mr-5 shadow-lg">
-                                                <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                            <div class="commerce-section-icon mr-5">
+                                                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                                                 </svg>
                                             </div>
                                             <div class="flex-1">
                                                 <div class="flex items-center space-x-3">
                                                     <span class="font-bold text-gray-900 text-xl">LianLian Pay</span>
-                                                    <span class="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-bold rounded-full shadow-md">RECOMMENDED</span>
+                                                    <span class="commerce-badge bg-[#005366] text-white">Recommended</span>
                                                 </div>
                                                 <p class="text-sm text-gray-600 mt-2">Credit Card & Digital Wallet with 3D Secure</p>
-                                                <div class="flex items-center mt-3 text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg">
+                                                <div class="flex items-center mt-3 text-sm text-[#005366] bg-blue-50 px-3 py-2 rounded-lg">
                                                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                                     </svg>
@@ -1091,21 +1159,20 @@ function buildCheckoutCustomizationInputs(customizations) {
                                     </label>
                                     
                                     <!-- LianLian Pay Form -->
-                                    <div id="lianlian-pay-info" class="hidden mt-4 p-6 border-2 border-orange-200 rounded-xl bg-gradient-to-r from-orange-50 to-red-50">
+                                    <div id="lianlian-pay-info" class="hidden mt-4 p-6 border border-gray-200 rounded-xl bg-gray-50">
                                         <div class="flex items-center mb-4">
-                                            <div class="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center mr-3">
-                                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <div class="commerce-section-icon mr-3">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                                                 </svg>
                                             </div>
-                                            <h4 class="font-bold text-orange-900 text-lg">💳 LianLian Pay Secure Checkout</h4>
+                                            <h4 class="font-bold text-gray-900 text-lg">LianLian Pay Secure Checkout</h4>
                                         </div>
                                         
-                                        <!-- Card Type Logos -->
                                         <div class="flex gap-3 mb-4 justify-center">
-                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded text-white text-xs font-bold flex items-center justify-center">VISA</div>
-                                            <div class="w-12 h-8 bg-gradient-to-r from-red-500 to-red-700 rounded text-white text-xs font-bold flex items-center justify-center">MC</div>
-                                            <div class="w-12 h-8 bg-gradient-to-r from-blue-400 to-blue-600 rounded text-white text-xs font-bold flex items-center justify-center">AMEX</div>
+                                            <div class="w-12 h-8 bg-gray-800 rounded text-white text-xs font-bold flex items-center justify-center">VISA</div>
+                                            <div class="w-12 h-8 bg-gray-700 rounded text-white text-xs font-bold flex items-center justify-center">MC</div>
+                                            <div class="w-12 h-8 bg-gray-600 rounded text-white text-xs font-bold flex items-center justify-center">AMEX</div>
                                         </div>
 
                                         <!-- LianLian Pay iframe Container -->
@@ -1118,29 +1185,30 @@ function buildCheckoutCustomizationInputs(customizations) {
                                             </div>
                                         </div>
 
-                                        <!-- Security Notice -->
-                                        <div class="mt-4 p-3 bg-white/60 rounded-lg border border-orange-200">
+                                        <div class="mt-4 p-3 bg-white rounded-lg border border-gray-200">
                                             <div class="flex items-start">
-                                                <svg class="w-5 h-5 text-green-600 mt-0.5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                <svg class="w-5 h-5 text-green-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                                                 </svg>
-                                                <div class="text-sm text-orange-800">
-                                                    <p class="font-semibold mb-1">🔒 Secure Payment</p>
+                                                <div class="text-sm text-gray-700">
+                                                    <p class="font-semibold mb-1">Secure Payment</p>
                                                     <p>Your card information is encrypted with 256-bit SSL. 3D Secure authentication may be required for additional security.</p>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+                                @endif
 
+                                @if(!empty($paymentMethods['paypal']))
                                 <!-- PayPal -->
                                 <div class="relative">
-                                    <label for="payment_paypal" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-blue-500 hover:shadow-xl transition-all duration-300 payment-option bg-white">
-                                        <input type="radio" id="payment_paypal" name="payment_method" value="paypal" class="w-6 h-6 text-blue-600 border-gray-300 focus:ring-blue-500 mr-5">
+                                    <label for="payment_paypal" class="flex items-center p-6 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-[#005366] hover:shadow-md transition-all duration-300 payment-option bg-white">
+                                        <input type="radio" id="payment_paypal" name="payment_method" value="paypal" class="w-6 h-6 text-[#005366] border-gray-300 focus:ring-[#005366] mr-5" @checked($defaultPaymentMethod === 'paypal')>
                                         <div class="flex items-center flex-1">
-                                            <div class="bg-blue-600 rounded-2xl p-4 mr-5 shadow-lg">
+                                            <div class="commerce-section-icon mr-5 p-3">
                                                 <img src="https://www.paypalobjects.com/webstatic/icon/pp258.png" 
-                                                     alt="PayPal" class="h-10 w-10">
+                                                     alt="PayPal" class="h-8 w-8">
                                             </div>
                                             <div class="flex-1">
                                                 <span class="font-bold text-gray-900 text-xl">PayPal</span>
@@ -1157,22 +1225,22 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 </div>
                                 
                                 <!-- PayPal Button Container -->
-                                <div id="paypal-button-container" class="hidden mt-4 p-6 border-2 border-blue-200 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50">
+                                <div id="paypal-button-container" class="hidden mt-4 p-6 border border-gray-200 rounded-xl bg-gray-50">
                                     <div class="flex items-center mb-4">
-                                        <div class="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white mr-3">
+                                        <div class="commerce-section-icon mr-3">
                                             <img src="https://www.paypalobjects.com/webstatic/icon/pp258.png" 
                                                  alt="PayPal" class="h-6 w-6">
                                         </div>
-                                        <h4 class="font-bold text-blue-900 text-lg">💳 PayPal Checkout</h4>
+                                        <h4 class="font-bold text-gray-900 text-lg">PayPal Checkout</h4>
                                     </div>
-                                    <!-- PayPal button will be rendered here -->
                                     <div id="paypal-button" class="min-h-[120px] flex items-center justify-center">
                                         <div class="text-center">
-                                            <div class="animate-spin w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full mx-auto mb-3"></div>
-                                            <p class="text-blue-600 text-sm">Loading PayPal...</p>
+                                            <div class="animate-spin w-8 h-8 border-4 border-gray-200 border-t-[#005366] rounded-full mx-auto mb-3"></div>
+                                            <p class="text-gray-600 text-sm">Loading PayPal...</p>
                                         </div>
                                     </div>
                                 </div>
+                                @endif
                                 
                             </div>
                             @error('payment_method')
@@ -1181,34 +1249,26 @@ function buildCheckoutCustomizationInputs(customizations) {
                         </div>
 
                         <!-- Submit Button -->
-                        <div class="mt-8 pt-6 border-t-2 border-gray-100 relative z-10">
-                            <button type="submit" 
-                                    class="w-full py-5 px-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group cursor-pointer">
-                                <span class="flex items-center justify-center relative z-20">
-                                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                                    </svg>
-                                    Secure Checkout
-                                    <svg class="w-6 h-6 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                                    </svg>
-                                </span>
-                                <!-- Shimmer effect -->
-                                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 -translate-x-full group-hover:translate-x-full transition-transform duration-700 z-10"></div>
+                        <div class="mt-8 pt-6 border-t border-gray-200 relative z-10">
+                            <button type="submit" class="btn-cta btn-cta--block text-lg">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                                Secure Checkout
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                                </svg>
                             </button>
                             
-                            <!-- Security Information -->
-                            <div class="mt-6 p-6 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-xl">
-                                <div class="flex items-center justify-center text-white">
-                                    <div class="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center mr-4">
-                                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
-                                        </svg>
-                                    </div>
-                                    <div class="text-center">
-                                        <h3 class="text-lg font-bold mb-1">🔒 100% Secure Checkout</h3>
-                                        <p class="text-green-100 text-sm">Your information is protected with 256-bit SSL encryption</p>
-                                    </div>
+                            <div class="commerce-security-note">
+                                <div class="commerce-security-note__icon">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="text-base font-bold mb-1">100% Secure Checkout</h3>
+                                    <p class="text-sm">Your information is protected with 256-bit SSL encryption</p>
                                 </div>
                             </div>
                         </div>
@@ -1218,11 +1278,11 @@ function buildCheckoutCustomizationInputs(customizations) {
             </div>
 
             <!-- Order Summary -->
-            <div class="order-1 lg:order-2 animate-slideInRight">
-                <div class="bg-white rounded-2xl shadow-lg p-6 lg:sticky lg:top-8 order-summary-container">
-                    <div class="flex items-center mb-6">
-                        <div class="w-8 h-8 rounded-lg bg-purple-500 flex items-center justify-center text-white mr-3">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="order-1 lg:order-2">
+                <div class="commerce-summary lg:sticky lg:top-8 order-summary-container">
+                    <div class="commerce-section-title mb-6">
+                        <div class="commerce-section-icon">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
                             </svg>
                         </div>
@@ -1234,20 +1294,14 @@ function buildCheckoutCustomizationInputs(customizations) {
                         @foreach($products as $item)
                             <div class="product-item p-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm transition flex gap-3" data-checkout-cart-item-id="{{ $item['cart_item']->id }}">
                                 @php
-                                    $media = $item['product']->getEffectiveMedia();
-                                    $imageUrl = null;
-                                    if ($media && count($media) > 0) {
-                                        if (is_string($media[0])) {
-                                            $imageUrl = $media[0];
-                                        } elseif (is_array($media[0])) {
-                                            $imageUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? null;
-                                        }
-                                    }
+                                    $cartLine = $item['cart_item'];
+                                    $imageUrl = $cartLine->resolveDisplayImage();
+                                    $displayName = $cartLine->resolveDisplayName();
                                 @endphp
                                 <div class="shrink-0">
                                     @if($imageUrl)
                                         <img src="{{ $imageUrl }}" 
-                                             alt="{{ $item['product']->name }}"
+                                             alt="{{ $displayName }}"
                                              class="w-14 h-14 object-cover rounded-lg">
                                     @else
                                         <div class="w-14 h-14 bg-gray-200 rounded-lg flex items-center justify-center">
@@ -1260,11 +1314,13 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-start justify-between gap-3">
-                                        <h3 class="font-semibold text-gray-900 text-sm truncate">{{ Str::limit($item['product']->name, 42) }}</h3>
+                                        <h3 class="font-semibold text-gray-900 text-sm commerce-line-clamp-2">{{ $displayName }}</h3>
                                         <div class="flex items-center gap-2 shrink-0">
-                                            <button onclick="openCheckoutEditCartModal({{ $item['cart_item']->id }})" class="p-1.5 text-gray-400 hover:text-blue-600" title="Edit item">
+                                            @if(!$cartLine->isStudioCustom())
+                                            <button onclick="openCheckoutEditCartModal({{ $item['cart_item']->id }})" class="p-1.5 text-gray-400 hover:text-[#005366]" title="Edit item">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                             </button>
+                                            @endif
                                             <p class="font-semibold text-gray-900">
                                                 {{ \App\Services\CurrencyService::formatPrice($item['total'], $currency ?? 'USD') }}
                                             </p>
@@ -1281,18 +1337,21 @@ function buildCheckoutCustomizationInputs(customizations) {
                                         </div>
                                     @endif
 
-                                    @if($item['cart_item']->customizations && count($item['cart_item']->customizations) > 0)
-                                        @php $cid = $item['cart_item']->id; @endphp
+                                    @if($item['cart_item']->visibleCustomizations())
+                                        @php $cid = $item['cart_item']->id; $visibleCust = $item['cart_item']->visibleCustomizations(); @endphp
                                         <div class="mt-2">
                                             <ul id="cust-list-{{ $cid }}" class="space-y-0.5">
-                                                @foreach($item['cart_item']->customizations as $k => $c)
+                                                @foreach($visibleCust as $k => $c)
+                                                    @if(!is_array($c))
+                                                        @continue
+                                                    @endif
                                                     <li class="text-[11px] text-gray-700 {{ $loop->iteration > 3 ? 'hidden more-'.$cid : '' }}">
                                                         <span class="text-gray-500">{{ $k }}:</span>
-                                                        <span class="font-medium customization-value" title="{{ $c['value'] }}">
-                                                            @if(strlen($c['value']) > 50)
-                                                                {{ Str::limit($c['value'], 50) }}
+                                                        <span class="font-medium customization-value" title="{{ $c['value'] ?? '' }}">
+                                                            @if(strlen((string) ($c['value'] ?? '')) > 50)
+                                                                {{ Str::limit((string) $c['value'], 50) }}
                                                             @else
-                                                                {{ $c['value'] }}
+                                                                {{ $c['value'] ?? '' }}
                                                             @endif
                                                         </span>
                                                         @if(isset($c['price']) && $c['price']>0)
@@ -1301,8 +1360,8 @@ function buildCheckoutCustomizationInputs(customizations) {
                                                     </li>
                                                 @endforeach
                                             </ul>
-                                            @if(count($item['cart_item']->customizations) > 3)
-                                                <button type="button" class="mt-1 text-[11px] text-blue-600 hover:underline" onclick="toggleCheckoutCustList({{ $cid }})" id="cust-toggle-{{ $cid }}">View more</button>
+                                            @if(count($visibleCust) > 3)
+                                                <button type="button" class="mt-1 text-[11px] text-[#005366] hover:underline" onclick="toggleCheckoutCustList({{ $cid }})" id="cust-toggle-{{ $cid }}">View more</button>
                                             @endif
                                         </div>
                                     @endif
@@ -1349,6 +1408,19 @@ function buildCheckoutCustomizationInputs(customizations) {
                         </div>
                     </div>
 
+                    @include('checkout.partials.discount-options', [
+                        'discountType' => $discountType ?? 'none',
+                        'discountAmount' => $discountAmount ?? 0,
+                        'discountedSubtotal' => $discountedSubtotal ?? ($subtotal ?? 0),
+                        'volumeEligible' => $volumeEligible ?? false,
+                        'volumeDiscountPercent' => $volumeDiscountPercent ?? 0,
+                        'volumePreview' => $volumePreview ?? [],
+                        'totalCartQuantity' => $totalCartQuantity ?? 0,
+                        'appliedPromoCode' => $appliedPromoCode ?? null,
+                        'volumeTiers' => $volumeTiers ?? [],
+                        'subtotal' => $subtotal ?? 0,
+                    ])
+
                     <!-- Order Totals -->
                     <div class="border-t border-gray-200 pt-4 space-y-3">
                         <div class="flex justify-between text-gray-600">
@@ -1357,12 +1429,28 @@ function buildCheckoutCustomizationInputs(customizations) {
                                 {{ \App\Services\CurrencyService::formatPrice($subtotal, $currency ?? 'USD') }}
                             </span>
                         </div>
+
+                        <div class="flex justify-between text-green-700 text-sm {{ ($discountAmount ?? 0) > 0 ? '' : 'hidden' }}" id="checkout-discount-line">
+                            <span id="checkout-discount-label">
+                                @if(($discountType ?? 'none') === 'volume')
+                                    Volume discount ({{ $volumeDiscountPercent ?? 0 }}%)
+                                @else
+                                    Promo discount
+                                @endif
+                            </span>
+                            <span class="font-semibold" id="checkout-discount-amount">-{{ \App\Services\CurrencyService::formatPrice($discountAmount ?? 0, $currency ?? 'USD') }}</span>
+                        </div>
                         
                         <!-- Shipping Zone is auto-detected from country selection -->
                         
                         <div class="flex justify-between text-gray-600" id="checkout-shipping-cost-row">
-                            <span id="checkout-shipping-label">Shipping</span>
-                            <span class="font-semibold" id="checkout-shipping-cost">{{ \App\Services\CurrencyService::formatPrice(0, $currency ?? 'USD') }}</span>
+                            <span id="checkout-shipping-label">
+                                Shipping
+                                @if(!empty($shippingDetails['country_name']) || !empty($defaultCountry))
+                                    ({{ $shippingDetails['country_name'] ?? $defaultCountry ?? '' }})
+                                @endif
+                            </span>
+                            <span class="font-semibold" id="checkout-shipping-cost">{{ \App\Services\CurrencyService::formatPrice($convertedShipping ?? $shippingCost ?? 0, $currency ?? 'USD') }}</span>
                         </div>
                         
                         <!-- Exchange Rate Display (only show if currency is not USD) -->
@@ -1390,42 +1478,34 @@ function buildCheckoutCustomizationInputs(customizations) {
                         
                         <div class="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-3 mt-3">
                             <span>Total</span>
-                            <span class="text-blue-600 total-display" id="checkout-total">
-                                {{ \App\Services\CurrencyService::formatPrice($convertedSubtotal ?? $subtotal, $currency ?? 'USD') }}
+                            <span class="text-[#005366] total-display" id="checkout-total">
+                                {{ \App\Services\CurrencyService::formatPrice($convertedTotal ?? $total, $currency ?? 'USD') }}
                             </span>
                         </div>
+
+                        @include('checkout.partials.discount-expiry-bar')
                     </div>
 
-                    <!-- Security Badge -->
-                    <div class="mt-6 p-6 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-xl text-white">
-                        <div class="text-center">
-                            <div class="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                                </svg>
-                            </div>
-                            <h3 class="font-bold text-xl mb-2">🔒 100% Secure Checkout</h3>
-                            <div class="space-y-1 text-green-100 text-sm">
-                                <div class="flex items-center justify-center">
-                                    <span class="mr-2">🔒</span>
-                                    <span>SSL Encrypted</span>
-                                </div>
-                                <div class="flex items-center justify-center">
-                                    <span class="mr-2">🛡️</span>
-                                    <span>PCI Compliant</span>
-                                </div>
-                                <div class="flex items-center justify-center">
-                                    <span class="mr-2">💳</span>
-                                    <span>Safe Payments</span>
-                                </div>
-                            </div>
+                    <div class="mt-6 commerce-security-note">
+                        <div class="commerce-security-note__icon">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-base mb-2">100% Secure Checkout</h3>
+                            <ul class="space-y-1 text-sm">
+                                <li>SSL Encrypted</li>
+                                <li>PCI Compliant</li>
+                                <li>Safe Payments</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
+</section>
 
 <!-- Checkout Edit Cart Modal -->
 <div id="checkoutEditCartModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
@@ -2504,20 +2584,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Set default selection to Stripe
-    const defaultPaymentRadio = document.querySelector('input[value="stripe"]');
+    // Set default payment method from admin settings
+    const defaultPaymentRadio = document.querySelector('input[name="payment_method"][value="' + CHECKOUT_DEFAULT_PAYMENT + '"]')
+        || document.querySelector('input[name="payment_method"]');
     if (defaultPaymentRadio) {
-        console.log('🎯 Setting default payment method to Stripe');
-        // Ensure it's checked
         defaultPaymentRadio.checked = true;
-        
-        // Handle payment method change (will prepare the Stripe UI)
         handlePaymentMethodChange();
-        
-        console.log('✅ Stripe is now the default payment method');
+    }
+
+    if (CHECKOUT_STRIPE_ONLY && !stripeCardElement && typeof initializeStripeElements === 'function') {
+        initializeStripeElements();
     }
     
-    // Initialize PayPal SDK when ready
+    // Initialize PayPal SDK when ready (only if enabled in admin)
     const initializePayPalSDK = () => {
         paypalSDKLoadAttempts++;
         
@@ -2573,16 +2652,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 style: {
                     base: {
                         fontSize: '16px',
-                        color: '#32325d',
+                        lineHeight: '24px',
+                        color: '#111827',
                         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                         '::placeholder': {
-                            color: '#aab7c4',
+                            color: '#9ca3af',
                         },
-                        iconColor: '#666EE8',
+                        iconColor: '#005366',
                     },
                     invalid: {
-                        color: '#fa755a',
-                        iconColor: '#fa755a',
+                        color: '#e2150c',
+                        iconColor: '#e2150c',
                     },
                 },
                 hidePostalCode: true,
@@ -2737,7 +2817,9 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // Start checking for PayPal SDK
-    initializePayPalSDK();
+    if (CHECKOUT_PAYMENT_METHODS && CHECKOUT_PAYMENT_METHODS.paypal) {
+        initializePayPalSDK();
+    }
     
     // Form submission handler
     form.addEventListener('submit', function(e) {
@@ -3204,6 +3286,8 @@ document.addEventListener('DOMContentLoaded', function() {
             tipInput.value = tip;
         }
     }
+
+    window.updateCheckoutTotal = updateTotal;
     
     // Checkout shipping calculation functions - define in DOMContentLoaded
     // Get products with categories - will be initialized after checkoutItemsData is available
@@ -3856,9 +3940,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Convert to current currency if needed
-        const costConverted = CHECKOUT_CURRENCY !== 'USD' && CHECKOUT_CURRENCY_RATE > 0
+        let costConverted = CHECKOUT_CURRENCY !== 'USD' && CHECKOUT_CURRENCY_RATE > 0
             ? totalShippingCost * CHECKOUT_CURRENCY_RATE
             : totalShippingCost;
+
+        const discountedSubtotalUsd = CHECKOUT_CURRENCY !== 'USD' && CHECKOUT_CURRENCY_RATE > 0
+            ? (parseFloat(CHECKOUT_CONVERTED_SUBTOTAL) || 0) / CHECKOUT_CURRENCY_RATE
+            : (parseFloat(CHECKOUT_CONVERTED_SUBTOTAL) || 0);
+
+        if (discountedSubtotalUsd >= CHECKOUT_FREE_SHIPPING_THRESHOLD_USD) {
+            totalShippingCost = 0;
+            costConverted = 0;
+        }
         
         // Final zoneName: prioritize currentZoneName (zone selected from dropdown) over zoneName from rate
         const finalZoneName = currentZoneName || zoneName;
@@ -3952,6 +4045,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update total - this will recalculate the total with new shipping cost
         updateTotal();
     }
+
+    window.updateCheckoutShippingDisplay = updateCheckoutShippingDisplay;
     
     /**
      * Get zone ID from country code
@@ -4072,8 +4167,8 @@ document.addEventListener('DOMContentLoaded', function() {
             updateCheckoutShippingDisplay(actualZoneId);
         }, 100);
     }
-    
-    // Initialize shipping cost on page load
+
+    window.updateShippingFromCountry = updateShippingFromCountry;
     function initializeCheckoutShipping() {
         let selectedZoneId = null;
         
@@ -4152,26 +4247,29 @@ document.addEventListener('DOMContentLoaded', function() {
 @php
     $checkoutItems = [];
     foreach ($products as $item) {
-        // Get categories from product
-        $categories = $item['product']->categories ?? collect();
+        $cartLine = $item['cart_item'];
+        $product = $item['product'];
+        $categories = $product?->categories ?? collect();
         if (!($categories instanceof Collection)) {
             $categories = collect($categories);
         }
-        
+
         $checkoutItems[] = [
-            'id' => $item['cart_item']->id,
-            'quantity' => $item['cart_item']->quantity,
-            'price' => (float) $item['cart_item']->price,
+            'id' => $cartLine->id,
+            'quantity' => $cartLine->quantity,
+            'price' => (float) $cartLine->price,
             'product' => [
-                'id' => $item['product']->id,
-                'name' => $item['product']->name,
-                'sku' => $item['product']->sku ?? null,
-                'variants' => $item['product']->variants,
-                'media' => $item['product']->media ?? $item['product']->getEffectiveMedia(),
-                'base_price' => (float) ($item['product']->base_price ?? 0),
-                'price' => (float) ($item['product']->price ?? 0),
-                'template' => $item['product']->template ? ['base_price' => (float) $item['product']->template->base_price] : null,
-                'categories' => $categories->map(function($cat) {
+                'id' => $product?->id,
+                'name' => $cartLine->resolveDisplayName(),
+                'sku' => $product?->sku,
+                'variants' => $product?->variants,
+                'media' => $cartLine->isStudioCustom()
+                    ? [$cartLine->resolveDisplayImage()]
+                    : ($product?->media ?? $product?->getEffectiveMedia()),
+                'base_price' => (float) ($product?->base_price ?? 0),
+                'price' => (float) ($product?->price ?? $cartLine->price),
+                'template' => $product?->template ? ['base_price' => (float) $product->template->base_price] : null,
+                'categories' => $categories->map(function ($cat) {
                     return [
                         'id' => $cat->id ?? null,
                         'name' => $cat->name ?? null,
@@ -4337,6 +4435,124 @@ function saveCheckoutCartChanges(cartItemId) {
         method:'PUT', headers:{ 'Content-Type':'application/json','X-CSRF-TOKEN': checkoutCsrfToken },
         body: JSON.stringify({ quantity: qty, selected_variant: selectedVariant, customizations: customizations, price: unitPrice })
     }).then(r=>r.json()).then(data=>{ if(data.success){ window.location.reload(); } else { alert('Failed to update cart item'); }}).catch(err=>{ console.error(err); alert('An error occurred'); });
+}
+
+function getCheckoutCustomerEmail() {
+    return document.getElementById('customer_email')?.value?.trim() || '';
+}
+
+function applyCheckoutDiscountResponse(data) {
+    if (!data || !data.discount) return;
+    const d = data.discount;
+    CHECKOUT_CONVERTED_SUBTOTAL = parseFloat(d.discounted_subtotal) || 0;
+    CHECKOUT_DISCOUNT_AMOUNT = parseFloat(d.discount_amount) || 0;
+    CHECKOUT_BASE_SUBTOTAL = CHECKOUT_CURRENCY !== 'USD' && CHECKOUT_CURRENCY_RATE > 0
+        ? CHECKOUT_CONVERTED_SUBTOTAL / CHECKOUT_CURRENCY_RATE
+        : CHECKOUT_CONVERTED_SUBTOTAL;
+
+    const typeInput = document.getElementById('checkout-discount-type');
+    const codeInput = document.getElementById('checkout-promo-code-hidden');
+    if (typeInput) typeInput.value = d.discount_type || 'none';
+    if (codeInput) codeInput.value = d.promo_code || '';
+
+    document.querySelectorAll('input[name="checkout_discount_choice"]').forEach(radio => {
+        radio.checked = radio.value === (d.discount_type || 'none');
+    });
+
+    const volumePercentLabel = document.getElementById('checkout-volume-percent-label');
+    if (volumePercentLabel && d.volume_discount_percent != null) {
+        volumePercentLabel.textContent = String(d.volume_discount_percent || 0);
+    }
+
+    document.querySelectorAll('#checkout-discount-panel [data-discount-option]').forEach(option => {
+        const selected = option.getAttribute('data-discount-option') === (d.discount_type || 'none');
+        option.classList.toggle('border-[#005366]', selected);
+        option.classList.toggle('bg-[#005366]/5', selected);
+        option.classList.toggle('border-gray-200', !selected);
+    });
+
+    const discountLine = document.getElementById('checkout-discount-line');
+    const discountLabel = document.getElementById('checkout-discount-label');
+    const discountAmountEl = document.getElementById('checkout-discount-amount');
+
+    if (CHECKOUT_DISCOUNT_AMOUNT > 0 && discountLine) {
+        discountLine.classList.remove('hidden');
+        if (discountLabel) {
+            discountLabel.textContent = d.discount_type === 'volume'
+                ? 'Volume discount (' + (d.volume_discount_percent || 0) + '%)'
+                : 'Promo discount';
+        }
+        if (discountAmountEl) {
+            discountAmountEl.textContent = '-' + formatPrice(CHECKOUT_DISCOUNT_AMOUNT, CHECKOUT_CURRENCY);
+        }
+    } else if (discountLine) {
+        discountLine.classList.add('hidden');
+    }
+
+    if (typeof window.syncDiscountExpiryBar === 'function') {
+        window.syncDiscountExpiryBar(d.hold_remaining_seconds, d.hold_duration_seconds);
+    }
+
+    if (typeof window.updateCheckoutTotal === 'function') {
+        window.updateCheckoutTotal();
+    }
+
+    const countrySelect = document.getElementById('country');
+    if (countrySelect && countrySelect.value && typeof window.updateShippingFromCountry === 'function') {
+        window.updateShippingFromCountry();
+    } else if (typeof window.updateCheckoutShippingDisplay === 'function') {
+        window.updateCheckoutShippingDisplay(document.getElementById('shipping_zone_id')?.value || null);
+    }
+}
+
+function setCheckoutDiscountType(type) {
+    fetch('{{ route('checkout.discount.set-type') }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': checkoutCsrfToken,
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify({ discount_type: type, email: getCheckoutCustomerEmail() }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            alert(data.message || 'Could not update discount.');
+            return;
+        }
+        applyCheckoutDiscountResponse(data);
+        const msg = document.getElementById('checkout-promo-message');
+        if (msg && type !== 'promo') msg.textContent = '';
+    })
+    .catch(err => console.error(err));
+}
+
+function applyCheckoutPromoCode() {
+    const code = document.getElementById('checkout-promo-code-input')?.value?.trim();
+    if (!code) return;
+
+    fetch('{{ route('checkout.discount.apply-promo') }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': checkoutCsrfToken,
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify({ code: code, email: getCheckoutCustomerEmail() }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        const msg = document.getElementById('checkout-promo-message');
+        if (!data.success) {
+            if (msg) { msg.textContent = data.message || 'Invalid code'; msg.className = 'text-xs mt-2 text-red-600'; }
+            return;
+        }
+        document.querySelector('input[name="checkout_discount_choice"][value="promo"]')?.click();
+        if (msg) { msg.textContent = 'Applied: ' + (data.discount?.promo_code || code); msg.className = 'text-xs mt-2 text-green-700'; }
+        applyCheckoutDiscountResponse(data);
+    })
+    .catch(err => console.error(err));
 }
 
 </script>

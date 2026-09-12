@@ -62,6 +62,7 @@ class ProductTemplateController extends Controller
             'name' => 'required|string|max:255',
             'category_id' => 'required|exists:categories,id',
             'base_price' => 'required|numeric|min:0',
+            'list_price' => 'required|numeric|min:0',
             'description' => 'nullable|string',
             'media.*' => 'nullable|mimes:jpeg,png,jpg,gif,mp4,mov,avi|max:10240',
             'allow_customization' => 'nullable|boolean',
@@ -79,7 +80,8 @@ class ProductTemplateController extends Controller
             'variants.*.variant_name' => 'required_with:variants|string|max:255',
             'variants.*.variant_key' => 'nullable|string|max:255',
             'variants.*.attributes' => 'nullable|string',
-            'variants.*.price' => 'nullable|numeric|min:0',
+            'variants.*.price' => 'required_with:variants.*.variant_name|numeric|min:0',
+            'variants.*.list_price' => 'required_with:variants.*.variant_name|numeric|min:0',
             'variants.*.quantity' => 'nullable|integer|min:0',
             'variants.*.media' => 'nullable|mimes:jpeg,png,jpg,gif,mp4,mov,avi|max:10240',
         ]);
@@ -168,6 +170,8 @@ class ProductTemplateController extends Controller
                         $variantData['attributes'] = [];
                     }
 
+                    $variantData = $this->fillTemplateVariantDefaults($variantData, $template->base_price, $template->list_price);
+
                     Log::info("Creating variant with media: " . json_encode($variantMediaUrls));
                     Log::info("Creating variant with attributes: " . json_encode($variantData['attributes']));
 
@@ -225,6 +229,7 @@ class ProductTemplateController extends Controller
             'name' => 'required|string|max:255',
             'category_id' => 'required|exists:categories,id',
             'base_price' => 'required|numeric|min:0',
+            'list_price' => 'required|numeric|min:0',
             'description' => 'nullable|string',
             'media.*' => 'nullable|mimes:jpeg,png,jpg,gif,mp4,mov,avi|max:10240',
             'allow_customization' => 'nullable|boolean',
@@ -242,7 +247,8 @@ class ProductTemplateController extends Controller
             'variants.*.variant_name' => 'required_with:variants|string|max:255',
             'variants.*.variant_key' => 'nullable|string|max:255',
             'variants.*.attributes' => 'nullable|string',
-            'variants.*.price' => 'nullable|numeric|min:0',
+            'variants.*.price' => 'required_with:variants.*.variant_name|numeric|min:0',
+            'variants.*.list_price' => 'required_with:variants.*.variant_name|numeric|min:0',
             'variants.*.quantity' => 'nullable|integer|min:0',
             'variants.*.media' => 'nullable|mimes:jpeg,png,jpg,gif,mp4,mov,avi|max:10240',
         ]);
@@ -370,6 +376,8 @@ class ProductTemplateController extends Controller
                         $variantData['attributes'] = [];
                     }
 
+                    $variantData = $this->fillTemplateVariantDefaults($variantData, $productTemplate->base_price, $productTemplate->list_price);
+
                     TemplateVariant::create($variantData);
                     Log::info("Created variant: {$variantData['variant_name']}", [
                         'media_count' => count($variantMediaUrls),
@@ -409,6 +417,7 @@ class ProductTemplateController extends Controller
                 'variant_name' => $variant->variant_name,
                 'attributes' => $variant->attributes, // Clone attributes
                 'price' => $variant->price,
+                'list_price' => $variant->list_price,
                 'quantity' => $variant->quantity,
                 'media' => $variant->media,
             ]);
@@ -438,5 +447,26 @@ class ProductTemplateController extends Controller
 
         return redirect()->route('admin.product-templates.index')
             ->with('success', 'Template deleted successfully.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $variantData
+     * @return array<string, mixed>
+     */
+    protected function fillTemplateVariantDefaults(array $variantData, mixed $basePrice, mixed $listPrice = null): array
+    {
+        if (! isset($variantData['price']) || $variantData['price'] === '' || $variantData['price'] === null) {
+            $variantData['price'] = $basePrice;
+        }
+
+        if (! isset($variantData['list_price']) || $variantData['list_price'] === '' || $variantData['list_price'] === null) {
+            $variantData['list_price'] = $listPrice;
+        }
+
+        if (! isset($variantData['quantity']) || $variantData['quantity'] === '' || $variantData['quantity'] === null) {
+            $variantData['quantity'] = 100;
+        }
+
+        return $variantData;
     }
 }

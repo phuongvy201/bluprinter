@@ -3,64 +3,47 @@
 @section('title', $page->meta_title ?? $page->title)
 @section('meta_description', $page->meta_description ?? $page->excerpt)
 
+{{-- Legacy view name; prefer pages.templates.* via PageController --}}
 @section('content')
-<!-- Page Header -->
-<div class="bg-gradient-to-r from-[#005366] to-[#003d4d] text-white py-16">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h1 class="text-4xl md:text-5xl font-bold mb-4">{{ $page->title }}</h1>
-        @if($page->excerpt)
-            <p class="text-xl text-gray-100">{{ $page->excerpt }}</p>
-        @endif
-        <div class="flex items-center justify-center space-x-4 text-sm text-gray-200 mt-6">
-            <span class="flex items-center">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                {{ $page->updated_at->format('M d, Y') }}
-            </span>
-            <span class="flex items-center">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                </svg>
-                {{ number_format($page->views) }} views
-            </span>
-        </div>
-    </div>
-</div>
+@include('pages.partials.styles')
 
-<!-- Page Content -->
-<div class="bg-gray-50 py-12">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="bg-white rounded-2xl shadow-sm p-8 md:p-12">
-            @if($page->featured_image)
-                <div class="mb-8 rounded-xl overflow-hidden">
-                    <img src="{{ Storage::url($page->featured_image) }}" alt="{{ $page->title }}" class="w-full h-auto">
-                </div>
+<div class="page-shell page-body-font">
+    <header class="relative overflow-hidden bg-[var(--page-petrol)] text-white">
+        <div class="absolute inset-0 opacity-40"
+             style="background:
+                radial-gradient(ellipse 70% 80% at 10% 20%, rgba(242,101,34,0.45), transparent 55%),
+                radial-gradient(ellipse 50% 60% at 90% 80%, rgba(226,21,12,0.28), transparent 50%),
+                linear-gradient(135deg, #005366 0%, #003d4d 100%);">
+        </div>
+        <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 text-center">
+            <p class="page-display text-xs tracking-[0.28em] text-white/70 page-reveal">Bluprinter</p>
+            <h1 class="page-display mt-3 text-4xl md:text-5xl lg:text-[3.4rem] leading-[1.05] page-reveal page-reveal-delay-1">
+                {{ $page->title }}
+            </h1>
+            @if($page->excerpt)
+                <p class="mt-5 text-lg text-white/90 max-w-2xl mx-auto page-reveal page-reveal-delay-2">{{ $page->excerpt }}</p>
             @endif
-
-            <div class="prose prose-lg max-w-none">
-                {!! $page->content !!}
+            <div class="mt-7 flex justify-center page-reveal page-reveal-delay-3">
+                @include('pages.partials.meta-row')
             </div>
         </div>
+    </header>
 
-        <!-- Child Pages -->
-        @if($childPages->isNotEmpty())
-            <div class="mt-12">
-                <h2 class="text-2xl font-bold text-gray-900 mb-6">Related Pages</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    @foreach($childPages as $child)
-                        <a href="{{ route('page.show', $child->slug) }}" class="bg-white rounded-xl shadow-sm p-6 hover:shadow-lg transition-all">
-                            <h3 class="text-lg font-bold text-gray-900 mb-2 hover:text-[#005366]">{{ $child->title }}</h3>
-                            @if($child->excerpt)
-                                <p class="text-gray-600 text-sm">{{ Str::limit($child->excerpt, 120) }}</p>
-                            @endif
-                        </a>
-                    @endforeach
+    <div class="bg-[var(--page-paper)] py-12 md:py-16">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <article class="bg-white border border-[#dce7eb] px-6 py-8 sm:px-10 sm:py-12 page-reveal page-reveal-delay-1">
+                @if($page->featuredImageUrl())
+                    <figure class="-mx-6 sm:-mx-10 -mt-8 sm:-mt-12 mb-8 overflow-hidden">
+                        <img src="{{ $page->featuredImageUrl() }}" alt="{{ $page->title }}" class="w-full max-h-[28rem] object-cover">
+                    </figure>
+                @endif
+                <div class="page-prose">
+                    {!! $page->content !!}
                 </div>
-            </div>
-        @endif
+            </article>
+
+            @include('pages.partials.child-pages')
+        </div>
     </div>
 </div>
 @endsection
-

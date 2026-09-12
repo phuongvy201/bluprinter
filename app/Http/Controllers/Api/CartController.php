@@ -18,19 +18,29 @@ class CartController extends Controller
     {
         try {
             $request->validate([
-                'id' => 'required|exists:products,id',
+                'id' => 'nullable|integer|exists:products,id',
                 'quantity' => 'required|integer|min:1',
                 'price' => 'required|numeric|min:0',
                 'selectedVariant' => 'nullable|array',
                 'customizations' => 'nullable|array'
             ]);
 
-            $product = Product::findOrFail($request->id);
+            $productId = $request->id ? (int) $request->id : null;
+            $product = $productId ? Product::findOrFail($productId) : null;
             $sessionId = session()->getId();
             $userId = Auth::id();
 
+            $isStudio = (bool) data_get($request->customizations, '_studio.standalone');
+            if (!$product && !$isStudio) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Product is required.',
+                ], 422);
+            }
+
             // Find existing cart item
-            $cartItems = Cart::where('product_id', $request->id)
+            $cartItems = Cart::query()
+                ->when($productId, fn ($query) => $query->where('product_id', $productId), fn ($query) => $query->whereNull('product_id'))
                 ->where(function ($query) use ($sessionId, $userId) {
                     if ($userId) {
                         $query->where('user_id', $userId);
@@ -62,13 +72,19 @@ class CartController extends Controller
                 $cartItem = Cart::create([
                     'session_id' => $userId ? null : $sessionId,
                     'user_id' => $userId,
-                    'product_id' => $request->id,
-                    'variant_id' => $request->selectedVariant['id'] ?? null,
+                    'product_id' => $productId,
+                    'variant_id' => $productId ? ($request->selectedVariant['id'] ?? null) : null,
                     'quantity' => $request->quantity,
                     'price' => $request->price,
                     'selected_variant' => $request->selectedVariant,
                     'customizations' => $request->customizations
                 ]);
+            }
+
+            $cartItem->refresh();
+            $effectivePrice = $cartItem->getEffectiveUnitPrice();
+            if (abs($effectivePrice - (float) $cartItem->price) > 0.009) {
+                $cartItem->update(['price' => $effectivePrice]);
             }
 
             Log::info('Item added to cart', [
@@ -79,7 +95,9 @@ class CartController extends Controller
                 'quantity' => $cartItem->quantity
             ]);
 
-            $this->trackTikTokAddToCartEvent($request, $product, $cartItem->quantity, $request->price);
+            if ($product) {
+                $this->trackTikTokAddToCartEvent($request, $product, $cartItem->quantity, $request->price);
+            }
 
             return response()->json([
                 'success' => true,
@@ -115,16 +133,19 @@ class CartController extends Controller
                 })
                 ->get();
 
-            // Transform cart items to include media
+            // Transform cart items to include media and resolved pricing
             $cartItems->each(function ($item) {
                 if ($item->product) {
                     $item->product->media = $item->product->getEffectiveMedia();
                 }
+
+                $item->effective_unit_price = $item->getEffectiveUnitPrice();
+                $item->line_total = $item->getTotalPrice();
             });
 
             $totalItems = $cartItems->sum('quantity');
             $totalPrice = $cartItems->sum(function ($item) {
-                return $item->getTotalPriceWithCustomizations();
+                return $item->getTotalPrice();
             });
 
             // Get currency and rate
@@ -157,8 +178,9 @@ class CartController extends Controller
                 // Prepare cart items for shipping calculation
                 // Shipping calculator expects USD prices, so we need to convert back to USD
                 $items = $cartItems->map(function ($item) use ($currency, $currencyRate) {
-                    // Convert price back to USD for shipping calculation
-                    $priceInUSD = $currency !== 'USD' ? $item->price / $currencyRate : $item->price;
+                    $unitPrice = $item->getEffectiveUnitPrice();
+                    $priceInUSD = $currency !== 'USD' ? $unitPrice / $currencyRate : $unitPrice;
+
                     return [
                         'product_id' => $item->product_id,
                         'quantity' => $item->quantity,

@@ -39,6 +39,48 @@ class OrderItem extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function resolveDisplayImage(): string
+    {
+        $options = is_array($this->product_options) ? $this->product_options : [];
+        $customs = $options['customizations'] ?? [];
+        if (! is_array($customs)) {
+            $customs = [];
+        }
+        $studio = $customs['_studio']['image'] ?? $customs['Custom design']['image'] ?? '';
+        if (is_string($studio) && $studio !== '') {
+            return $studio;
+        }
+
+        $media = $this->product?->getEffectiveMedia();
+        if (is_array($media) && $media !== []) {
+            $first = $media[0];
+            if (is_string($first) && $first !== '') {
+                return $first;
+            }
+            if (is_array($first)) {
+                return (string) ($first['url'] ?? $first['path'] ?? '');
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function visibleCustomizations(): array
+    {
+        $options = is_array($this->product_options) ? $this->product_options : [];
+        $customs = $options['customizations'] ?? [];
+        if (! is_array($customs)) {
+            return [];
+        }
+
+        return collect($customs)
+            ->reject(fn ($value, $key) => str_starts_with((string) $key, '_'))
+            ->all();
+    }
+
     // Accessor for backward compatibility
     public function getPriceAttribute()
     {

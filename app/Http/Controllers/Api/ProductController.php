@@ -164,6 +164,7 @@ class ProductController extends Controller
                 'name' => $request->name,
                 'slug' => $slug,
                 'template_id' => $request->template_id,
+                'category_id' => $template->category_id,
                 'shop_id' => $shopId,
                 'status' => 'active',
                 'created_by' => 'api',
@@ -171,6 +172,10 @@ class ProductController extends Controller
                 // Copy từ template nếu không được cung cấp
                 'description' => $request->description ?? $template->description,
                 'price' => $request->price ?? $template->base_price,
+                'list_price' => $request->list_price ?? $template->list_price,
+
+                'allow_customization' => (bool) $template->allow_customization,
+                'customizations' => $template->customizations,
 
                 // Media: Ưu tiên media mới upload, fallback về template media
                 'media' => !empty($processedMediaUrls) ? $processedMediaUrls : ($template->media ?? []),
@@ -213,6 +218,7 @@ class ProductController extends Controller
                             'attributes' => $templateVariant->attributes ?? [],
                             'sku' => $uniqueSku, // Truly unique SKU
                             'price' => $templateVariant->price ?? $template->base_price ?? 0,
+                            'list_price' => $templateVariant->list_price ?? $template->list_price,
                             'quantity' => $request->quantity ?? 999,
                             'media' => $templateVariant->media ?? $template->media ?? [],
                         ];

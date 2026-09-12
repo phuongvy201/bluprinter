@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Page;
-use Illuminate\Http\Request;
 
 class PageController extends Controller
 {
@@ -21,14 +20,12 @@ class PageController extends Controller
             ->published()
             ->firstOrFail();
 
-        // Increment views
         $page->incrementViews();
 
-        // Get child pages if any
         $childPages = $page->children()
             ->published()
             ->get();
 
-        return view('pages.show', compact('page', 'childPages'));
+        return view($page->resolveTemplateView(), compact('page', 'childPages'));
     }
 }

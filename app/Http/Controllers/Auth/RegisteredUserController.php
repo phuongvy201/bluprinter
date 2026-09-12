@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\PromoCodeService;
 use App\Services\TikTokEventsService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
@@ -50,6 +51,18 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
+        $promoMessage = '';
+        $promoResult = app(PromoCodeService::class)->claimAndSendFixedPromo(
+            'signup',
+            $user->email,
+            $user->name,
+            $user->id,
+        );
+
+        if ($promoResult['success'] ?? false) {
+            $promoMessage = ' Promo code ' . ($promoResult['code'] ?? 'SIGNUP10') . ' has been sent to your email.';
+        }
+
         $tikTok = app(TikTokEventsService::class);
         if ($tikTok->enabled()) {
             $tikTok->track(
@@ -72,7 +85,7 @@ class RegisteredUserController extends Controller
 
         // Redirect to home with message to verify email (NOT dashboard)
         return redirect()->intended(route('home', absolute: false))
-            ->with('success', 'Registration successful! Please check your email to verify your account.');
+            ->with('success', 'Registration successful! Please check your email to verify your account.' . $promoMessage);
     }
 
     protected function validateRecaptcha(Request $request): void

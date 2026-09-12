@@ -62,6 +62,7 @@
                     @enderror
                 </div>
 
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Base Price -->
                 <div>
                     <label for="base_price" class="block text-sm font-medium text-gray-700 mb-2">Base Price *</label>
@@ -79,7 +80,27 @@
                     @error('base_price')
                         <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                     @enderror
-                    <p class="mt-1 text-xs text-gray-500">Giá này sẽ tự động được áp dụng cho tất cả variants</p>
+                    <p class="mt-1 text-xs text-gray-500">Giá bán. Tự động áp dụng cho tất cả variants.</p>
+                </div>
+
+                <div>
+                    <label for="list_price" class="block text-sm font-medium text-gray-700 mb-2">List Price *</label>
+                        <input type="number"
+                               id="list_price"
+                               name="list_price"
+                               value="{{ old('list_price') }}"
+                               step="0.01"
+                               min="0"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('list_price') border-red-500 @enderror"
+                               placeholder="0.00"
+                               onchange="applyListPriceToAllVariants()"
+                               oninput="applyListPriceToAllVariants()"
+                               required>
+                    @error('list_price')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-gray-500">Giá niêm yết (MSRP). Hiện gạch ngang khi cao hơn giá bán.</p>
+                </div>
                 </div>
 
                 <!-- Description -->
@@ -859,10 +880,18 @@ function displayVariants(combinations) {
                             </th>
                             <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                 <div class="flex items-center">
+                                    <svg class="w-4 h-4 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                                    </svg>
+                                    List Price *
+                                </div>
+                            </th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                <div class="flex items-center">
                                     <svg class="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
                                     </svg>
-                                    Price
+                                    Base Price *
                                 </div>
                             </th>
                             <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -889,6 +918,8 @@ function displayVariants(combinations) {
     // Get base price value
     const basePriceInput = document.getElementById('base_price');
     const basePrice = basePriceInput ? basePriceInput.value : '';
+    const listPriceInput = document.getElementById('list_price');
+    const listPrice = listPriceInput ? listPriceInput.value : '';
     
     combinations.forEach((combination, index) => {
         const variantName = combination.map(c => c.value).join('/');
@@ -922,11 +953,23 @@ function displayVariants(combinations) {
                     </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
+                        <input type="number"
+                               name="variants[${index}][list_price]"
+                               step="0.01"
+                               min="0"
+                               value="${listPrice}"
+                               required
+                               class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors font-medium"
+                               placeholder="0.00"
+                               onchange="highlightVariant(this)">
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
                         <input type="number" 
                                name="variants[${index}][price]" 
                                step="0.01" 
                                min="0" 
                                value="${basePrice}"
+                               required
                                class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors font-medium"
                                placeholder="0.00"
                                onchange="highlightVariant(this)">
@@ -937,7 +980,7 @@ function displayVariants(combinations) {
                            min="0" 
                            value="100"
                            class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors font-medium"
-                           placeholder="0"
+                           placeholder="100"
                            onchange="highlightVariant(this)">
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -993,19 +1036,28 @@ function applyBasePriceToAllVariants() {
     
     const basePrice = basePriceInput.value;
     
-    // Find all variant price inputs
-    const variantPriceInputs = document.querySelectorAll('input[name*="variants"][name*="[price]"]');
+    const variantPriceInputs = document.querySelectorAll('input[name*="variants"][name$="[price]"]');
     
     if (variantPriceInputs.length === 0) return;
     
-    // Update all variant prices
     variantPriceInputs.forEach(input => {
         input.value = basePrice;
-        // Highlight the variant row to show it was updated
         highlightVariant(input);
     });
-    
-    console.log(`Đã áp dụng giá base_price (${basePrice}) cho ${variantPriceInputs.length} variants`);
+}
+
+function applyListPriceToAllVariants() {
+    const listPriceInput = document.getElementById('list_price');
+    if (!listPriceInput) return;
+
+    const listPrice = listPriceInput.value;
+    const variantListPriceInputs = document.querySelectorAll('input[name*="variants"][name$="[list_price]"]');
+    if (variantListPriceInputs.length === 0) return;
+
+    variantListPriceInputs.forEach(input => {
+        input.value = listPrice;
+        highlightVariant(input);
+    });
 }
 
 function removeVariant(button) {

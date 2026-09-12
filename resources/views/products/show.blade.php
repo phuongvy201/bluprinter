@@ -8,20 +8,44 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
 @php
-    $categories = $product->categories ?? collect();
-    if (!($categories instanceof \Illuminate\Support\Collection)) {
-        $categories = collect($categories);
-    }
-    $primaryCategory = optional($categories->first())->name ?? null;
-    
-    // Get currency for current domain
+    $displayCategory = $product->resolveDisplayCategory();
+    $primaryCategory = $displayCategory['name'] ?? null;
+    $displayTitle = $product->getDisplayTitle();
+    $activeFlashDeal = $product->activeFlashDeal;
+    $isFlashSale = $activeFlashDeal !== null;
+    $flashDiscountPct = $isFlashSale ? (int) $product->flashDiscountPercent() : 0;
+    $flashOriginalPriceUsd = $isFlashSale ? (float) $activeFlashDeal->original_price : null;
+    $flashEndsAt = $isFlashSale ? $activeFlashDeal->ends_at : null;
     $currentCurrency = currency();
     $currencySymbol = currency_symbol();
     $currentCurrencyRate = currency_rate() ?? 1.0;
-    $productPriceUSD = (float) ($product->price ?? $product->base_price);
+    $productPriceUSD = (float) $product->getEffectivePrice();
+
+    // PDP luôn chọn variant đầu → giá flash phải theo variant (không lấy products.price đã giảm một mình)
+    if ($isFlashSale && $product->relationLoaded('variants') && $product->variants->isNotEmpty()) {
+        $firstVariant = $product->variants->first();
+        $productPriceUSD = (float) $firstVariant->getFinalPrice();
+        $flashOriginalPriceUsd = (float) $firstVariant->getFlashDisplayOriginalPrice();
+    } elseif ($isFlashSale && ! $product->relationLoaded('variants')) {
+        $firstVariant = $product->variants()->first();
+        if ($firstVariant) {
+            $firstVariant->setRelation('product', $product);
+            $productPriceUSD = (float) $firstVariant->getFinalPrice();
+            $flashOriginalPriceUsd = (float) $firstVariant->getFlashDisplayOriginalPrice();
+        }
+    }
+
     $productPriceConverted = convert_currency($productPriceUSD);
-    $productBasePriceUSD = (float) ($product->base_price ?? 0);
-    $productBasePriceConverted = convert_currency($productBasePriceUSD);
+    $productListPriceUSD = (float) $product->getCompareAtPrice();
+    $productListPriceConverted = convert_currency($productListPriceUSD);
+    $hasListDiscount = ! $isFlashSale && $productListPriceUSD > $productPriceUSD;
+    $listDiscountPct = $hasListDiscount
+        ? (int) round((($productListPriceUSD - $productPriceUSD) / $productListPriceUSD) * 100)
+        : 0;
+    $tryOnMedia = $product->tryOnImages();
+    $flashSavingsUsd = ($isFlashSale && $flashOriginalPriceUsd && $flashOriginalPriceUsd > $productPriceUSD)
+        ? $flashOriginalPriceUsd - $productPriceUSD
+        : null;
     
     // Get current domain
     $currentDomain = \App\Services\CurrencyService::getCurrentDomain();
@@ -315,6 +339,13 @@ const TIKTOK_PRODUCT_PRICE = {{ $productPriceConverted }};
 const CURRENT_CURRENCY = @json($currentCurrency);
 const CURRENCY_SYMBOL = @json($currencySymbol ?? '$');
 const CURRENT_CURRENCY_RATE = {{ $currentCurrencyRate }};
+const AUTH_USER = {!! json_encode(auth()->check() ? [
+    'email' => auth()->user()->email,
+    'name' => auth()->user()->name,
+    'country' => auth()->user()->country ?? null,
+] : null) !!};
+const CART_PROMO_CLAIMED_KEY = 'cart_promo_claimed';
+const FREE_SHIPPING_THRESHOLD_USD = 100;
 const SHIPPING_RATES = @json($shippingRatesData);
 const SHIPPING_RATES_BY_ZONE = @json($shippingRatesByZone);
 const SHIPPING_ZONES = @json($zonesData);
@@ -348,7 +379,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    // Event tracking Ä‘Æ°á»£c xá»­ lÃ½ bá»Ÿi GTM thÃ´ng qua dataLayer
     if (typeof dataLayer !== 'undefined') {
         dataLayer.push({
             'event': 'view_item',
@@ -385,93 +416,146 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-<!-- Breadcrumb -->
-<div class="bg-gray-50 border-b border-gray-200 hidden md:block">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <nav class="flex" aria-label="Breadcrumb">
-            <ol class="flex items-center space-x-2">
-                @foreach($breadcrumbs as $index => $breadcrumb)
-                    @if($index > 0)
-                        <li>
-                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                            </svg>
-                        </li>
-                    @endif
-                    <li>
-                        @if($breadcrumb['url'] && $index < count($breadcrumbs) - 1)
-                            <a href="{{ $breadcrumb['url'] }}" class="text-gray-500 hover:text-[#005366] transition-colors">
-                                {{ $breadcrumb['name'] }}
-                            </a>
-                        @else
-                            <span class="text-gray-900 font-medium max-w-xs md:max-w-md lg:max-w-lg truncate inline-block" title="{{ $breadcrumb['name'] }}">
-                                {{ $breadcrumb['name'] }}
-                            </span>
-                        @endif
-                    </li>
-                @endforeach
-            </ol>
+<!-- Product page -->
+<section class="product-show-page catalog-page" aria-labelledby="product-show-heading">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 product-show-page__body">
+        <nav class="product-show-breadcrumb" aria-label="Breadcrumb">
+            @foreach ($breadcrumbs as $index => $breadcrumb)
+                @if ($index > 0)
+                    <svg class="product-show-breadcrumb__chev" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                @endif
+                @if (!empty($breadcrumb['url']) && $index < count($breadcrumbs) - 1)
+                    <a href="{{ $breadcrumb['url'] }}">{{ $breadcrumb['name'] }}</a>
+                @else
+                    <span class="product-show-breadcrumb__current">{{ $breadcrumb['name'] }}</span>
+                @endif
+            @endforeach
         </nav>
-    </div>
-</div>
 
-<!-- Product Details -->
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        <!-- Left Column: Product Images & Related Products -->
-        <div class="space-y-4">
+        <div class="product-show-layout product-show-layout--sticky-gallery">
+            <div class="product-show-col product-show-col--gallery">
+                    <div class="product-show-gallery">
                 @php
-                // Combine product and template images FIRST
-                    $media = $product->getEffectiveMedia();
-                $allImages = [];
-                
-                // Add product images first
-                if($media && count($media) > 0) {
-                    foreach($media as $mediaItem) {
-                        if (is_string($mediaItem)) {
-                            $allImages[] = $mediaItem;
-                        } elseif (is_array($mediaItem)) {
-                            $mediaUrl = $mediaItem['url'] ?? $mediaItem['path'] ?? reset($mediaItem) ?? null;
-                            if ($mediaUrl) {
-                                $allImages[] = $mediaUrl;
-                            }
-                        }
-                    }
-                }
-                
-                // Add template images (if different from product images)
-                if($product->template && $product->template->media) {
-                    $templateMedia = is_array($product->template->media) ? $product->template->media : json_decode($product->template->media, true);
-                    $templateMediaUrls = collect($templateMedia)->map(function($item) {
-                        if (is_string($item)) {
+                    $normalizeMediaUrl = static function ($item) {
+                        if (is_string($item) && $item !== '') {
                             return $item;
-                        } elseif (is_array($item)) {
-                            return $item['url'] ?? $item['path'] ?? reset($item) ?? null;
+                        }
+                        if (is_array($item)) {
+                            $url = $item['url'] ?? $item['path'] ?? (reset($item) ?: null);
+                            return is_string($url) && $url !== '' ? $url : null;
                         }
                         return null;
-                    })->filter()->toArray();
-                    
-                    // Only add template images that are not already in product images
-                    foreach($templateMediaUrls as $templateUrl) {
-                        if(!in_array($templateUrl, $allImages)) {
-                            $allImages[] = $templateUrl;
+                    };
+
+                    $allImages = [];
+                    $seenUrls = [];
+
+                    $productMedia = is_array($product->media) ? $product->media : [];
+                    foreach ($productMedia as $mediaItem) {
+                        $url = $normalizeMediaUrl($mediaItem);
+                        if ($url && !isset($seenUrls[$url])) {
+                            $allImages[] = $url;
+                            $seenUrls[$url] = true;
                         }
                     }
-                }
-            @endphp
-            
-            <!-- Main Image/Video with Enhanced Effects -->
-            <div class="aspect-square bg-white rounded-xl shadow-lg overflow-hidden relative group" id="image-container">
-                @if($media && count($media) > 0)
-                    @php
-                        // Get first media URL safely
-                        if (is_string($media[0])) {
-                            $firstMediaUrl = $media[0];
-                        } elseif (is_array($media[0])) {
-                            $firstMediaUrl = $media[0]['url'] ?? $media[0]['path'] ?? reset($media[0]) ?? '';
-                        } else {
-                            $firstMediaUrl = '';
+
+                    $productImageCount = count($allImages);
+
+                    $templateMedia = [];
+                    if ($product->template && $product->template->media) {
+                        $templateMedia = is_array($product->template->media) ? $product->template->media : [];
+                    }
+                    foreach ($templateMedia as $mediaItem) {
+                        $url = $normalizeMediaUrl($mediaItem);
+                        if ($url && !isset($seenUrls[$url])) {
+                            $allImages[] = $url;
+                            $seenUrls[$url] = true;
                         }
+                    }
+
+                    $media = $allImages;
+                    $firstMediaUrl = $allImages[0] ?? '';
+                @endphp
+
+            <div class="product-show-gallery__sticky-media">
+            <div class="product-show-gallery__frame">
+            @if(!empty($allImages) && count($allImages) > 1)
+                <aside class="product-show-gallery__nav-block" aria-label="Product gallery thumbnails">
+                    <div class="product-show-gallery__thumbs-wrap">
+                        @if(count($allImages) > 4)
+                            <button type="button" onclick="scrollThumbnails('up')"
+                                    class="product-show-gallery__thumb-scroll product-show-gallery__thumb-scroll--up"
+                                    aria-label="Scroll thumbnails up">
+                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                </svg>
+                            </button>
+                        @endif
+                        <div class="product-show-gallery__thumbs flex overflow-x-auto scrollbar-hide" id="thumbnail-container">
+                    @foreach($allImages as $index => $imageUrl)
+                                @php
+                                    $isThumbVideo = str_contains($imageUrl, '.mp4') || str_contains($imageUrl, '.mov') || str_contains($imageUrl, '.avi') || str_contains($imageUrl, '.webm');
+                                    $isTemplateThumb = $index >= $productImageCount;
+                                @endphp
+                                <button type="button" onclick="changeMainImage('{{ $imageUrl }}', {{ $index }})"
+                                        class="product-show-gallery__thumb flex-shrink-0 bg-white rounded-lg shadow-sm overflow-hidden border-2 {{ $index === 0 ? 'border-[#005366]' : 'border-gray-200' }} hover:border-[#005366] transition-colors group relative"
+                                        aria-label="View media {{ $index + 1 }}{{ $isTemplateThumb ? ' (template)' : '' }}"
+                                        aria-current="{{ $index === 0 ? 'true' : 'false' }}">
+                                    @if($isThumbVideo)
+                                        <div class="w-full h-full bg-[#005366]/10 flex items-center justify-center">
+                                            <svg class="w-6 h-6 text-[#005366]" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path>
+                                            </svg>
+                                        </div>
+                                        <div class="absolute bottom-0 left-0 right-0 bg-[#005366] text-white text-[8px] text-center py-0.5 font-bold">
+                                            Video
+                                        </div>
+                                    @else
+                                        <img src="{{ $imageUrl }}"
+                                             alt="{{ $product->name }} - Media {{ $index + 1 }}"
+                                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
+                                    @endif
+                        </button>
+                    @endforeach
+                        </div>
+                        @if(count($allImages) > 4)
+                            <button type="button" onclick="scrollThumbnails('down')"
+                                    class="product-show-gallery__thumb-scroll product-show-gallery__thumb-scroll--down"
+                                    aria-label="Scroll thumbnails down">
+                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </button>
+                            <button type="button" onclick="scrollThumbnails('left')"
+                                    class="product-show-gallery__thumb-scroll product-show-gallery__thumb-scroll--prev"
+                                    aria-label="Scroll thumbnails left">
+                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                </svg>
+                            </button>
+                            <button type="button" onclick="scrollThumbnails('right')"
+                                    class="product-show-gallery__thumb-scroll product-show-gallery__thumb-scroll--next"
+                                    aria-label="Scroll thumbnails right">
+                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </button>
+                        @endif
+                    </div>
+                </aside>
+            @endif
+            <!-- Main Image/Video -->
+            <div class="product-show-gallery__main overflow-hidden relative group" id="image-container">
+                @if(!empty($allImages) && count($allImages) > 1)
+                    <button type="button" class="product-show-gallery__nav product-show-gallery__nav--prev" onclick="navigateMainGallery('prev')" aria-label="Previous image">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    </button>
+                    <button type="button" class="product-show-gallery__nav product-show-gallery__nav--next" onclick="navigateMainGallery('next')" aria-label="Next image">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                @endif
+                @if(!empty($allImages))
+                    @php
                         $isVideo = str_contains($firstMediaUrl, '.mp4') || str_contains($firstMediaUrl, '.mov') || str_contains($firstMediaUrl, '.avi') || str_contains($firstMediaUrl, '.webm');
                     @endphp
                     
@@ -519,18 +603,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             Your browser does not support the video tag.
                         </video>
                         
-                        <!-- Video Badge -->
-                        <div class="absolute top-3 left-3 bg-purple-600 text-white text-xs px-3 py-1 rounded-full font-medium flex items-center space-x-1 pointer-events-none z-10">
-                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <div class="absolute top-3 left-3 bg-[#005366] text-white text-xs px-3 py-1 rounded-full font-medium flex items-center space-x-1 pointer-events-none z-10">
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                 <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path>
                             </svg>
-                            <span>VIDEO</span>
+                            <span>Video</span>
                         </div>
                         
-                        <!-- Custom Play Button Overlay (before playing) -->
                         <div id="video-play-overlay" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 transition-opacity cursor-pointer z-20" onclick="playVideoOnClick(event)">
                             <div class="w-20 h-20 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-2xl hover:bg-opacity-100 hover:scale-110 transition-all duration-300">
-                                <svg class="w-10 h-10 text-purple-600 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="w-10 h-10 text-[#005366] ml-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                     <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path>
                                 </svg>
                             </div>
@@ -561,14 +643,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     @endif
                     
-                    <!-- Stock Status Badge for Mobile/Tablet -->
-                    <div id="mobile-stock-badge" class="absolute top-3 left-3 bg-green-100 rounded-full px-3 py-1.5 items-center space-x-2 pointer-events-none z-10 lg:hidden mobile-stock-badge">
-                        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        <span class="text-sm font-medium text-green-700">In Stock</span>
-                    </div>
-                    
                     <!-- Loading Spinner -->
                     <div id="image-loading" class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center hidden">
                         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#005366]"></div>
@@ -581,654 +655,366 @@ document.addEventListener('DOMContentLoaded', function() {
                         </svg>
                     </div>
                 @endif
+
+                @if($primaryCategory)
+                    <span class="product-show-gallery__badge">{{ $primaryCategory }}</span>
+                @endif
+                @if($isFlashSale)
+                    <span class="product-show-gallery__flash-badge product-show-gallery__flash-badge--live">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        <span class="product-show-gallery__flash-badge-text">Flash Sale</span>
+                        @if($flashDiscountPct > 0)
+                            <span class="product-show-gallery__flash-badge-pct">-{{ $flashDiscountPct }}%</span>
+                        @endif
+                    </span>
+                @endif
+
+                <div class="product-show-gallery__wishlist">
+                    <x-wishlist-button :product="$product" size="md" :showText="false" />
+                </div>
+                @if (! empty($tryOnMedia['image']))
+                    <button type="button"
+                            class="product-show-gallery__tryon"
+                            data-tryon-open
+                            data-tryon-name="{{ $product->name }}"
+                            data-tryon-type="{{ $product->getDisplayCategoryName() }}"
+                            data-tryon-url="{{ route('products.show', $product->slug) }}"
+                            data-tryon-image="{{ $tryOnMedia['image'] }}"
+                            data-tryon-back="{{ $tryOnMedia['back'] }}"
+                            aria-label="Start virtual try-on">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+                        </svg>
+                        TRY ON
+                    </button>
+                @endif
                 
                 <!-- Hover Effects -->
                 <div class="absolute inset-0 border-2 border-transparent group-hover:border-[#005366] transition-all duration-300 rounded-xl"></div>
             </div>
+            </div>{{-- /.product-show-gallery__frame --}}
 
-            
             @if(!empty($allImages) && count($allImages) > 1)
-                <!-- Smart Gallery -->
-                <div class="space-y-4">
-                    <!-- Thumbnail Navigation -->
-                    <div class="relative">
-                        <div class="flex overflow-x-auto scrollbar-hide space-x-2 pb-2" id="thumbnail-container">
-                    @foreach($allImages as $index => $imageUrl)
-                                @php
-                                    $isThumbVideo = str_contains($imageUrl, '.mp4') || str_contains($imageUrl, '.mov') || str_contains($imageUrl, '.avi') || str_contains($imageUrl, '.webm');
-                                @endphp
-                                <button onclick="changeMainImage('{{ $imageUrl }}', {{ $index }})" 
-                                        class="flex-shrink-0 w-16 h-16 bg-white rounded-lg shadow-sm overflow-hidden border-2 {{ $index === 0 ? 'border-[#005366]' : 'border-gray-200' }} hover:border-[#005366] transition-colors group relative">
-                                    @if($isThumbVideo)
-                                        <!-- Video Thumbnail -->
-                                        <div class="w-full h-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
-                                            <svg class="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path>
-                                            </svg>
-                                        </div>
-                                        <!-- Video Badge -->
-                                        <div class="absolute bottom-0 left-0 right-0 bg-purple-600 bg-opacity-90 text-white text-[8px] text-center py-0.5 font-bold">
-                                            VIDEO
-                                        </div>
-                                    @else
-                                        <!-- Image Thumbnail -->
-                                        <img src="{{ $imageUrl }}" 
-                                             alt="{{ $product->name }} - Media {{ $index + 1 }}" 
-                                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
-                                    @endif
-                        </button>
-                    @endforeach
-                        </div>
-                        
-                        <!-- Navigation Arrows (only show if more than 6 images) -->
-                        @if(!empty($allImages) && count($allImages) > 6)
-                            <button onclick="scrollThumbnails('left')" 
-                                    class="absolute left-0 top-1/2 transform -translate-y-1/2 bg-white shadow-lg rounded-full p-2 border border-gray-200 hover:bg-gray-50 transition-colors">
-                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                                </svg>
-                            </button>
-                            <button onclick="scrollThumbnails('right')" 
-                                    class="absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-lg rounded-full p-2 border border-gray-200 hover:bg-gray-50 transition-colors">
-                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                </svg>
-                            </button>
-                        @endif
-                    </div>
-                    
-                    <!-- Gallery Actions -->
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-2 text-sm text-gray-600">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
-                            <span>{{ !empty($allImages) ? count($allImages) : 0 }} {{ !empty($allImages) && count($allImages) === 1 ? 'image' : 'images' }}</span>
-                        </div>
-                        
-                        @if(!empty($allImages) && count($allImages) > 1)
-                            <button onclick="openGalleryModal()" 
-                                    class="text-sm text-[#005366] hover:underline flex items-center space-x-1">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
-                                </svg>
-                                <span>View All</span>
-                            </button>
-                        @endif
-                    </div>
-                </div>
-            @endif
-            
-            <!-- Related Products (Desktop: here, Mobile: below) -->
-            @if($relatedProducts->count() > 0)
-                <div class="space-y-4 hidden lg:block">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-xl font-bold text-gray-900">Related Products</h3>
-                        <a href="{{ route('products.index') }}" class="text-sm text-[#005366] hover:underline">
-                            See All Items
-                        </a>
-                    </div>
-                    
-                    <!-- Related Products Carousel -->
-                    <div class="relative">
-                        <!-- Navigation Buttons -->
-                        @if($relatedProducts->count() > 3)
-                            <button id="relatedPrevBtn" 
-                                    onclick="scrollRelatedProducts('prev')"
-                                    class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100">
-                                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                                </svg>
-                            </button>
-                            
-                            <button id="relatedNextBtn" 
-                                    onclick="scrollRelatedProducts('next')"
-                                    class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-all">
-                                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                </svg>
-                            </button>
-                        @endif
-                        
-                        <!-- Products Container -->
-                        <div id="relatedProductsContainer" class="overflow-hidden group">
-                            <div id="relatedProductsTrack" class="flex gap-3 transition-transform duration-300">
-                                @foreach($relatedProducts->take(12) as $relatedProduct)
-                                    <a href="{{ route('products.show', $relatedProduct->slug) }}" 
-                                       class="flex-shrink-0 w-40 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group/item overflow-hidden border border-gray-200">
-                                        <!-- Product Image -->
-                                        <div class="relative aspect-square overflow-hidden">
-                                            @php
-                                                $relatedMedia = $relatedProduct->getEffectiveMedia();
-                                                $relatedImageUrl = null;
-                                                if ($relatedMedia && count($relatedMedia) > 0) {
-                                                    if (is_string($relatedMedia[0])) {
-                                                        $relatedImageUrl = $relatedMedia[0];
-                                                    } elseif (is_array($relatedMedia[0])) {
-                                                        $relatedImageUrl = $relatedMedia[0]['url'] ?? $relatedMedia[0]['path'] ?? reset($relatedMedia[0]) ?? null;
-                                                    }
-                                                }
-                                            @endphp
-                                            @if($relatedImageUrl)
-                                                <img src="{{ $relatedImageUrl }}" 
-                                                     alt="{{ $relatedProduct->name }}" 
-                                                     class="w-full h-full object-cover group-hover/item:scale-105 transition-transform duration-300">
-                                            @else
-                                                <div class="w-full h-full bg-gray-200 flex items-center justify-center">
-                                                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                                    </svg>
-                                                </div>
-                                            @endif
-                                        </div>
-
-                                        <!-- Product Info (Compact) -->
-                                        <div class="p-2.5">
-                                            <h4 class="font-medium text-gray-900 text-xs line-clamp-2 group-hover/item:text-[#005366] transition-colors mb-1.5 h-8 overflow-hidden" title="{{ $relatedProduct->name }}">
-                                                {{ Str::limit($relatedProduct->name, 30) }}
-                                            </h4>
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-xs font-bold text-[#E2150C]">{{ format_price_usd($relatedProduct->base_price) }}</span>
-                                                <div class="flex items-center text-xs text-gray-500">
-                                                    <svg class="w-3 h-3 text-yellow-400 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                                    </svg>
-                                                    <span class="text-xs">4.5</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </a>
-                                @endforeach
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            @endif
-            <!-- Reviews Section (Desktop Only) -->
-            <div class="space-y-6 hidden lg:block">
-                <!-- Reviews Header -->
-                <div class="flex items-center justify-between">
-                    <h3 class="text-2xl font-bold text-gray-900">Reviews</h3>
-                </div>
-
-                <!-- Tabs -->
-                <div class="border-b border-gray-200">
-                    <nav class="-mb-px flex space-x-8">
-                        <button class="border-b-2 border-[#005366] py-2 px-1 text-sm font-medium text-[#005366]">
-                            Reviews for this item
-                        </button>
-                        <button class="border-b-2 border-transparent py-2 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                            Reviews for this shop
-                        </button>
-                    </nav>
-                </div>
-
-                @php
-                    $averageRating = $product->getAverageRating();
-                    $totalReviews = $product->getTotalReviews();
-                    $ratingBreakdown = $product->getRatingBreakdown();
-                @endphp
-
-                <!-- Overall Rating Summary -->
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-                    <!-- Average Rating -->
-                    <div class="flex items-center space-x-4">
-                        <div class="flex items-center">
-                            <svg class="w-8 h-8 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                            </svg>
-                            <span class="text-2xl font-bold text-gray-900 ml-2">{{ number_format($averageRating, 1) }} /5.0</span>
-                        </div>
-                        <div class="text-sm text-gray-600">
-                            <span class="underline">{{ $totalReviews }} Reviews</span>
-                        </div>
-                    </div>
-
-                    <!-- Star Rating Distribution -->
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2">
-                        <!-- Left Column -->
-                        <div class="space-y-2">
-                            @for($star = 5; $star >= 3; $star--)
-                                @php
-                                    $count = $ratingBreakdown[$star] ?? 0;
-                                    $percentage = $totalReviews > 0 ? round(($count / $totalReviews) * 100) : 0;
-                                @endphp
-                                <div class="flex items-center space-x-2">
-                                    <div class="flex items-center">
-                                        <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                        </svg>
-                                        <span class="text-sm font-medium text-gray-700 ml-1">{{ $star }}</span>
-                                    </div>
-                                    <div class="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
-                                        <div class="bg-gray-900 h-2 rounded-full" style="width: {{ $percentage }}%"></div>
-                                    </div>
-                                    <span class="text-xs text-gray-500 w-8">({{ $percentage }}%)</span>
-                                </div>
-                            @endfor
-                        </div>
-                        
-                        <!-- Right Column -->
-                        <div class="space-y-2">
-                            @for($star = 2; $star >= 1; $star--)
-                                @php
-                                    $count = $ratingBreakdown[$star] ?? 0;
-                                    $percentage = $totalReviews > 0 ? round(($count / $totalReviews) * 100) : 0;
-                                @endphp
-                                <div class="flex items-center space-x-2">
-                                    <div class="flex items-center">
-                                        <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                        </svg>
-                                        <span class="text-sm font-medium text-gray-700 ml-1">{{ $star }}</span>
-                                    </div>
-                                    <div class="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
-                                        <div class="bg-gray-900 h-2 rounded-full" style="width: {{ $percentage }}%"></div>
-                                    </div>
-                                    <span class="text-xs text-gray-500 w-8">({{ $percentage }}%)</span>
-                                </div>
-                            @endfor
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Individual Reviews -->
-                @if($product->approvedReviews->count() > 0)
-                    <div class="space-y-6">
-                        @foreach($product->approvedReviews->take(3) as $review)
-                            <div class="border-t border-dotted border-gray-300 pt-6">
-                                <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between space-y-4 lg:space-y-0">
-                                    <!-- Review Content -->
-                                    <div class="flex-1">
-                                        <!-- Rating -->
-                                        <div class="flex items-center mb-3">
-                                            @for($i = 1; $i <= 5; $i++)
-                                                @if($i <= floor($review->rating))
-                                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                                    </svg>
-                                                @elseif($i - 0.5 <= $review->rating)
-                                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                                        <defs>
-                                                            <linearGradient id="half-star-{{ $review->id }}-{{ $i }}">
-                                                                <stop offset="50%" stop-color="currentColor"/>
-                                                                <stop offset="50%" stop-color="#E5E7EB"/>
-                                                            </linearGradient>
-                                                        </defs>
-                                                        <path fill="url(#half-star-{{ $review->id }}-{{ $i }})" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                                    </svg>
-                                                @else
-                                                    <svg class="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                                    </svg>
-                                                @endif
-                                            @endfor
-                                        </div>
-
-                                        <!-- Review Title and Text -->
-                                        @if($review->review_text)
-                                            @php
-                                                $words = explode(' ', $review->review_text);
-                                                $title = count($words) > 8 ? implode(' ', array_slice($words, 0, 8)) . '...' : $review->review_text;
-                                            @endphp
-                                            <h4 class="font-semibold text-gray-900 mb-2">{{ $title }}</h4>
-                                            <p class="text-gray-700 text-sm leading-relaxed">{{ $review->review_text }}</p>
-                                        @endif
-                                    </div>
-
-                                    <!-- Reviewer Info -->
-                                    <div class="flex items-center space-x-3 lg:ml-6">
-                                        <div class="flex-shrink-0">
-                                            <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-medium text-sm">
-                                                {{ Str::upper(substr($review->display_name, 0, 2)) }}
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <div class="text-sm font-medium text-gray-900">{{ $review->display_name }}</div>
-                                            <div class="text-xs text-gray-500">{{ $review->created_at->format('D M d Y') }}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                @else
-                    <div class="text-center py-12">
-                        <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                <div class="product-show-gallery__meta">
+                    <div class="flex items-center space-x-2 text-sm text-gray-600">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                         </svg>
-                        <p class="text-gray-500 text-lg mb-2">No reviews yet</p>
-                        <p class="text-gray-400 text-sm">Be the first to review this product</p>
+                        <span>{{ count($allImages) }} {{ count($allImages) === 1 ? 'image' : 'images' }}</span>
                     </div>
-                @endif
-
-                <!-- Write Review and Pagination -->
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0 pt-6 border-t border-gray-200">
-                    <!-- Write Review Button -->
-                    <button class="inline-flex items-center px-4 py-2 border border-orange-500 text-orange-500 rounded-lg hover:bg-orange-50 transition-colors">
-                        <svg class="w-4 h-4 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
+                    <button type="button" onclick="openGalleryModal()"
+                            class="text-sm text-[#005366] hover:underline flex items-center space-x-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"/>
                         </svg>
-                        Write your review
+                        <span>View All</span>
                     </button>
-
-                    <!-- Pagination -->
-                    @if($product->approvedReviews->count() > 3)
-                        <div class="flex items-center space-x-2">
-                            <button class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
-                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                                </svg>
-                            </button>
-                            <span class="text-sm text-gray-600 px-3">1/3</span>
-                            <button class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
-                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                </svg>
-                            </button>
-                        </div>
-                    @endif
                 </div>
+            @endif
             </div>
         </div>
-        <!-- Product Info -->
-        <div class="space-y-6">
-            <div>
-                <h1 class="text-4xl font-bold text-gray-900 mb-4">{{ $product->name }}</h1>
-                
-                <!-- Engagement Metrics -->
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center space-x-4">
-                        <!-- Stock Status Badge (Desktop only) -->
-                        <div class="hidden lg:flex items-center space-x-2 bg-green-100 rounded-full px-3 py-1.5">
-                            <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                            <span class="text-sm font-medium text-green-700">In Stock</span>
-                        </div>
-                         <!-- Viewing Count -->
-                         <div class="flex items-center space-x-2 bg-gray-100 rounded-full px-3 py-1.5">
-                             <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                             </svg>
-                             <span class="text-sm font-medium text-gray-700">{{ rand(20, 100) }} viewing</span>
-                         </div>
-                        
-                        <!-- Cart Count -->
-                        <div class="flex items-center space-x-2 bg-red-50 rounded-full px-3 py-1.5">
-                            <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01"></path>
-                            </svg>
-                            <span class="text-sm font-medium text-red-700">In {{ rand(10, 50) }}+ carts</span>
-                        </div>
-                    </div>
-                    
-                    <!-- Share Button -->
-                    <button onclick="openShareModal()" class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
-                        </svg>
-                    </button>
-                </div>
-                
-                <!-- Seller Info -->
-                <div class="flex items-center space-x-3 mb-4">
-                    <span class="text-gray-600">Sold by:</span>
-                    <a href="{{ route('shops.show', $product->shop->shop_slug ?? '') }}" class="text-[#005366] hover:underline font-medium">
-                        {{ $product->shop->name ?? 'Unknown Shop' }}
-                    </a>
-                    @if($product->shop && $product->shop->verified)
-                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                            </svg>
-                            Verified
-                        </span>
-                    @endif
-                </div>
-
             </div>
 
-            <!-- Price -->
-            <div class="bg-gray-50 rounded-xl p-6">
-                <div class="mb-4">
-                    <div class="flex items-center space-x-4 mb-2">
-                    @if($product->template && $product->template->base_price > $product->price)
-                        @php
-                            $templateBasePriceConverted = convert_currency((float) $product->template->base_price);
-                            $discount = round((($product->template->base_price - $product->price) / $product->template->base_price) * 100);
-                        @endphp
-                        <span class="text-2xl text-gray-500 line-through">{{ format_price_usd((float) $product->template->base_price) }}</span>
-                            <span class="text-4xl font-bold text-[#E2150C]" id="base-price" data-price="{{ $productPriceUSD }}" data-price-converted="{{ $productPriceConverted }}">{{ format_price_usd($productPriceUSD) }}</span>
-                        <span class="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                            {{ $discount }}% OFF
+            <div class="product-show-col product-show-col--info">
+                <div class="product-show-purchase">
+            @php
+                $averageRating = $product->getAverageRating();
+                $totalReviews = $product->getTotalReviews();
+                $soldCount = $product->getSoldCount();
+                $productShowConfig = $productShowSettings ?? config('catalog.product_show', []);
+                $virtualStatsConfig = $productShowConfig['virtual_stats'] ?? [];
+                $virtualViews = (int) ($virtualStatsConfig['views_base'] ?? 800)
+                    + ($product->id * (int) ($virtualStatsConfig['views_multiplier'] ?? 37) % 1500);
+                $virtualInCart = (int) ($virtualStatsConfig['in_cart_base'] ?? 40)
+                    + ($product->id * (int) ($virtualStatsConfig['in_cart_multiplier'] ?? 1) % 80);
+                $virtualViewsLabel = $virtualViews >= 1000
+                    ? rtrim(rtrim(number_format($virtualViews / 1000, 1), '0'), '.') . 'k'
+                    : number_format($virtualViews);
+                $volumeDiscountTiers = $productShowConfig['volume_discounts'] ?? [];
+                $saleEndsDate = $productShowConfig['sale_ends_date'] ?? null;
+                if ($saleEndsDate) {
+                    try {
+                        $saleEndsFormatted = \Carbon\Carbon::parse($saleEndsDate)->format('F d, Y');
+                    } catch (\Exception $e) {
+                        $saleEndsFormatted = null;
+                    }
+                } else {
+                    $saleEndsFormatted = null;
+                }
+                $tryOnImage = $tryOnMedia['image'];
+                $shopInitials = $product->shop
+                    ? strtoupper(substr($product->shop->name ?? $product->shop->shop_name ?? 'B', 0, 2))
+                    : 'BP';
+                $pdpShop = $product->shop;
+                $pdpShopLogo = $pdpShop?->shop_logo;
+                $pdpShopRating = null;
+                $pdpShopRatingCount = 0;
+                if ($pdpShop) {
+                    if (($pdpShop->total_ratings ?? 0) > 0 && ($pdpShop->rating ?? 0) > 0) {
+                        $pdpShopRating = (float) $pdpShop->getRatingStars();
+                        $pdpShopRatingCount = (int) $pdpShop->total_ratings;
+                    } elseif (($shopReviewsTotal ?? 0) > 0) {
+                        $pdpShopRating = (float) ($shopReviewsAverage ?? 0);
+                        $pdpShopRatingCount = (int) ($shopReviewsTotal ?? 0);
+                    }
+                    $pdpShopProductCount = (int) ($pdpShop->total_products ?? 0);
+                    $pdpShopFollowerCount = (int) ($pdpShop->followers_count ?? 0);
+                    $pdpShopJoinedLabel = $pdpShop->created_at
+                        ? 'Joined ' . $pdpShop->created_at->format('M Y')
+                        : null;
+                    $pdpShopIsNew = $pdpShop->created_at && $pdpShop->created_at->greaterThan(now()->subDays(60));
+                    $pdpShopTrustLine = null;
+                    if ($pdpShopProductCount >= 3) {
+                        $pdpShopTrustLine = number_format($pdpShopProductCount) . ' ' . \Illuminate\Support\Str::plural('product', $pdpShopProductCount);
+                    } elseif ($pdpShopFollowerCount >= 1) {
+                        $pdpShopTrustLine = number_format($pdpShopFollowerCount) . ' ' . \Illuminate\Support\Str::plural('follower', $pdpShopFollowerCount);
+                    } elseif ($pdpShopJoinedLabel) {
+                        $pdpShopTrustLine = $pdpShopJoinedLabel;
+                    } elseif ($pdpShopProductCount > 0) {
+                        $pdpShopTrustLine = 'Updating catalog';
+                    } elseif ($pdpShopIsNew) {
+                        $pdpShopTrustLine = 'New shop';
+                    }
+                }
+            @endphp
+            <div class="product-show-purchase__head">
+                @if($isFlashSale)
+                    <div class="product-show-flash-chip" role="status" aria-label="Flash sale active">
+                        <span class="product-show-flash-chip__icon" aria-hidden="true">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
                         </span>
-                    @else
-                            <span class="text-4xl font-bold text-[#E2150C]" id="base-price" data-price="{{ $productBasePriceUSD }}" data-price-converted="{{ $productBasePriceConverted }}">{{ format_price_usd($productBasePriceUSD) }}</span>
-                    @endif
+                        <span class="product-show-flash-chip__text">Flash Sale</span>
+                        @if($flashDiscountPct > 0)
+                            <span class="product-show-flash-chip__pct">{{ $flashDiscountPct }}% OFF</span>
+                        @endif
+                        <span class="product-show-flash-chip__urgency">Limited time</span>
                     </div>
-                    
-                    <!-- Customization Price Display -->
-                    <div id="customization-price-display" class="hidden mt-2">
-                        <div class="flex items-center justify-between text-sm">
-                            <span class="text-gray-600">Customization:</span>
-                            <span class="text-[#005366] font-medium" id="customization-price">+{{ currency_symbol() }}0.00</span>
-                        </div>
-                        <div class="border-t border-gray-300 mt-2 pt-2 flex items-center justify-between">
-                            <span class="text-gray-900 font-semibold">Total:</span>
-                            <span class="text-2xl font-bold text-[#005366]" id="total-price">{{ format_price_usd($productBasePriceUSD) }}</span>
-                        </div>
-                    </div>
-                </div>
-                
-                @if($product->template && $product->template->base_price > $product->price)
-                    <p class="text-sm text-red-600 font-medium mb-4">
-                        Sale ends at {{ now()->addDays(7)->format('F d, Y') }}
-                    </p>
                 @endif
-
-                <!-- FREE Returns Section -->
-                <div class="flex items-center space-x-2 mb-4">
-                    <span class="text-sm font-medium text-gray-900">FREE Returns</span>
-                    <div class="relative inline-block">
-                        <button onclick="toggleReturnsInfo()" class="w-4 h-4 bg-blue-500 text-white rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
-                            <span class="text-xs font-bold">i</span>
-                        </button>
-                        
-                        <!-- Returns Info Popup -->
-                        <div id="returns-info-popup" class="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white border border-gray-200 rounded-lg shadow-lg p-4 w-72 z-50 hidden">
-                            <div class="relative">
-                                <p class="text-sm text-gray-700 mb-2">
-                                    Free returns are available for the shipping address you chose. You can return the item for any reason in new and unused condition: no return shipping charges.
-                                </p>
-                                <a href="{{ route('page.show', 'returns-exchanges-policy') }}" class="text-sm text-red-600 hover:underline">
-                                    Read the full returns policy
-                                </a>
-                                
-                                <!-- Arrow pointing down -->
-                                <div class="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-white border-r border-b border-gray-200 rotate-45"></div>
-                            </div>
-                        </div>
+                <div class="product-show-purchase__title-row">
+                    <h1 id="product-show-heading" class="product-show-purchase__title" title="{{ $product->name }}">{{ $displayTitle }}</h1>
+                    <button type="button" onclick="openShareModal()" class="product-show-purchase__share" aria-label="Share this product">
+                        <span class="product-show-purchase__share-btn" aria-hidden="true">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"/>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+                <div class="product-show-purchase__meta-row">
+                    <div class="product-show-purchase__meta-item">
+                        <svg class="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <span class="font-semibold text-gray-900">{{ number_format($averageRating, 1) }}</span>
+                        <span>({{ number_format($totalReviews) }} {{ Str::plural('review', $totalReviews) }})</span>
+                    </div>
+                    <span class="product-show-purchase__meta-divider" aria-hidden="true"></span>
+                    <div class="product-show-purchase__meta-item">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                        <span>{{ $virtualViewsLabel }} views</span>
+                    </div>
+                    <span class="product-show-purchase__meta-divider" aria-hidden="true"></span>
+                    <div class="product-show-purchase__meta-item">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                        </svg>
+                        <span>{{ number_format($virtualInCart) }} in cart</span>
                     </div>
                 </div>
+            </div>
 
-                <!-- Customization Options -->
-                @if($product->template && $product->template->hasCustomization())
-                    <div class="space-y-4 mb-6">
-                        <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-gray-900">Personalization Options</h3>
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" 
-                                       id="enable-customization" 
-                                       onchange="toggleCustomization()"
-                                       class="h-5 w-5 text-[#005366] focus:ring-[#005366] border-gray-300 rounded">
-                                <span class="text-sm font-medium text-gray-700">Add Personalization</span>
-                            </label>
-                        </div>
-                        
-                        <div id="customization-container" class="hidden space-y-4">
-                        @foreach($product->template->getCustomizationTypes() as $index => $customization)
-                            <div class="border border-gray-200 rounded-lg p-4 bg-white">
-                                <div class="flex items-center justify-between mb-3">
-                                    <h4 class="font-medium text-gray-900 text-base">
-                                        {{ $customization['label'] ?? $customization['name'] ?? 'Customization ' . ($index + 1) }}
-                                    </h4>
-                                    <div class="flex items-center space-x-2">
-                                        @if(isset($customization['required']) && $customization['required'])
-                                            <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">Required</span>
-                                        @endif
-                                        @if(isset($customization['price']) && $customization['price'] > 0)
-                                            <span class="text-sm font-medium text-[#E2150C]">+{{ format_price_usd($customization['price'] ?? 0) }}</span>
-                                        @endif
-                                    </div>
+            <div class="product-show-purchase__price-panel @if($isFlashSale) product-show-purchase__price-panel--flash @endif">
+                @if($isFlashSale)
+                    <div class="product-show-flash-sale"
+                         id="pdpFlashSale"
+                         data-ends-at="{{ $flashEndsAt->toIso8601String() }}"
+                         role="status"
+                         aria-live="polite">
+                        <div class="product-show-flash-sale__banner">
+                            <div class="product-show-flash-sale__intro">
+                                <span class="product-show-flash-sale__bolt" aria-hidden="true">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                    </svg>
+                                </span>
+                                <div class="product-show-flash-sale__copy">
+                                    <strong class="product-show-flash-sale__title">Flash Sale Price</strong>
+                                    <span class="product-show-flash-sale__subtitle">Grab it before time runs out</span>
                                 </div>
-                                
-                                @if(isset($customization['description']) && !empty($customization['description']))
-                                    <p class="text-sm text-gray-600 mb-3">{{ strip_tags(html_entity_decode($customization['description'], ENT_QUOTES, 'UTF-8')) }}</p>
-                                @endif
-                                
-                                @if(isset($customization['instructions']) && !empty($customization['instructions']))
-                                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                                        <div class="flex items-start space-x-2">
-                                            <svg class="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                            </svg>
-                                            <p class="text-xs text-blue-800">{{ strip_tags(html_entity_decode($customization['instructions'], ENT_QUOTES, 'UTF-8')) }}</p>
-                                        </div>
-                                    </div>
-                                @endif
-                                
-                                @if(isset($customization['options']) && is_array($customization['options']) && count($customization['options']) > 0)
-                                    <div class="space-y-3">
-                                        <p class="text-sm text-gray-700 font-medium">Choose an option:</p>
-                                        @foreach($customization['options'] as $optionIndex => $option)
-                                            <label class="flex items-center space-x-3 cursor-pointer p-3 hover:bg-gray-50 rounded-lg border border-gray-100">
-                                                <input type="radio" 
-                                                       name="customization_{{ $index }}_{{ $customization['type'] ?? 'option' }}" 
-                                                       value="{{ $option['value'] ?? $option['label'] ?? $option }}" 
-                                                       data-price="{{ convert_currency((float)($option['price'] ?? 0)) }}"
-                                                       onchange="updateCustomizationPrice()"
-                                                       {{ (isset($customization['required']) && $customization['required']) ? 'required' : '' }}
-                                                       class="customization-input text-[#005366] focus:ring-[#005366] w-4 h-4">
-                                                <div class="flex-1">
-                                                    <span class="text-sm text-gray-700 font-medium">{{ $option['label'] ?? $option['value'] ?? $option }}</span>
-                                                    @if(isset($option['description']) && !empty($option['description']))
-                                                        <p class="text-xs text-gray-500 mt-1">{{ strip_tags(html_entity_decode($option['description'], ENT_QUOTES, 'UTF-8')) }}</p>
-                                                    @endif
-                                                </div>
-                                                @if(isset($option['price']) && $option['price'] > 0)
-                                                    <span class="text-xs text-[#E2150C] font-medium">+{{ format_price_usd($option['price'] ?? 0) }}</span>
-                                                @endif
-                                            </label>
-                                        @endforeach
-                                    </div>
-                                @elseif(isset($customization['input_type']) && $customization['input_type'] === 'textarea')
-                                    <div class="space-y-3">
-                                        <textarea name="customization_{{ $index }}_{{ $customization['type'] ?? 'customization' }}"
-                                                  placeholder="{{ $customization['placeholder'] ?? 'Enter your text here...' }}" 
-                                                  rows="{{ $customization['rows'] ?? 3 }}"
-                                                  data-price="{{ convert_currency((float)($customization['price'] ?? 0)) }}"
-                                                  data-label="{{ $customization['label'] ?? $customization['type'] ?? 'Customization' }}"
-                                                  oninput="updateCustomizationPrice()"
-                                                  {{ (isset($customization['required']) && $customization['required']) ? 'required' : '' }}
-                                                  class="customization-input w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#005366] focus:border-transparent resize-vertical">{{ old('customization_' . $index) }}</textarea>
-                                        @if(isset($customization['max_length']))
-                                            <p class="text-xs text-gray-500">Maximum {{ $customization['max_length'] }} characters</p>
-                                        @endif
-                                    </div>
-                                @else
-                                    <div class="space-y-3">
-                                        <input type="{{ $customization['input_type'] ?? 'text' }}" 
-                                               name="customization_{{ $index }}_{{ $customization['type'] ?? 'customization' }}"
-                                               placeholder="{{ $customization['placeholder'] ?? 'Enter ' . ($customization['type'] ?? 'customization') . '...' }}" 
-                                               value="{{ old('customization_' . $index) }}"
-                                               data-price="{{ convert_currency((float)($customization['price'] ?? 0)) }}"
-                                               data-label="{{ $customization['label'] ?? $customization['type'] ?? 'Customization' }}"
-                                               oninput="updateCustomizationPrice()"
-                                               {{ (isset($customization['required']) && $customization['required']) ? 'required' : '' }}
-                                               class="customization-input w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#005366] focus:border-transparent">
-                                        @if(isset($customization['max_length']))
-                                            <p class="text-xs text-gray-500">Maximum {{ $customization['max_length'] }} characters</p>
-                                        @endif
-                                        @if(isset($customization['help_text']) && !empty($customization['help_text']))
-                                            <p class="text-xs text-gray-500">{{ $customization['help_text'] }}</p>
-                                        @endif
-                                    </div>
-                                @endif
-                                
-                                @if(isset($customization['file_upload']) && $customization['file_upload'])
-                                    <div class="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                        <label class="block text-sm text-gray-700 font-medium mb-2">
-                                            Upload your file:
-                                        </label>
-                                        <input type="file" 
-                                               name="customization_file_{{ $index }}"
-                                               accept="{{ $customization['accepted_formats'] ?? 'image/*' }}"
-                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#005366] focus:border-transparent">
-                                        @if(isset($customization['file_requirements']))
-                                            <p class="text-xs text-gray-500 mt-1">{{ $customization['file_requirements'] }}</p>
-                                        @endif
-                                    </div>
+                                @if($flashDiscountPct > 0)
+                                    <span class="product-show-flash-sale__pct">{{ $flashDiscountPct }}% OFF</span>
                                 @endif
                             </div>
-                        @endforeach
+                            <div class="product-show-flash-sale__countdown" aria-label="Flash sale ends in">
+                                <span class="product-show-flash-sale__countdown-label">Ends in</span>
+                                <div class="product-show-flash-sale__timer">
+                                    <span class="product-show-flash-sale__time-unit">
+                                        <span class="product-show-flash-sale__time-value" id="pdpFlashHours">00</span>
+                                        <span class="product-show-flash-sale__time-label">hr</span>
+                                    </span>
+                                    <span class="product-show-flash-sale__time-sep" aria-hidden="true">:</span>
+                                    <span class="product-show-flash-sale__time-unit">
+                                        <span class="product-show-flash-sale__time-value" id="pdpFlashMinutes">00</span>
+                                        <span class="product-show-flash-sale__time-label">min</span>
+                                    </span>
+                                    <span class="product-show-flash-sale__time-sep" aria-hidden="true">:</span>
+                                    <span class="product-show-flash-sale__time-unit">
+                                        <span class="product-show-flash-sale__time-value" id="pdpFlashSeconds">00</span>
+                                        <span class="product-show-flash-sale__time-label">sec</span>
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 @endif
-                <!-- Product Options -->
+                <div class="product-show-purchase__price-row @if($isFlashSale) product-show-purchase__price-row--flash @endif">
+                    @if($isFlashSale)
+                        <span class="product-show-purchase__price-current product-show-purchase__price-current--flash" id="base-price" data-price="{{ $productPriceUSD }}" data-price-converted="{{ $productPriceConverted }}">{{ format_price_usd($productPriceUSD) }}</span>
+                        @if($flashOriginalPriceUsd > $productPriceUSD)
+                            <span class="product-show-purchase__price-original" id="flash-original-price" data-price="{{ $flashOriginalPriceUsd }}" data-price-converted="{{ convert_currency($flashOriginalPriceUsd) }}">{{ format_price_usd($flashOriginalPriceUsd) }}</span>
+                        @else
+                            <span class="product-show-purchase__price-original hidden" id="flash-original-price" data-price="0" data-price-converted="0"></span>
+                        @endif
+                        @if($flashDiscountPct > 0)
+                            <span class="product-show-purchase__save-badge product-show-purchase__save-badge--flash" id="flash-save-badge">{{ $flashDiscountPct }}% OFF</span>
+                        @endif
+                    @elseif($hasListDiscount)
+                        <span class="product-show-purchase__price-current" id="base-price" data-price="{{ $productPriceUSD }}" data-price-converted="{{ $productPriceConverted }}">{{ format_price_usd($productPriceUSD) }}</span>
+                        <span class="product-show-purchase__price-original" id="list-price" data-price="{{ $productListPriceUSD }}" data-price-converted="{{ $productListPriceConverted }}">{{ format_price_usd($productListPriceUSD) }}</span>
+                        <span class="product-show-purchase__save-badge" id="list-save-badge">Save {{ $listDiscountPct }}%</span>
+                        @if($saleEndsFormatted)
+                            <span class="product-show-purchase__sale-ends text-sm text-[#e2150c] font-medium">Sale ends {{ $saleEndsFormatted }}</span>
+                        @endif
+                    @else
+                        <span class="product-show-purchase__price-current" id="base-price" data-price="{{ $productPriceUSD }}" data-price-converted="{{ $productPriceConverted }}">{{ format_price_usd($productPriceUSD) }}</span>
+                        <span class="product-show-purchase__price-original hidden" id="list-price" data-price="{{ $productListPriceUSD }}" data-price-converted="{{ $productListPriceConverted }}">{{ format_price_usd($productListPriceUSD) }}</span>
+                        <span class="product-show-purchase__save-badge hidden" id="list-save-badge">Save 0%</span>
+                    @endif
+                </div>
+                @if($isFlashSale && $flashSavingsUsd)
+                    <p class="product-show-flash-sale__savings">You save <strong>{{ format_price_usd($flashSavingsUsd) }}</strong> with this flash deal</p>
+                @endif
+                <div class="product-show-purchase__stock-row">
+                    <span class="product-show-purchase__stock-dot" id="engagement-stock-dot"></span>
+                    <span class="product-show-purchase__stock-label" id="engagement-stock-label">In Stock</span>
+                    <span class="product-show-purchase__stock-qty" id="engagement-stock-qty"></span>
+                </div>
+                <p id="volume-discount-hint" class="hidden mt-2 text-sm font-medium text-[#005366]"></p>
+                <div id="customization-price-display" class="hidden mt-2">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-600">Customization:</span>
+                        <span class="text-[#005366] font-medium" id="customization-price">+{{ currency_symbol() }}0.00</span>
+                    </div>
+                    <div class="border-t border-gray-300 mt-2 pt-2 flex items-center justify-between">
+                        <span class="text-gray-900 font-semibold">Total:</span>
+                        <span class="text-xl font-bold text-[#005366]" id="total-price">{{ format_price($productPriceConverted) }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="product-show-purchase__divider">
+
+            <div class="product-show-options">
+            <div class="product-show-purchase__panel">
                 @if($product->variants()->count() > 0)
                     @php
                         $variants = $product->variants;
                         $selectedVariant = $variants->first();
-                        
-                        // Extract unique attribute values dynamically
+
                         $allAttributes = [];
-                        foreach($variants as $variant) {
-                            if($variant->attributes) {
-                                foreach($variant->attributes as $key => $value) {
-                                    if(!isset($allAttributes[$key])) {
+                        foreach ($variants as $variant) {
+                            if ($variant->attributes) {
+                                foreach ($variant->attributes as $key => $value) {
+                                    if (!isset($allAttributes[$key])) {
                                         $allAttributes[$key] = [];
                                     }
-                                    if(!in_array($value, $allAttributes[$key])) {
+                                    if (!in_array($value, $allAttributes[$key], true)) {
                                         $allAttributes[$key][] = $value;
                                     }
                                 }
                             }
                         }
-                        
-                        // For backward compatibility, check for Size and Color specifically
+
+                        $sizeOrderMap = ['XS' => 0, 'S' => 1, 'M' => 2, 'L' => 3, 'XL' => 4, '2XL' => 5, '3XL' => 6, '4XL' => 7, '5XL' => 8];
+                        $sortSizeValues = function (array $values) use ($sizeOrderMap) {
+                            usort($values, function ($a, $b) use ($sizeOrderMap) {
+                                $oa = $sizeOrderMap[strtoupper(trim($a))] ?? 999;
+                                $ob = $sizeOrderMap[strtoupper(trim($b))] ?? 999;
+                                if ($oa === $ob) {
+                                    return strcasecmp($a, $b);
+                                }
+                                return $oa <=> $ob;
+                            });
+                            return $values;
+                        };
+
+                        $sortedAttributes = [];
+                        $colorKey = null;
+                        $sizeKey = null;
+                        foreach ($allAttributes as $key => $values) {
+                            $norm = strtolower($key);
+                            if ($norm === 'color' || $norm === 'colour') {
+                                $colorKey = $key;
+                            } elseif ($norm === 'size') {
+                                $sizeKey = $key;
+                            }
+                        }
+                        if ($colorKey) {
+                            $sortedAttributes[$colorKey] = $allAttributes[$colorKey];
+                        }
+                        if ($sizeKey) {
+                            $sortedAttributes[$sizeKey] = $sortSizeValues($allAttributes[$sizeKey]);
+                        }
+                        foreach ($allAttributes as $key => $values) {
+                            if (!isset($sortedAttributes[$key])) {
+                                $sortedAttributes[$key] = strtolower($key) === 'size'
+                                    ? $sortSizeValues($values)
+                                    : $values;
+                            }
+                        }
+                        $allAttributes = $sortedAttributes;
+
                         $sizes = collect($allAttributes['Size'] ?? []);
-                        $colors = collect($allAttributes['Color'] ?? []);
+                        $colors = collect($allAttributes['Color'] ?? $allAttributes['Colour'] ?? []);
                     @endphp
-                    
-                    <div class="space-y-6 mb-6">
+
+                    <div class="product-show-options__attrs">
                         @foreach($allAttributes as $attributeName => $attributeValues)
                             @if($attributeName === 'Size')
                                 <!-- Size Selection -->
-                                <div>
-                                    <div class="flex items-center justify-between mb-3">
-                                        <h3 class="text-lg font-semibold text-gray-900">Size</h3>
-                                        <button onclick="openSizeGuide()" class="text-sm text-[#005366] hover:underline flex items-center">
-                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-                                            </svg>
-                                            View Size Guide
+                                <div class="product-show-options__group">
+                                    <div class="product-show-options__head">
+                                        <h3 class="product-show-options__label">
+                                            Size — <span id="selected-size-name">{{ $selectedVariant->attributes['Size'] ?? ($attributeValues[0] ?? '') }}</span>
+                                        </h3>
+                                        <button type="button" onclick="openSizeGuide()" class="product-show-options__guide">
+                                            Size guide
                                         </button>
                                     </div>
-                                    <div class="relative">
-                                        <select id="{{ strtolower($attributeName) }}-selector" onchange="selectAttribute('{{ $attributeName }}', this.value)" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#005366] focus:border-transparent appearance-none bg-white">
-                                            <option value="">Choose a {{ strtolower($attributeName) }}</option>
-                                            @foreach($attributeValues as $value)
-                                                <option value="{{ $value }}" {{ $loop->first ? 'selected' : '' }}>
-                                                    {{ $value }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                        <svg class="w-5 h-5 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                        </svg>
+                                    <div class="product-show-options__chips" id="size-selector-buttons">
+                                        @foreach($attributeValues as $value)
+                                            @php $isSizeSelected = ($selectedVariant->attributes['Size'] ?? $attributeValues[0] ?? '') === $value; @endphp
+                                            <button type="button"
+                                                    onclick="selectAttribute('{{ $attributeName }}', '{{ $value }}')"
+                                                    class="attribute-option {{ $isSizeSelected ? 'border-[#005366] bg-[#005366] text-white' : 'border-gray-300 text-gray-900' }}"
+                                                    data-attribute="{{ $attributeName }}"
+                                                    data-value="{{ $value }}">
+                                                {{ $value }}
+                                            </button>
+                                        @endforeach
                                     </div>
+                                    <select id="{{ strtolower($attributeName) }}-selector" onchange="selectAttribute('{{ $attributeName }}', this.value)" class="hidden" aria-hidden="true">
+                                        @foreach($attributeValues as $value)
+                                            <option value="{{ $value }}" {{ $loop->first ? 'selected' : '' }}>{{ $value }}</option>
+                                        @endforeach
+                                    </select>
                                 </div>
                             @elseif($attributeName === 'Color' || $attributeName === 'Colour')
                                 <!-- Color Selection -->
@@ -1283,54 +1069,40 @@ document.addEventListener('DOMContentLoaded', function() {
                                         'orange' => '#ea580c', 'natural' => '#fef3c7',
                                     ];
                                 @endphp
-                                <div>
-                                    <div class="flex items-center justify-between mb-3">
-                                        <h3 class="text-lg font-semibold text-gray-900">
-                                            {{ $attributeName }}: <span id="selected-color-name" class="text-[#005366]">{{ $attributeValues[0] ?? '' }}</span>
+                                <div class="product-show-options__group">
+                                    <div class="product-show-options__head">
+                                        <h3 class="product-show-options__label">
+                                            {{ $attributeName }} — <span id="selected-color-name">{{ $selectedVariant->attributes[$attributeName] ?? ($attributeValues[0] ?? '') }}</span>
                                         </h3>
                                     </div>
-                                    <div class="flex flex-wrap gap-2">
+                                    <div class="product-show-options__swatches">
                                         @foreach($attributeValues as $color)
                                             @php
                                                 $colorCode = $colorMap[strtolower($color)] ?? '#6b7280';
+                                                $isColorSelected = ($selectedVariant->attributes[$attributeName] ?? $attributeValues[0] ?? '') === $color;
                                             @endphp
-                                            <button onclick="selectAttribute('{{ $attributeName }}', '{{ $color }}')" 
-                                                    class="color-swatch variant-option w-10 h-10 rounded-full border-2 {{ $loop->first ? 'border-[#005366] ring-2 ring-[#005366] ring-offset-1 scale-105' : 'border-gray-300 hover:border-gray-400 hover:scale-105' }} transition-all duration-200 relative shadow-sm hover:shadow-md group"
+                                            <button type="button" onclick="selectAttribute('{{ $attributeName }}', '{{ $color }}')"
+                                                    class="color-swatch variant-option {{ $isColorSelected ? 'is-selected border-[#005366]' : 'border-transparent' }}"
                                                     data-attribute="{{ $attributeName }}"
                                                     data-value="{{ $color }}"
-                                                    style="background: {{ $colorCode }}; background-image: linear-gradient(45deg, {{ $colorCode }}cc, {{ $colorCode }});"
+                                                    aria-label="{{ $attributeName }}: {{ $color }}"
                                                     title="{{ $color }}">
-                                                
-                                                <!-- Gradient overlay for special colors -->
-                                                @if(in_array(strtolower($color), ['gold', 'silver', 'copper', 'bronze', 'platinum']))
-                                                    <div class="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent"></div>
-                                                @elseif(in_array(strtolower($color), ['white', 'cream', 'light yellow']))
-                                                    <div class="absolute inset-0 rounded-full border border-gray-200"></div>
-                                                @endif
-                                                
-                                                <!-- Checkmark for selected color -->
-                                                @if($loop->first)
-                                                    <svg class="w-4 h-4 text-white absolute inset-0 m-auto drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                                                    </svg>
-                                                @endif
-                                                
-                                                <!-- Color name tooltip on hover -->
-                                                <div class="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                                                    {{ $color }}
-                                                </div>
+                                                <span style="background: {{ $colorCode }};"></span>
+                                                <svg class="color-swatch__check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                                                </svg>
                                             </button>
                                         @endforeach
                                     </div>
                                 </div>
                             @else
                                 <!-- Other Attributes -->
-                                <div>
-                                    <h3 class="text-lg font-semibold text-gray-900 mb-3">{{ $attributeName }}</h3>
-                                    <div class="flex flex-wrap gap-3">
+                                <div class="product-show-options__group">
+                                    <h3 class="product-show-options__label">{{ $attributeName }}</h3>
+                                    <div class="product-show-options__chips">
                                         @foreach($attributeValues as $value)
-                                            <button onclick="selectAttribute('{{ $attributeName }}', '{{ $value }}')" 
-                                                    class="attribute-option px-4 py-2 border-2 border-gray-300 rounded-lg hover:border-[#005366] transition-colors {{ $loop->first ? 'border-[#005366] bg-[#005366] text-white' : '' }}"
+                                            <button type="button" onclick="selectAttribute('{{ $attributeName }}', '{{ $value }}')"
+                                                    class="attribute-option {{ $loop->first ? 'border-[#005366] bg-gray-50 text-[#005366]' : 'border-gray-300 text-gray-600' }}"
                                                     data-attribute="{{ $attributeName }}"
                                                     data-value="{{ $value }}">
                                                 {{ $value }}
@@ -1340,48 +1112,32 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </div>
                             @endif
                         @endforeach
-
-                        <!-- Selected Variant Summary -->
-                        <div id="selected-variant-summary" class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-medium text-gray-900">
-                                        <span id="selected-variant-name">
-                                            @if($selectedVariant->variant_name)
-                                                {{ $selectedVariant->variant_name }}
-                                            @elseif($selectedVariant->attributes)
-                                                @php
-                                                    $attrParts = [];
-                                                    foreach($selectedVariant->attributes as $key => $value) {
-                                                        $attrParts[] = $value;
-                                                    }
-                                                    echo implode(' - ', $attrParts);
-                                                @endphp
-                                            @else
-                                                Standard
-                                            @endif
-                                        </span>
-                                    </h4>
-                                    @if($selectedVariant->quantity !== null)
-                                        <p class="text-xs text-gray-500 mt-1" id="selected-variant-stock">
-                                            Stock: {{ $selectedVariant->quantity > 0 ? $selectedVariant->quantity . ' available' : 'Out of stock' }}
-                                        </p>
-                                    @endif
-                                </div>
-                                <div class="text-right">
-                                    <span class="text-lg font-bold text-[#E2150C]" id="selected-variant-price">
-                                        {{ format_price_usd($selectedVariant->price ?? $product->base_price) }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Hidden data for JavaScript -->
                     <script type="application/json" id="variants-data">
-                        {!! $variants->map(function($variant) use ($product) {
-                            $variantPriceUSD = (float) ($variant->price ?? $product->base_price);
+                        {!! $variants->map(function ($variant) use ($product, $isFlashSale, $flashDiscountPct, $flashOriginalPriceUsd) {
+                            $rawVariantPrice = $variant->price;
+                            $variantPriceUSD = (float) ($rawVariantPrice ?? $product->getEffectivePrice());
+                            $variantListUSD = (float) $variant->getCompareAtPrice();
+
+                            if ($isFlashSale && $flashDiscountPct > 0) {
+                                if ($rawVariantPrice !== null) {
+                                    // Variant table stores pre-deal price → apply same flash %
+                                    $variantListUSD = max($variantListUSD, (float) $rawVariantPrice);
+                                    $variantPriceUSD = round((float) $rawVariantPrice * (1 - $flashDiscountPct / 100), 2);
+                                } else {
+                                    $variantListUSD = max(
+                                        $variantListUSD,
+                                        (float) ($flashOriginalPriceUsd ?? $variantListUSD)
+                                    );
+                                    $variantPriceUSD = (float) $product->getEffectivePrice();
+                                }
+                            }
+
                             $variantPriceConverted = convert_currency($variantPriceUSD);
+                            $variantListConverted = convert_currency($variantListUSD);
+
                             return [
                                 'id' => $variant->id,
                                 'attributes' => $variant->attributes ?? [],
@@ -1389,540 +1145,189 @@ document.addEventListener('DOMContentLoaded', function() {
                                 'color' => $variant->attributes['Color'] ?? null,
                                 'colour' => $variant->attributes['Colour'] ?? null,
                                 'price' => $variantPriceConverted,
-                                'price_usd' => $variantPriceUSD, // Giữ giá USD gốc để tính toán
+                                'price_usd' => $variantPriceUSD,
+                                'list_price' => $variantListConverted,
+                                'list_price_usd' => $variantListUSD,
                                 'quantity' => $variant->quantity,
                                 'variant_name' => $variant->variant_name,
-                                'media' => $variant->media
+                                'media' => $variant->media,
+                                'flash' => $isFlashSale,
+                                'flash_percent' => $flashDiscountPct,
                             ];
                         })->values()->toJson() !!}
                     </script>
                 @endif
 
+                <div class="product-show-purchase__promo-divider" aria-hidden="true"></div>
+                @include('products.partials.show-volume-discounts', ['volumeDiscountTiers' => $volumeDiscountTiers])
+                @include('products.partials.show-customization', ['product' => $product])
+
                 <!-- Custom File Upload Section -->
-                @if($product->allow_customization)
+                @if($product->hasCustomization() || $product->allow_customization)
                     <x-custom-file-upload :product="$product" />
                 @endif
 
                 <!-- Action Buttons -->
-                <div class="flex space-x-3 md:space-x-4">
-                    <button id="add-to-cart-btn" 
-                            onclick="addToCart()"
-                            class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-semibold py-3 md:py-4 px-4 md:px-6 rounded-lg md:rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base min-h-[44px]">
-                            <svg id="cart-icon" class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
-                            </svg>
-                            <span id="cart-text">Add to Cart</span>
-                            <div id="cart-loading" class="hidden">
-                                <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                            </div>
-                        </button>
-                        <button onclick="buyNow()" class="flex-1 bg-[#E2150C] hover:bg-[#c0120a] text-white font-semibold py-3 md:py-4 px-4 md:px-6 rounded-lg md:rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 text-sm md:text-base min-h-[44px]">
-                            <span>Buy Now</span>
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                            </svg>
-                        </button>
-                    </div>
-
-                <!-- Wishlist Button -->
-                <div class="w-full mt-4">
-                    <x-wishlist-button :product="$product" size="lg" :showText="true" />
-                </div>
-
-                <!-- Guarantee & Delivery Info Section -->
-                <div class="bg-amber-50 border border-amber-200 rounded-xl p-6 mt-6">
-                    <!-- Printerval Guarantee -->
-                    <div class="flex items-center space-x-3 mb-4">
-                        <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                            <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                            </svg>
+                <div class="product-show-purchase__actions-bar">
+                    <div class="product-show-purchase__actions-inner">
+                        <div class="product-show-purchase__qty" aria-label="Quantity">
+                            <button type="button" class="product-show-purchase__qty-btn" onclick="changeProductQuantity(-1)" aria-label="Decrease quantity">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                            </button>
+                            <span class="product-show-purchase__qty-value" id="product-quantity">1</span>
+                            <button type="button" class="product-show-purchase__qty-btn" onclick="changeProductQuantity(1)" aria-label="Increase quantity">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            </button>
                         </div>
-                        <div>
-                            <h4 class="font-semibold text-gray-900">Bluprinter Guarantee</h4>
-                            <p class="text-sm text-gray-600">Don't love it? We'll fix it. For free.</p>
-                        </div>
-                    </div>
-
-                    <!-- Delivery Info -->
-                    <div class="flex items-start space-x-3">
-                        <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                            </svg>
-                        </div>
-                        <div class="flex-1">
-                            <h4 class="font-semibold text-gray-900" id="delivery-location">Deliver to <span id="customer-location">Loading...</span></h4>
-                            @if($defaultShippingRate)
-                                <p class="text-sm text-gray-600" id="delivery-shipping-rate">{{ $defaultShippingRate->name }}</p>
-                                @if($defaultShippingRate->description)
-                                    <p class="text-sm text-gray-600" id="delivery-estimate">{{ $defaultShippingRate->description }}</p>
-                                @else
-                                    <p class="text-sm text-gray-600" id="delivery-estimate">Calculating delivery time...</p>
-                                @endif
-                            @else
-                                <p class="text-sm text-gray-600" id="delivery-estimate">Calculating delivery time...</p>
-                            @endif
-                            <p class="text-sm text-gray-600" id="ready-to-ship">Ready to ship in: 2 business days</p>
-                        </div>
-                    </div>
-
-                </div>
-
-                <!-- Designer & Policies Section -->
-                <div class="space-y-6 mt-6">
-                    <!-- Designed by -->
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-3">
-                            <span class="text-gray-700">Designed by</span>
-                            <a href="{{ route('shops.show', $product->shop->shop_slug ?? '') }}" class="text-[#005366] hover:underline font-medium flex items-center space-x-1">
-                                <span>{{ $product->shop->name ?? 'Bluprinter Team' }}</span>
-                                <svg class="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                </svg>
-                            </a>
-                        </div>
-                    </div>
-
-                    <!-- Policies -->
-                    <div class="flex items-start space-x-3">
-                        <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold text-gray-900 mb-1">Policies</h4>
-                            <p class="text-sm text-gray-600">
-                                Eligible for <a href="{{ route('page.show', 'returns-exchanges-policy') }}" class="text-orange-600 font-medium hover:underline">Refund</a> or <a href="{{ route('page.show', 'returns-exchanges-policy') }}" class="text-orange-600 font-medium hover:underline">Return and Replacement</a> within 30 days from the date of delivery
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Need Support -->
-                    <div class="flex items-start space-x-3">
-                        <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path>
-                            </svg>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold text-gray-900 mb-2">Need Support?</h4>
-                            <div class="flex items-center space-x-4">
-                                <a href="{{ route('page.show', 'contact-us') }}" class="text-[#005366] hover:underline text-sm">Submit a ticket</a>
-                                <span class="text-gray-300">|</span>
-                                <a href="{{ route('page.show', 'contact-us') }}" class="text-[#005366] hover:underline text-sm">Report Product</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- Product Details -->
-            <div class="space-y-6">
-                <div>
-                    <h3 class="text-xl font-semibold text-gray-900 mb-3">Product Description</h3>
-                    @php
-                        $description = $product->description ?? 'No description available for this product.';
-                        
-                        // Convert HTML to text
-                        $description = strip_tags($description);
-                        
-                        // Decode HTML entities
-                        $description = html_entity_decode($description, ENT_QUOTES, 'UTF-8');
-                        
-                        // Replace &nbsp; with regular spaces
-                        $description = str_replace('&nbsp;', ' ', $description);
-                        
-                        // Replace multiple hyphens with section breaks
-                        $description = preg_replace('/-{3,}/', "\n\n", $description);
-                        
-                        // Clean up extra spaces and line breaks
-                        $description = preg_replace('/\s+/', ' ', $description);
-                        $description = preg_replace('/\n\s*\n/', "\n\n", $description);
-                        $description = trim($description);
-                        
-                        // Calculate preview length (approximately 4 lines = ~300 characters)
-                        $previewLength = 300;
-                        $hasMoreContent = strlen($description) > $previewLength;
-                        
-                        if ($hasMoreContent) {
-                            // Find a good break point (end of sentence or word)
-                            $previewText = substr($description, 0, $previewLength);
-                            $lastPeriod = strrpos($previewText, '.');
-                            $lastSpace = strrpos($previewText, ' ');
-                            
-                            if ($lastPeriod !== false && $lastPeriod > $previewLength * 0.7) {
-                                $previewText = substr($previewText, 0, $lastPeriod + 1);
-                            } elseif ($lastSpace !== false) {
-                                $previewText = substr($previewText, 0, $lastSpace) . '...';
-                            } else {
-                                $previewText .= '...';
-                            }
-                        } else {
-                            $previewText = $description;
-                        }
-                        
-                        // Split by double line breaks to create sections for full display
-                        $sections = array_filter(array_map('trim', explode("\n\n", $description)));
-                    @endphp
-                    
-                    <!-- Description Preview (Always Visible) -->
-                    <div id="description-preview" class="text-gray-700 leading-relaxed whitespace-pre-line">
-                        {{ $previewText }}
-                </div>
-
-                    <!-- Full Description (Hidden by default) -->
-                    <div id="description-full" class="hidden text-gray-700 leading-relaxed space-y-4">
-                        @foreach($sections as $index => $section)
-                            @if(strpos($section, ':') !== false)
-                                @php
-                                    list($title, $content) = explode(':', $section, 2);
-                                    $title = trim($title);
-                                    $content = trim($content);
-                                @endphp
-                                <div class="border-l-4 border-[#005366] pl-4 py-2">
-                                    <h4 class="font-semibold text-gray-900 mb-1">{{ $title }}</h4>
-                                    <p class="text-gray-700">{{ $content }}</p>
+                        <div class="product-show-purchase__actions">
+                            <button id="add-to-cart-btn"
+                                    type="button"
+                                    onclick="addToCart()"
+                                    class="product-show-purchase__btn product-show-purchase__btn--cart disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span id="cart-text">Add to Cart</span>
+                                <div id="cart-loading" class="hidden">
+                                    <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-[#005366]"></div>
                                 </div>
-                            @else
-                                <p class="text-gray-700">{{ $section }}</p>
-                            @endif
-                        @endforeach
-                    </div>
-                    
-                    <!-- Show More/Less Button -->
-                    @if($hasMoreContent)
-                        <button id="toggle-description" onclick="toggleDescription()" class="mt-4 text-[#005366] hover:underline font-medium flex items-center space-x-2">
-                            <span id="description-toggle-text">Show More</span>
-                            <svg id="description-toggle-icon" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </button>
-                    @endif
-                </div>
-
-
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Related Products (Mobile Only) -->
-@if($relatedProducts->count() > 0)
-<div class="lg:hidden bg-gray-50 py-8 border-t border-gray-200">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="space-y-4">
-            <div class="flex items-center justify-between">
-                <h3 class="text-xl font-bold text-gray-900">Related Products</h3>
-                <a href="{{ route('products.index') }}" class="text-sm text-[#005366] hover:underline">
-                    See All Items
-                </a>
-            </div>
-            
-            <!-- Related Products Scroll Container -->
-            <div class="overflow-x-auto mobile-scroll-hide" style="scroll-behavior: smooth;">
-                <div class="flex gap-3 pb-2">
-                        @foreach($relatedProducts->take(12) as $relatedProduct)
-                            <a href="{{ route('products.show', $relatedProduct->slug) }}" 
-                               class="flex-shrink-0 w-40 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group/item overflow-hidden border border-gray-200">
-                    <!-- Product Image -->
-                    <div class="relative aspect-square overflow-hidden">
-                        @php
-                            $relatedMedia = $relatedProduct->getEffectiveMedia();
-                            $relatedImageUrl = null;
-                            if ($relatedMedia && count($relatedMedia) > 0) {
-                                if (is_string($relatedMedia[0])) {
-                                    $relatedImageUrl = $relatedMedia[0];
-                                } elseif (is_array($relatedMedia[0])) {
-                                    $relatedImageUrl = $relatedMedia[0]['url'] ?? $relatedMedia[0]['path'] ?? reset($relatedMedia[0]) ?? null;
-                                }
-                            }
-                        @endphp
-                        @if($relatedImageUrl)
-                            <img src="{{ $relatedImageUrl }}" 
-                                 alt="{{ $relatedProduct->name }}" 
-                                            class="w-full h-full object-cover group-hover/item:scale-105 transition-transform duration-300">
-                        @else
-                            <div class="w-full h-full bg-gray-200 flex items-center justify-center">
-                                            <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                </svg>
-                            </div>
-                        @endif
-                    </div>
-
-                                <!-- Product Info (Compact) -->
-                                <div class="p-2.5">
-                                    <h4 class="font-medium text-gray-900 text-xs line-clamp-2 group-hover/item:text-[#005366] transition-colors mb-1.5 h-8 overflow-hidden" title="{{ $relatedProduct->name }}">
-                                        {{ Str::limit($relatedProduct->name, 30) }}
-                                    </h4>
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-xs font-bold text-[#E2150C]">{{ format_price_usd($relatedProduct->base_price) }}</span>
-                                        <div class="flex items-center text-xs text-gray-500">
-                                            <svg class="w-3 h-3 text-yellow-400 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                            </svg>
-                                            <span class="text-xs">4.5</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </a>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-@endif
-<!-- Reviews Section (Mobile & Tablet Only) -->
-<div class="lg:hidden bg-white py-8 border-t border-gray-200">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="space-y-6">
-            <!-- Reviews Header -->
-            <div class="flex items-center justify-between">
-                <h3 class="text-2xl font-bold text-gray-900">Reviews</h3>
-            </div>
-
-            <!-- Tabs -->
-            <div class="border-b border-gray-200">
-                <nav class="-mb-px flex space-x-8">
-                    <button class="border-b-2 border-[#005366] py-2 px-1 text-sm font-medium text-[#005366]">
-                        Reviews for this item
-                    </button>
-                    <button class="border-b-2 border-transparent py-2 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                        Reviews for this shop
-                    </button>
-                </nav>
-            </div>
-
-            @php
-                $averageRating = $product->getAverageRating();
-                $totalReviews = $product->getTotalReviews();
-                $ratingBreakdown = $product->getRatingBreakdown();
-            @endphp
-
-            <!-- Overall Rating Summary -->
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-                <!-- Average Rating -->
-                <div class="flex items-center space-x-4">
-                    <div class="flex items-center">
-                        <svg class="w-8 h-8 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                        </svg>
-                        <span class="text-2xl font-bold text-gray-900 ml-2">{{ number_format($averageRating, 1) }} /5.0</span>
-                    </div>
-                    <div class="text-sm text-gray-600">
-                        <span class="underline">{{ $totalReviews }} Reviews</span>
-                    </div>
-                </div>
-
-                <!-- Star Rating Distribution -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2">
-                    <!-- Left Column -->
-                    <div class="space-y-2">
-                        @for($star = 5; $star >= 3; $star--)
-                            @php
-                                $count = $ratingBreakdown[$star] ?? 0;
-                                $percentage = $totalReviews > 0 ? round(($count / $totalReviews) * 100) : 0;
-                            @endphp
-                            <div class="flex items-center space-x-2">
-                                <div class="flex items-center">
-                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                    </svg>
-                                    <span class="text-sm font-medium text-gray-700 ml-1">{{ $star }}</span>
-                                </div>
-                                <div class="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
-                                    <div class="bg-gray-900 h-2 rounded-full" style="width: {{ $percentage }}%"></div>
-                                </div>
-                                <span class="text-xs text-gray-500 w-8">({{ $percentage }}%)</span>
-                            </div>
-                        @endfor
-                    </div>
-                    
-                    <!-- Right Column -->
-                    <div class="space-y-2">
-                        @for($star = 2; $star >= 1; $star--)
-                            @php
-                                $count = $ratingBreakdown[$star] ?? 0;
-                                $percentage = $totalReviews > 0 ? round(($count / $totalReviews) * 100) : 0;
-                            @endphp
-                            <div class="flex items-center space-x-2">
-                                <div class="flex items-center">
-                                    <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                    </svg>
-                                    <span class="text-sm font-medium text-gray-700 ml-1">{{ $star }}</span>
-                                </div>
-                                <div class="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
-                                    <div class="bg-gray-900 h-2 rounded-full" style="width: {{ $percentage }}%"></div>
-                                </div>
-                                <span class="text-xs text-gray-500 w-8">({{ $percentage }}%)</span>
-                            </div>
-                        @endfor
-                    </div>
-                </div>
-            </div>
-
-            <!-- Individual Reviews -->
-            @if($product->approvedReviews->count() > 0)
-                <div class="space-y-6">
-                    @foreach($product->approvedReviews->take(3) as $review)
-                        <div class="border-t border-dotted border-gray-300 pt-6">
-                            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between space-y-4 lg:space-y-0">
-                                <!-- Review Content -->
-                                <div class="flex-1">
-                                    <!-- Rating -->
-                                    <div class="flex items-center mb-3">
-                                        @for($i = 1; $i <= 5; $i++)
-                                            @if($i <= floor($review->rating))
-                                                <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                                </svg>
-                                            @elseif($i - 0.5 <= $review->rating)
-                                                <svg class="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                                    <defs>
-                                                        <linearGradient id="half-star-mobile-{{ $review->id }}-{{ $i }}">
-                                                            <stop offset="50%" stop-color="currentColor"/>
-                                                            <stop offset="50%" stop-color="#E5E7EB"/>
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <path fill="url(#half-star-mobile-{{ $review->id }}-{{ $i }})" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                                </svg>
-                                            @else
-                                                <svg class="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                                                </svg>
-                                            @endif
-                                        @endfor
-                                    </div>
-
-                                    <!-- Review Title and Text -->
-                                    @if($review->review_text)
-                                        @php
-                                            $words = explode(' ', $review->review_text);
-                                            $title = count($words) > 8 ? implode(' ', array_slice($words, 0, 8)) . '...' : $review->review_text;
-                                        @endphp
-                                        <h4 class="font-semibold text-gray-900 mb-2">{{ $title }}</h4>
-                                        <p class="text-gray-700 text-sm leading-relaxed">{{ $review->review_text }}</p>
-                                    @endif
-                                </div>
-
-                                <!-- Reviewer Info -->
-                                <div class="flex items-center space-x-3 lg:ml-6">
-                                    <div class="flex-shrink-0">
-                                        <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-medium text-sm">
-                                            {{ Str::upper(substr($review->display_name, 0, 2)) }}
-                                        </div>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="text-sm font-medium text-gray-900">{{ $review->display_name }}</div>
-                                        <div class="text-xs text-gray-500">{{ $review->created_at->format('D M d Y') }}</div>
-                                    </div>
-                                </div>
-                            </div>
+                            </button>
+                            <button type="button" onclick="buyNow()" class="product-show-purchase__btn product-show-purchase__btn--buy">
+                                Buy Now
+                            </button>
                         </div>
-                    @endforeach
+                    </div>
                 </div>
-            @else
-                <div class="text-center py-12">
-                    <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+
+                <button type="button"
+                        class="product-show-purchase__tryon"
+                        data-tryon-open
+                        data-tryon-name="{{ $product->name }}"
+                        data-tryon-type="{{ $product->getDisplayCategoryName() }}"
+                        data-tryon-url="{{ route('products.show', $product->slug) }}"
+                        data-tryon-image="{{ $tryOnMedia['image'] }}"
+                        data-tryon-back="{{ $tryOnMedia['back'] }}">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
                     </svg>
-                    <p class="text-gray-500 text-lg mb-2">No reviews yet</p>
-                    <p class="text-gray-400 text-sm">Be the first to review this product</p>
-                </div>
-            @endif
-
-            <!-- Write Review and Pagination -->
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0 pt-6 border-t border-gray-200">
-                <!-- Write Review Button -->
-                <button class="inline-flex items-center px-4 py-2 border border-orange-500 text-orange-500 rounded-lg hover:bg-orange-50 transition-colors">
-                    <svg class="w-4 h-4 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
-                    </svg>
-                    Write your review
+                    Try it on with AI
                 </button>
 
-                <!-- Pagination -->
-                @if($product->approvedReviews->count() > 3)
-                    <div class="flex items-center space-x-2">
-                        <button class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
-                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                            </svg>
-                        </button>
-                        <span class="text-sm text-gray-600 px-3">1/3</span>
-                        <button class="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
-                            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                            </svg>
-                        </button>
+                @if($product->shop)
+                    <div class="product-show-purchase__shop-divider" aria-hidden="true"></div>
+
+                    <div class="product-show-purchase__shop-card">
+                        <p class="product-show-purchase__shop-eyebrow">Sold by</p>
+                        <div class="product-show-purchase__shop-body">
+                            <a href="{{ route('shops.show', $product->shop->shop_slug ?? $product->shop->id) }}"
+                               class="product-show-purchase__shop-info-link">
+                                @if ($pdpShopLogo)
+                                    <img src="{{ $pdpShopLogo }}"
+                                         alt="{{ $product->shop->shop_name }} logo"
+                                         class="product-show-purchase__shop-avatar product-show-purchase__shop-avatar--photo"
+                                         loading="lazy">
+                                @else
+                                    <div class="product-show-purchase__shop-avatar" aria-hidden="true">{{ $shopInitials }}</div>
+                                @endif
+                                <div class="product-show-purchase__shop-copy">
+                                    <h4 class="product-show-purchase__shop-name">{{ $product->shop->shop_name ?? $product->shop->name ?? 'Shop' }}</h4>
+                                    <div class="product-show-purchase__shop-stats">
+                                        @if ($pdpShopRatingCount > 0 && $pdpShopRating !== null)
+                                            <span class="product-show-purchase__shop-rating">
+                                                <svg class="product-show-purchase__shop-star" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                                                </svg>
+                                                {{ number_format($pdpShopRating, 1) }}
+                                                <span class="product-show-purchase__shop-rating-count">({{ number_format($pdpShopRatingCount) }})</span>
+                                            </span>
+                                        @endif
+                                        @if ($soldCount > 0)
+                                            @if ($pdpShopRatingCount > 0)
+                                                <span class="product-show-purchase__shop-stat-sep" aria-hidden="true">·</span>
+                                            @endif
+                                            <span>{{ number_format($soldCount) }} sold<span class="product-show-purchase__shop-sold-detail"> on this item</span></span>
+                                        @endif
+                                    </div>
+                                    @if (! empty($pdpShopTrustLine))
+                                        <p class="product-show-purchase__shop-trust">{{ $pdpShopTrustLine }}</p>
+                                    @endif
+                                </div>
+                            </a>
+                            <div class="product-show-purchase__shop-actions">
+                                <button type="button"
+                                        id="pdpContactShopBtn"
+                                        class="product-show-purchase__shop-message"
+                                        aria-label="Message {{ $product->shop->shop_name }}">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                                    </svg>
+                                    <span class="product-show-purchase__shop-message-label">Message</span>
+                                </button>
+                                <a href="{{ route('shops.show', $product->shop->shop_slug ?? $product->shop->id) }}"
+                                   class="product-show-purchase__shop-visit">
+                                    Visit store
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
                     </div>
+                @endif
+
+                @include('products.partials.show-listing-below')
+            </div>
+            </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="product-show-below">
+            <div class="product-show-below__reviews">
+                @include('products.partials.show-gallery-reviews')
+            </div>
+
+            @include('products.partials.show-frequently-bought-together', [
+                'fbtProducts' => $fbtProducts,
+                'product' => $product,
+            ])
+
+            @include('products.partials.show-customize-hero')
+
+            @include('products.partials.show-you-might-love-these', [
+                'collectionProducts' => $collectionProducts,
+                'product' => $product,
+            ])
+
+            @include('products.partials.show-recently-viewed', ['product' => $product])
+
+            <div class="product-show-info__tail">
+                @php
+                    $productTags = collect($product->keywords ?? [])->filter()->take(5);
+                @endphp
+                @if($productTags->isNotEmpty())
+                    <dl class="product-show-purchase__meta-list mt-4">
+                        <div class="product-show-purchase__meta-list-row">
+                            <dt>Tags</dt>
+                            <dd class="product-show-purchase__tags">
+                                @foreach($productTags as $tag)
+                                    <a href="{{ route('products.index', ['search' => $tag]) }}" class="product-show-purchase__tag">{{ $tag }}</a>
+                                @endforeach
+                            </dd>
+                        </div>
+                    </dl>
                 @endif
             </div>
         </div>
     </div>
-</div>
 
-<!-- Recently Viewed Products -->
-<div class="bg-gray-50 py-8 border-t border-gray-200">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="space-y-4">
-            <div class="flex items-center justify-between">
-                <h3 class="text-xl font-bold text-gray-900">Recently Viewed</h3>
-                <a href="{{ route('products.index') }}" class="text-sm text-[#005366] hover:underline">
-                    See All Items
-                </a>
-            </div>
-            
-            <!-- Recently Viewed Container -->
-            <div class="relative" id="recently-viewed-wrapper">
-                <!-- Navigation Buttons (Desktop only) -->
-                <button id="recentlyViewedPrevBtn" 
-                        onclick="scrollRecentlyViewed('prev')"
-                        class="hidden lg:block absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100">
-                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                    </svg>
-                </button>
-                
-                <button id="recentlyViewedNextBtn" 
-                        onclick="scrollRecentlyViewed('next')"
-                        class="hidden lg:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-all">
-                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                    </svg>
-                </button>
-                
-                <!-- Products Container -->
-                <div id="recentlyViewedContainer" class="overflow-x-auto lg:overflow-hidden mobile-scroll-hide group pb-2" style="scroll-behavior: smooth;">
-                    <div id="recently-viewed-container" class="flex gap-3 lg:transition-transform lg:duration-300">
-                        <!-- Products will be loaded here by JavaScript -->
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Empty State -->
-            <div id="recently-viewed-empty" class="text-center py-12 hidden">
-                <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                </svg>
-                <p class="text-gray-500 text-lg mb-2">No products viewed yet</p>
-                <p class="text-gray-400 text-sm">Products you view will appear here</p>
-            </div>
-        </div>
-    </div>
-</div>
+</section>
 
 <!-- Gallery Modal -->
 <div id="gallery-modal" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 hidden">
     <div class="relative w-full h-full max-w-7xl mx-auto p-4">
         <!-- Close Button -->
-        <button onclick="closeGalleryModal()" 
-                class="absolute top-4 right-4 z-10 bg-black bg-opacity-50 text-white rounded-full p-2 hover:bg-opacity-70 transition-colors">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button type="button" onclick="closeGalleryModal()"
+                class="absolute top-4 right-4 z-10 bg-black bg-opacity-50 text-white rounded-full p-2 hover:bg-opacity-70 transition-colors"
+                aria-label="Close gallery">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
         </button>
@@ -1944,7 +1349,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
         
         <!-- Media Type Badge -->
-        <div id="modal-media-badge" class="absolute top-4 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white text-xs px-3 py-1 rounded-full font-medium items-center space-x-1 hidden">
+        <div id="modal-media-badge" class="absolute top-4 left-1/2 transform -translate-x-1/2 bg-[#005366] text-white text-xs px-3 py-1 rounded-full font-medium items-center space-x-1 hidden">
             <svg class="w-3 h-3 inline" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path>
             </svg>
@@ -1952,15 +1357,17 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
         
         <!-- Navigation -->
-        <button onclick="previousImage()" 
-                class="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-3 hover:bg-opacity-70 transition-colors">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button type="button" onclick="previousImage()"
+                class="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-3 hover:bg-opacity-70 transition-colors"
+                aria-label="Previous media">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
             </svg>
         </button>
-        <button onclick="nextImage()" 
-                class="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-3 hover:bg-opacity-70 transition-colors">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button type="button" onclick="nextImage()"
+                class="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-3 hover:bg-opacity-70 transition-colors"
+                aria-label="Next media">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
         </button>
@@ -1975,8 +1382,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <button onclick="selectModalImage('{{ $imageUrl }}', {{ $index }})" 
                             class="w-12 h-12 rounded overflow-hidden border-2 border-transparent hover:border-white transition-colors relative">
                         @if($isModalThumbVideo)
-                            <div class="w-full h-full bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
-                                <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                            <div class="w-full h-full bg-[#005366]/10 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-[#005366]" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                     <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path>
                                 </svg>
                             </div>
@@ -2019,63 +1426,668 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 }
 
-/* Cart Popup Animations */
-.cart-popup-enter {
-    animation: cartPopupEnter 0.3s ease-out;
+/* Cart drawer — slide-in panel (replaces centered modal) */
+body.cart-drawer-open {
+    overflow: hidden;
 }
-
-@keyframes cartPopupEnter {
-    from {
-        opacity: 0;
-        transform: scale(0.9) translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
+.cart-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 94;
+    background: rgba(17, 24, 39, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
 }
-
-.cart-popup-exit {
-    animation: cartPopupExit 0.2s ease-in;
+.cart-drawer-backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
 }
-
-@keyframes cartPopupExit {
-    from {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-    to {
-        opacity: 0;
-        transform: scale(0.95) translateY(-10px);
-    }
+.cart-drawer {
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: 95;
+    display: flex;
+    flex-direction: column;
+    width: min(100vw, 420px);
+    height: 100vh;
+    height: 100dvh;
+    background: #fff;
+    border-left: 1px solid #e5e7eb;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.12);
+    transform: translateX(100%);
+    transition: transform 0.28s ease;
 }
-
-/* Cross-sell product hover effects */
+.cart-drawer.is-open {
+    transform: translateX(0);
+}
+.cart-drawer__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+.cart-drawer__footer {
+    flex-shrink: 0;
+    border-top: 1px solid #e5e7eb;
+    background: #fff;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+}
+.cart-drawer-freeship {
+    padding: 10px 16px;
+    background: #fffbeb;
+    border-bottom: 1px solid #fde68a;
+}
+.cart-drawer-freeship--done {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #ecfdf5;
+    border-bottom-color: #bbf7d0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #166534;
+}
+.cart-drawer-freeship__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 9999px;
+    background: #22c55e;
+    color: #fff;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+.cart-drawer-freeship__text {
+    margin: 0 0 6px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: #78350f;
+}
+.cart-drawer-freeship__track {
+    height: 6px;
+    border-radius: 9999px;
+    background: #fde68a;
+    overflow: hidden;
+}
+.cart-drawer-freeship__fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #f59e0b, #ea580c);
+    transition: width 0.25s ease;
+}
+.cart-drawer-bill {
+    padding: 12px 16px 10px;
+    background: #f9fafb;
+}
+.cart-drawer-bill__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 13px;
+    color: #4b5563;
+    line-height: 1.4;
+}
+.cart-drawer-bill__row + .cart-drawer-bill__row {
+    margin-top: 6px;
+}
+.cart-drawer-bill__row-value {
+    font-weight: 600;
+    color: #111827;
+    white-space: nowrap;
+}
+.cart-drawer-bill__row-value--free {
+    color: #16a34a;
+    font-weight: 700;
+}
+.cart-drawer-bill__row--error {
+    color: #e2150c;
+}
+.cart-drawer-bill__shipping-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.cart-drawer-bill__zone-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #005366;
+    cursor: pointer;
+    vertical-align: middle;
+}
+.cart-drawer-bill__zone-edit:hover {
+    background: rgba(0, 83, 102, 0.08);
+}
+.cart-drawer-bill__total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+}
+.cart-drawer-bill__total-value {
+    font-size: 17px;
+    color: #005366;
+}
+.cart-popup-zone-editor {
+    padding: 0 16px 10px;
+    background: #f9fafb;
+}
+.cart-popup-zone-editor--hidden {
+    display: none;
+}
+.cart-popup-zone-editor__select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #111827;
+    background: #fff;
+}
+.cart-popup-zone-editor__select:focus {
+    outline: none;
+    border-color: #005366;
+    box-shadow: 0 0 0 3px rgba(0, 83, 102, 0.12);
+}
+.cart-drawer-promo {
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 55%, #fef3c7 100%);
+    border-top: 2px solid #fb923c;
+    border-bottom: 1px solid #fdba74;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+.cart-drawer-promo__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.cart-drawer-promo__code {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 58px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #005366;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    box-shadow: 0 3px 10px rgba(0, 83, 102, 0.35);
+}
+.cart-drawer-promo__title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #9a3412;
+}
+.cart-drawer-promo__sub {
+    margin: 2px 0 0;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #c2410c;
+}
+.cart-drawer-promo__form {
+    display: flex;
+    gap: 8px;
+}
+.cart-drawer-promo__input {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid #fdba74;
+    border-radius: 8px;
+    font-size: 13px;
+    background: #fff;
+}
+.cart-drawer-promo__input:focus {
+    outline: none;
+    border-color: #ea580c;
+    box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15);
+}
+.cart-drawer-promo__submit {
+    flex-shrink: 0;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 8px;
+    background: #ea580c;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 3px 10px rgba(234, 88, 12, 0.35);
+    white-space: nowrap;
+}
+.cart-drawer-promo__submit:hover:not(:disabled) {
+    background: #c2410c;
+}
+.cart-drawer-promo__submit:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+.cart-drawer-promo--success {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #166534;
+    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+    border-top: 2px solid #86efac;
+    border-bottom: 1px solid #bbf7d0;
+}
+.cart-drawer-promo--success strong {
+    color: #15803d;
+}
+.cart-popup-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fff;
+    flex-shrink: 0;
+}
+.cart-popup-head__title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+.cart-popup-head__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 9999px;
+    background: #dcfce7;
+    color: #16a34a;
+    flex-shrink: 0;
+}
+.cart-popup-head__title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: #111827;
+}
+.cart-popup-head__sub {
+    margin: 2px 0 0;
+    font-size: 0.875rem;
+    color: #4b5563;
+}
+.cart-popup-head__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.cart-popup-head__close:hover {
+    color: #111827;
+    background: #f3f4f6;
+}
+.cart-drawer__scroll .cart-popup-body {
+    padding: 16px 20px 8px;
+}
+.cart-popup-items {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.cart-popup-item {
+    padding: 16px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    transition: box-shadow 0.2s ease;
+}
+.cart-popup-item:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+.cart-popup-item__inner {
+    display: flex;
+    gap: 16px;
+}
+.cart-popup-item__media {
+    flex-shrink: 0;
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f7f7f7;
+}
+.cart-popup-item__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.cart-popup-item__media-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    background: #f3f4f6;
+    color: #9ca3af;
+}
+.cart-popup-item__name {
+    margin: 0 0 4px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #111827;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.cart-popup-item__shop {
+    margin: 0 0 8px;
+    font-size: 0.75rem;
+    color: #4b5563;
+}
+.cart-popup-item__shop a {
+    color: #005366;
+    font-weight: 500;
+    text-decoration: none;
+}
+.cart-popup-item__shop a:hover {
+    text-decoration: underline;
+}
+.cart-popup-item__variant {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    margin: 0 4px 4px 0;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: #f3f4f6;
+    color: #4b5563;
+}
+.cart-popup-item__custom {
+    margin-bottom: 8px;
+    font-size: 0.75rem;
+    color: #4b5563;
+}
+.cart-popup-item__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+}
+.cart-popup-qty {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.cart-popup-qty__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    color: #111827;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+.cart-popup-qty__btn:hover:not(:disabled) {
+    border-color: #005366;
+    background: rgba(0, 83, 102, 0.06);
+}
+.cart-popup-qty__btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.cart-popup-qty__value {
+    min-width: 1.5rem;
+    text-align: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+}
+.cart-popup-item__price {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #005366;
+    text-align: right;
+}
+.cart-popup-item__unit {
+    margin: 2px 0 0;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    text-align: right;
+}
+.cart-popup-item__remove {
+    padding: 4px;
+    border: 0;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+.cart-popup-item__remove:hover {
+    color: #e2150c;
+    background: rgba(226, 21, 12, 0.08);
+}
+.cart-popup-summary {
+    padding: 0;
+    background: transparent;
+}
+.cart-popup-summary__rows,
+.cart-popup-summary__zone-label,
+.cart-popup-summary__zone-select,
+.cart-popup-summary__total {
+    display: none;
+}
+.cart-popup-actions {
+    padding: 10px 16px 12px;
+    background: #fff;
+}
+.cart-popup-actions__buttons {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.cart-popup-actions__buttons .btn-cta,
+.cart-popup-actions__buttons .btn-outline-petrol {
+    flex: 1;
+    min-height: 48px;
+    justify-content: center;
+    font-size: 0.9375rem;
+}
+.cart-popup-actions__continue {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #005366;
+    text-align: center;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.cart-popup-actions__continue:hover {
+    color: #003d4d;
+}
+.cart-popup-recs {
+    padding: 8px 20px 24px;
+    background: #fff;
+}
+.cart-popup-recs__title {
+    margin: 0 0 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+}
+.cart-popup-recs__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+.cart-popup-recs__empty {
+    grid-column: 1 / -1;
+    padding: 16px 0;
+    text-align: center;
+    font-size: 0.875rem;
+    color: #9ca3af;
+}
 .cross-sell-product {
-    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
-
 .cross-sell-product:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.07);
 }
-
-/* Responsive popup */
+.cross-sell-product__media {
+    position: relative;
+    aspect-ratio: 1;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f7f7f7;
+}
+.cross-sell-product__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.cross-sell-product__badge {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    padding: 2px 6px;
+    border-radius: 9999px;
+    font-size: 0.625rem;
+    font-weight: 600;
+    background: #005366;
+    color: #fff;
+}
+.cross-sell-product__name {
+    margin: 0 0 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: #111827;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex: 1;
+}
+.cross-sell-product__footer {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: auto;
+}
+.cross-sell-product__price {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #005366;
+}
+.cross-sell-product__price-old {
+    display: block;
+    font-size: 0.6875rem;
+    color: #9ca3af;
+    text-decoration: line-through;
+}
+.cross-sell-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 9999px;
+    background: #e2150c;
+    color: #fff;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.cross-sell-add-btn:hover {
+    background: #c0120a;
+}
+.cart-popup-empty {
+    padding: 32px 16px;
+    text-align: center;
+    font-size: 0.9375rem;
+    color: #9ca3af;
+}
+.cart-popup-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 48px 24px;
+}
 @media (max-width: 640px) {
-    .cart-popup-content {
-        margin: 0.5rem;
-        max-height: calc(100vh - 1rem);
-        max-width: calc(100vw - 1rem);
+    .cart-drawer {
+        width: 100vw;
     }
-    
-    .cart-popup-content .grid-cols-2 {
-        grid-template-columns: 1fr;
+    .cart-popup-head,
+    .cart-drawer__scroll .cart-popup-body,
+    .cart-popup-summary,
+    .cart-popup-actions,
+    .cart-popup-recs {
+        padding-left: 16px;
+        padding-right: 16px;
     }
-    
-    .cart-popup-content .flex.space-x-3 {
+    .cart-popup-actions__buttons {
         flex-direction: column;
-        space-x: 0;
-        gap: 0.75rem;
     }
 }
 
@@ -2101,7 +2113,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 /* Hover Effects - Disabled for zoom effect */
-.aspect-square:hover #main-image {
+.product-show-gallery__main:hover #main-image {
     /* Scale handled by JavaScript for zoom effect */
 }
 
@@ -2349,6 +2361,56 @@ let allImages = [
     @endif
 ];
 
+const VOLUME_DISCOUNT_TIERS = @json($volumeDiscountTiers ?? []);
+let selectedVolumeTierIndex = null;
+
+function getVolumeDiscountPercentForQuantity(qty) {
+    if (!VOLUME_DISCOUNT_TIERS.length) {
+        return 0;
+    }
+    let best = 0;
+    VOLUME_DISCOUNT_TIERS.forEach(function (tier) {
+        const min = parseInt(tier.min_quantity, 10) || 0;
+        const pct = parseInt(tier.discount_percent, 10) || 0;
+        if (qty >= min && pct > best) {
+            best = pct;
+        }
+    });
+    return best;
+}
+
+function applyVolumeDiscountDisplay() {
+    const hint = document.getElementById('volume-discount-hint');
+    if (!hint) {
+        return;
+    }
+    const pct = getVolumeDiscountPercentForQuantity(getProductQuantity());
+    if (pct > 0) {
+        hint.textContent = pct + '% volume discount applied';
+        hint.classList.remove('hidden');
+    } else {
+        hint.classList.add('hidden');
+    }
+}
+
+function selectVolumeTier(index) {
+    document.querySelectorAll('[data-volume-tier]').forEach(function (btn) {
+        btn.classList.remove('is-selected');
+    });
+    const btn = document.querySelector('[data-volume-tier="' + index + '"]');
+    if (!btn) {
+        return;
+    }
+    btn.classList.add('is-selected');
+    selectedVolumeTierIndex = index;
+    const minQty = parseInt(btn.dataset.minQuantity, 10) || 1;
+    const qtyEl = document.getElementById('product-quantity');
+    if (qtyEl) {
+        qtyEl.textContent = String(minQty);
+    }
+    applyVolumeDiscountDisplay();
+}
+
 // Helper function for showing alerts with SweetAlert2 or fallback
 function showAlert(options) {
     if (typeof Swal !== 'undefined') {
@@ -2370,19 +2432,12 @@ window.buyNow = function buyNow() {
     // Validate required customizations first
     const validation = validateRequiredCustomizations();
     if (!validation.isValid) {
-        const message = validation.needToEnableCustomization 
-            ? `<div class="text-left">
-                    <p class="mb-3 text-gray-600">This product requires personalization. Please enable "Add Personalization" and fill in:</p>
-                    <ul class="list-disc list-inside space-y-1 text-gray-700">
-                        ${validation.missingFields.map(field => `<li>${field}</li>`).join('')}
-                    </ul>
-                </div>`
-            : `<div class="text-left">
-                    <p class="mb-3 text-gray-600">Please fill in all required personalization information:</p>
-                    <ul class="list-disc list-inside space-y-1 text-gray-700">
-                        ${validation.missingFields.map(field => `<li>${field}</li>`).join('')}
-                    </ul>
-                </div>`;
+        const message = `<div class="text-left">
+                <p class="mb-3 text-gray-600">Please fill in all required personalization fields:</p>
+                <ul class="list-disc list-inside space-y-1 text-gray-700">
+                    ${validation.missingFields.map(field => `<li>${field}</li>`).join('')}
+                </ul>
+            </div>`;
         
         showAlert({
             icon: 'warning',
@@ -2396,14 +2451,7 @@ window.buyNow = function buyNow() {
             }
         });
         
-        // Scroll to customization section and auto-enable if needed
-        if (validation.needToEnableCustomization) {
-            const enableCheckbox = document.getElementById('enable-customization');
-            if (enableCheckbox) {
-                enableCheckbox.checked = true;
-                toggleCustomization();
-            }
-        }
+        expandCustomization();
         
         const customizationContainer = document.getElementById('customization-container');
         if (customizationContainer) {
@@ -2433,19 +2481,8 @@ window.buyNow = function buyNow() {
         return;
     }
     
-    const rawVariantPrice = selectedVariant && selectedVariant.price != null
-        ? selectedVariant.price
-        : {{ (float)($product->price ?? $product->base_price ?? 0) }};
-    const variantPrice = Number(rawVariantPrice) || 0;
-    
-    // Get product data
+    const totalPriceValue = getCartUnitPriceWithCustomizations();
     const customizations = getSelectedCustomizations();
-    let customizationTotal = 0;
-    Object.values(customizations).forEach(customization => {
-        customizationTotal += parseFloat(customization.price) || 0;
-    });
-    const totalPrice = variantPrice + customizationTotal;
-    const totalPriceValue = Math.round((totalPrice + Number.EPSILON) * 100) / 100;
 
     const productData = {
         id: {{ $product->id }},
@@ -2462,7 +2499,7 @@ window.buyNow = function buyNow() {
             }
         @endphp',
         shop: '{{ $product->shop->name ?? "Unknown Shop" }}',
-        quantity: 1,
+        quantity: getProductQuantity(),
         selectedVariant: selectedVariant,
         customizations: customizations,
         addedAt: Date.now()
@@ -2482,7 +2519,7 @@ window.buyNow = function buyNow() {
         });
     }
     
-    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    // Event tracking Ä‘Æ°á»£c xá»­ lÃ½ bá»Ÿi GTM thÃ´ng qua dataLayer
     if (typeof dataLayer !== 'undefined') {
         const gaItem = {
             item_id: '{{ $product->sku ?? $product->id }}',
@@ -2490,7 +2527,7 @@ window.buyNow = function buyNow() {
             item_category: @json($primaryCategory),
             item_variant: selectedVariant && selectedVariant.attributes ? Object.values(selectedVariant.attributes).join(' / ') : undefined,
             price: totalPriceValue,
-            quantity: 1
+            quantity: getProductQuantity()
         };
         if (!gaItem.item_variant) {
             delete gaItem.item_variant;
@@ -2498,7 +2535,7 @@ window.buyNow = function buyNow() {
         dataLayer.push({
             'event': 'add_to_cart',
             'currency': CURRENT_CURRENCY,
-            'value': totalPriceValue,
+            'value': totalPriceValue * getProductQuantity(),
             'items': [gaItem]
         });
     }
@@ -2512,7 +2549,7 @@ window.buyNow = function buyNow() {
                 quantity: productData.quantity || 1,
                 price: totalPriceValue
             }],
-            value: totalPriceValue,
+            value: totalPriceValue * (productData.quantity || 1),
             currency: CURRENT_CURRENCY
         };
 
@@ -2560,7 +2597,7 @@ window.buyNow = function buyNow() {
                     num_items: 1
                 });
                 
-                console.log('✅ Facebook Pixel: Buy Now - AddToCart & InitiateCheckout tracked');
+                console.log('âœ… Facebook Pixel: Buy Now - AddToCart & InitiateCheckout tracked');
             }
 
             if (typeof gtag === 'function') {
@@ -2576,7 +2613,7 @@ window.buyNow = function buyNow() {
                     delete gaItem.item_variant;
                 }
 
-                // Event tracking được xử lý bởi GTM thông qua dataLayer
+                // Event tracking Ä‘Æ°á»£c xá»­ lÃ½ bá»Ÿi GTM thÃ´ng qua dataLayer
                 if (typeof dataLayer !== 'undefined') {
                     dataLayer.push({
                         'event': 'begin_checkout',
@@ -2585,7 +2622,7 @@ window.buyNow = function buyNow() {
                         'items': [gaItem]
                     });
 
-                    console.log('✅ GTM: begin_checkout tracked from buyNow', {
+                    console.log('âœ… GTM: begin_checkout tracked from buyNow', {
                         value: totalPriceValue
                     });
                 }
@@ -2835,9 +2872,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Save current product to recently viewed
     saveToRecentlyViewed();
     
-    // Load and display recently viewed products
-    loadRecentlyViewed();
-    
 });
 
 
@@ -2893,6 +2927,9 @@ function initializeImageEffects() {
         
         // Click to open gallery modal (only for images, videos have their own controls)
         imageContainer.addEventListener('click', function(e) {
+            if (e.target.closest('[data-tryon-open], .product-show-gallery__tryon, .product-show-gallery__wishlist, .product-show-gallery__nav')) {
+                return;
+            }
             // Don't open modal if clicking on video or video controls
             if (mainVideo && !mainVideo.classList.contains('hidden')) {
                 // Check if click is on video element itself or video overlay
@@ -2991,7 +3028,7 @@ function changeMainImage(mediaUrl, index = null) {
                 });
                 overlayEl.innerHTML = `
                     <div class="w-20 h-20 bg-white bg-opacity-90 rounded-full flex items-center justify-center shadow-2xl hover:bg-opacity-100 hover:scale-110 transition-all duration-300">
-                        <svg class="w-10 h-10 text-purple-600 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                        <svg class="w-10 h-10 text-[#005366] ml-1" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path>
                         </svg>
                     </div>
@@ -3109,6 +3146,20 @@ function nextImage() {
     updateModalImage();
 }
 
+function navigateMainGallery(direction) {
+    if (!allImages || allImages.length === 0) {
+        return;
+    }
+
+    if (direction === 'prev') {
+        currentImageIndex = currentImageIndex > 0 ? currentImageIndex - 1 : allImages.length - 1;
+    } else {
+        currentImageIndex = currentImageIndex < allImages.length - 1 ? currentImageIndex + 1 : 0;
+    }
+
+    changeMainImage(allImages[currentImageIndex], currentImageIndex);
+}
+
 function selectModalImage(imageUrl, index) {
     currentImageIndex = index;
     updateModalImage();
@@ -3191,17 +3242,46 @@ function updateModalThumbnails() {
     });
 }
 
-// Thumbnail scrolling for horizontal scroll
+// Thumbnail scrolling — vertical on desktop, horizontal on mobile
 function scrollThumbnails(direction) {
     const container = document.getElementById('thumbnail-container');
-    const scrollAmount = 200;
-    
-    if (direction === 'left') {
+    if (!container) {
+        return;
+    }
+
+    const isVertical = window.matchMedia('(min-width: 768px)').matches;
+    const scrollAmount = isVertical ? 180 : 280;
+
+    if (isVertical) {
+        if (direction === 'up' || direction === 'left') {
+            container.scrollTop -= scrollAmount;
+        } else {
+            container.scrollTop += scrollAmount;
+        }
+        return;
+    }
+
+    if (direction === 'left' || direction === 'up') {
         container.scrollLeft -= scrollAmount;
     } else {
         container.scrollLeft += scrollAmount;
     }
 }
+
+function syncProductShowStickyColumns() {
+    if (typeof window.syncSiteHeaderMetrics === 'function') {
+        window.syncSiteHeaderMetrics();
+        return;
+    }
+    const header = document.getElementById('site-header');
+    const stickyTop = header ? Math.ceil(header.getBoundingClientRect().height) + 8 : 88;
+    document.documentElement.style.setProperty('--product-show-sticky-top', stickyTop + 'px');
+}
+
+document.addEventListener('DOMContentLoaded', syncProductShowStickyColumns);
+window.addEventListener('load', syncProductShowStickyColumns);
+window.addEventListener('resize', syncProductShowStickyColumns);
+window.addEventListener('siteHeaderMetricsUpdated', syncProductShowStickyColumns);
 
 // Keyboard navigation for gallery
 document.addEventListener('keydown', function(e) {
@@ -3240,6 +3320,12 @@ function selectAttribute(attributeName, value) {
                     selectedColorName.textContent = normalizedValue;
                 }
             }
+            if (normalizedAttribute === 'Size') {
+                const selectedSizeName = document.getElementById('selected-size-name');
+                if (selectedSizeName) {
+                    selectedSizeName.textContent = normalizedValue;
+                }
+            }
         }
 
         // Legacy functions for backward compatibility
@@ -3256,31 +3342,17 @@ function selectAttribute(attributeName, value) {
         }
 
 function updateAllAttributeButtons() {
-    // Update color swatches
     document.querySelectorAll('.color-swatch').forEach(btn => {
         const attribute = normalizeAttributeKey(btn.dataset.attribute);
         const value = normalizeAttributeValue(btn.dataset.value);
         const selectedValue = normalizeAttributeValue(selectedAttributes[attribute]);
-        
+
         if (selectedValue && selectedValue === value) {
-            btn.classList.add('border-[#005366]', 'ring-2', 'ring-[#005366]', 'ring-offset-2');
-            btn.classList.remove('border-gray-300', 'hover:border-gray-400');
-            // Add checkmark
-            if (!btn.querySelector('svg')) {
-                btn.innerHTML = `
-                    <svg class="w-4 h-4 text-white absolute inset-0 m-auto" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                    </svg>
-                `;
-            }
+            btn.classList.add('is-selected', 'border-[#005366]');
+            btn.classList.remove('border-transparent', 'border-gray-300', 'hover:border-gray-300', 'hover:border-gray-400');
         } else {
-            btn.classList.remove('border-[#005366]', 'ring-2', 'ring-[#005366]', 'ring-offset-2');
-            btn.classList.add('border-gray-300', 'hover:border-gray-400');
-            // Remove checkmark
-            const svg = btn.querySelector('svg');
-            if (svg) {
-                svg.remove();
-            }
+            btn.classList.remove('is-selected', 'border-[#005366]', 'ring-2', 'ring-[#005366]', 'ring-offset-2', 'border-gray-300');
+            btn.classList.add('border-transparent');
         }
     });
     
@@ -3292,10 +3364,10 @@ function updateAllAttributeButtons() {
         
         if (selectedValue && selectedValue === value) {
             btn.classList.add('border-[#005366]', 'bg-[#005366]', 'text-white');
-            btn.classList.remove('border-gray-300', 'text-gray-700');
+            btn.classList.remove('border-gray-300', 'text-gray-600', 'text-gray-700', 'text-gray-900', 'bg-gray-50', 'text-[#005366]');
         } else {
-            btn.classList.remove('border-[#005366]', 'bg-[#005366]', 'text-white');
-            btn.classList.add('border-gray-300', 'text-gray-700');
+            btn.classList.remove('border-[#005366]', 'bg-gray-50', 'text-[#005366]', 'bg-[#005366]', 'text-white');
+            btn.classList.add('border-gray-300', 'text-gray-900');
         }
     });
     
@@ -3397,11 +3469,17 @@ function updateVariantSelection() {
             variantName = 'Standard';
         }
         
-        document.getElementById('selected-variant-name').textContent = variantName;
+        const selectedVariantNameEl = document.getElementById('selected-variant-name');
+        if (selectedVariantNameEl) {
+            selectedVariantNameEl.textContent = variantName;
+        }
         
         // Update price
         const currencySymbol = typeof CURRENCY_SYMBOL !== 'undefined' ? CURRENCY_SYMBOL : '$';
-        document.getElementById('selected-variant-price').textContent = `${currencySymbol}${parseFloat(matchingVariant.price).toFixed(2)}`;
+        const variantPriceEl = document.getElementById('selected-variant-price');
+        if (variantPriceEl) {
+            variantPriceEl.textContent = `${currencySymbol}${parseFloat(matchingVariant.price).toFixed(2)}`;
+        }
         
         // Update stock
         const stockElement = document.getElementById('selected-variant-stock');
@@ -3484,10 +3562,19 @@ function updateVariantSelection() {
         }
         
         // Update main price display
-        const mainPriceElement = document.querySelector('.text-4xl.font-bold.text-\\[\\#E2150C\\]');
+        const mainPriceElement = document.getElementById('base-price');
         if (mainPriceElement) {
             mainPriceElement.textContent = `${CURRENCY_SYMBOL}${parseFloat(matchingVariant.price).toFixed(2)}`;
+            if (matchingVariant.price_usd !== undefined) {
+                mainPriceElement.dataset.price = matchingVariant.price_usd;
+            }
+            mainPriceElement.dataset.priceConverted = matchingVariant.price;
         }
+
+        syncPdpFlashPrice(matchingVariant);
+        syncPdpListPrice(matchingVariant);
+
+        updateCustomizationPrice();
     } else {
         // No matching variant found, enable button and reset text
         const addToCartBtn = document.getElementById('add-to-cart-btn');
@@ -3504,33 +3591,80 @@ function updateVariantSelection() {
 }
 
 function updateStockStatusBadge(quantity) {
-    const stockBadge = document.getElementById('stock-status-badge');
-    if (!stockBadge) {
+    const inStock = quantity === null || quantity > 0;
+    const engagementDot = document.getElementById('engagement-stock-dot');
+    const engagementLabel = document.getElementById('engagement-stock-label');
+    const engagementQty = document.getElementById('engagement-stock-qty');
+
+    if (engagementLabel) {
+        engagementLabel.textContent = inStock ? 'In Stock' : 'Out of Stock';
+        engagementLabel.classList.toggle('is-out', !inStock);
+    }
+
+    if (engagementDot) {
+        engagementDot.classList.toggle('is-out', !inStock);
+    }
+
+    if (engagementQty) {
+        if (inStock && quantity !== null && quantity > 0) {
+            engagementQty.textContent = ' - ' + quantity + ' items left';
+        } else {
+            engagementQty.textContent = '';
+        }
+    }
+
+    const mobileBadge = document.getElementById('mobile-stock-badge');
+    if (mobileBadge) {
+        const stockText = mobileBadge.querySelector('span');
+        const stockIcon = mobileBadge.querySelector('svg');
+        if (stockText) {
+            stockText.textContent = inStock ? 'In Stock' : 'Out of Stock';
+            stockText.className = inStock ? 'text-sm font-medium text-green-700' : 'text-sm font-medium text-red-700';
+        }
+        if (stockIcon) {
+            stockIcon.className = inStock ? 'w-4 h-4 text-green-600' : 'w-4 h-4 text-red-600';
+        }
+        mobileBadge.className = inStock
+            ? 'absolute top-3 left-3 bg-green-100 rounded-full px-3 py-1.5 items-center space-x-2 pointer-events-none z-10 lg:hidden mobile-stock-badge flex'
+            : 'absolute top-3 left-3 bg-red-100 rounded-full px-3 py-1.5 items-center space-x-2 pointer-events-none z-10 lg:hidden mobile-stock-badge flex';
+    }
+}
+
+function getProductQuantity() {
+    const el = document.getElementById('product-quantity');
+    const parsed = parseInt(el ? el.textContent : '1', 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function changeProductQuantity(delta) {
+    const el = document.getElementById('product-quantity');
+    if (!el) {
         return;
     }
-    
-    const stockText = stockBadge.querySelector('span');
-    const stockIcon = stockBadge.querySelector('svg');
-    
-    if (!stockText || !stockIcon) {
+
+    const selectedVariant = getSelectedVariant();
+    const maxQty = selectedVariant && selectedVariant.quantity !== null && selectedVariant.quantity > 0
+        ? selectedVariant.quantity
+        : 99;
+
+    let qty = getProductQuantity() + delta;
+    if (qty < 1) {
+        qty = 1;
+    }
+    if (qty > maxQty) {
+        qty = maxQty;
+    }
+
+    el.textContent = String(qty);
+    applyVolumeDiscountDisplay();
+}
+
+function toggleReturnsInfo() {
+    const popup = document.getElementById('returns-info-popup');
+    if (!popup) {
         return;
     }
-    
-    if (quantity === null || quantity > 0) {
-        // In Stock
-        stockBadge.className = 'flex items-center space-x-2 bg-green-100 rounded-full px-3 py-1.5';
-        stockText.className = 'text-sm font-medium text-green-700';
-        stockText.textContent = 'In Stock';
-        stockIcon.className = 'w-4 h-4 text-green-600';
-        stockIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>';
-    } else {
-        // Out of Stock
-        stockBadge.className = 'flex items-center space-x-2 bg-red-100 rounded-full px-3 py-1.5';
-        stockText.className = 'text-sm font-medium text-red-700';
-        stockText.textContent = 'Out of Stock';
-        stockIcon.className = 'w-4 h-4 text-red-600';
-        stockIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>';
-    }
+    popup.classList.toggle('hidden');
 }
 
 // Recently Viewed Functions
@@ -3539,7 +3673,8 @@ function saveToRecentlyViewed() {
         id: {{ $product->id }},
         slug: '{{ $product->slug }}',
         name: '{{ addslashes($product->name) }}',
-        price: {{ $product->base_price }},
+        price: {{ $productPriceUSD }},
+        originalPrice: {{ $productListPriceUSD }},
         image: '@php
             if ($media && count($media) > 0) {
                 if (is_string($media[0])) {
@@ -3571,246 +3706,15 @@ function saveToRecentlyViewed() {
 }
 
 function loadRecentlyViewed() {
-    const recentlyViewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-    const container = document.getElementById('recently-viewed-container');
-    const emptyState = document.getElementById('recently-viewed-empty');
-    const wrapper = document.getElementById('recently-viewed-wrapper');
-    
-    if (!container) return;
-    
-    // Filter out current product and limit to 12 products
-    const productsToShow = recentlyViewed
-        .filter(p => p.id !== {{ $product->id }})
-        .slice(0, 12);
-    
-    if (productsToShow.length === 0) {
-        if (wrapper) wrapper.classList.add('hidden');
-        emptyState.classList.remove('hidden');
-        return;
-    }
-    
-    if (wrapper) wrapper.classList.remove('hidden');
-    emptyState.classList.add('hidden');
-    
-    // Generate HTML for each product (same style as Related Products)
-    container.innerHTML = productsToShow.map(product => `
-        <a href="/products/${product.slug}" 
-           class="flex-shrink-0 w-40 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group/item overflow-hidden border border-gray-200">
-            <!-- Product Image -->
-            <div class="relative aspect-square overflow-hidden">
-                ${product.image ? `
-                    <img src="${product.image}" 
-                         alt="${product.name}" 
-                         class="w-full h-full object-cover group-hover/item:scale-105 transition-transform duration-300"
-                         onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full bg-gray-200 flex items-center justify-center\\'><svg class=\\'w-6 h-6 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'></path></svg></div>'">
-                ` : `
-                    <div class="w-full h-full bg-gray-200 flex items-center justify-center">
-                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                        </svg>
-                    </div>
-                `}
-            </div>
-
-            <!-- Product Info (Compact) -->
-            <div class="p-2.5">
-                <h4 class="font-medium text-gray-900 text-xs line-clamp-2 group-hover/item:text-[#005366] transition-colors mb-1.5 h-8 overflow-hidden" title="${product.name}">
-                    ${product.name.length > 30 ? product.name.substring(0, 30) + '...' : product.name}
-                </h4>
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-[#E2150C]">${CURRENCY_SYMBOL}${parseFloat(product.price).toFixed(2)}</span>
-                    <div class="flex items-center text-xs text-gray-500">
-                        <svg class="w-3 h-3 text-yellow-400 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                        </svg>
-                        <span class="text-xs">4.5</span>
-                    </div>
-                </div>
-            </div>
-        </a>
-    `).join('');
-    
-    // Show/hide navigation buttons based on number of products
-    updateRecentlyViewedNavigation(productsToShow.length);
-}
-
-function formatTimeAgo(timestamp) {
-    const now = Date.now();
-    const diff = now - timestamp;
-    
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return 'Recently';
-}
-
-// Related Products Carousel (Desktop)
-let relatedCurrentIndex = 0;
-
-function scrollRelatedProducts(direction) {
-    const container = document.getElementById('relatedProductsContainer');
-    const track = document.getElementById('relatedProductsTrack');
-    const prevBtn = document.getElementById('relatedPrevBtn');
-    const nextBtn = document.getElementById('relatedNextBtn');
-    
-    if (!track) return;
-    
-    const itemWidth = 160 + 12; // w-40 (160px) + gap-3 (12px)
-    const containerWidth = container.offsetWidth;
-    const itemsVisible = Math.floor(containerWidth / itemWidth);
-    const totalItems = track.children.length;
-    const maxIndex = Math.max(0, totalItems - itemsVisible);
-    
-    if (direction === 'next') {
-        relatedCurrentIndex = Math.min(relatedCurrentIndex + itemsVisible, maxIndex);
-    } else {
-        relatedCurrentIndex = Math.max(0, relatedCurrentIndex - itemsVisible);
-    }
-    
-    const translateX = -relatedCurrentIndex * itemWidth;
-    track.style.transform = `translateX(${translateX}px)`;
-    
-    // Update button states
-    if (prevBtn) {
-        if (relatedCurrentIndex === 0) {
-            prevBtn.classList.add('opacity-0');
-        } else {
-            prevBtn.classList.remove('opacity-0');
-        }
-    }
-    
-    if (nextBtn) {
-        if (relatedCurrentIndex >= maxIndex) {
-            nextBtn.classList.add('opacity-0');
-        } else {
-            nextBtn.classList.remove('opacity-0');
-        }
-    }
-}
-
-// Clear recently viewed (utility function)
-function clearRecentlyViewed() {
-    localStorage.removeItem('recentlyViewed');
-    loadRecentlyViewed();
-}
-
-// Recently Viewed Carousel Navigation
-let recentlyViewedCurrentIndex = 0;
-
-function scrollRecentlyViewed(direction) {
-    const container = document.getElementById('recentlyViewedContainer');
-    const track = document.getElementById('recently-viewed-container');
-    const prevBtn = document.getElementById('recentlyViewedPrevBtn');
-    const nextBtn = document.getElementById('recentlyViewedNextBtn');
-    
-    if (!track) return;
-    
-    const itemWidth = 160 + 12; // w-40 (160px) + gap-3 (12px)
-    const containerWidth = container.offsetWidth;
-    const itemsVisible = Math.floor(containerWidth / itemWidth);
-    const totalItems = track.children.length;
-    const maxIndex = Math.max(0, totalItems - itemsVisible);
-    
-    if (direction === 'next') {
-        recentlyViewedCurrentIndex = Math.min(recentlyViewedCurrentIndex + itemsVisible, maxIndex);
-    } else {
-        recentlyViewedCurrentIndex = Math.max(0, recentlyViewedCurrentIndex - itemsVisible);
-    }
-    
-    const translateX = -recentlyViewedCurrentIndex * itemWidth;
-    track.style.transform = `translateX(${translateX}px)`;
-    
-    // Update button states
-    if (prevBtn) {
-        if (recentlyViewedCurrentIndex === 0) {
-            prevBtn.classList.add('opacity-0');
-        } else {
-            prevBtn.classList.remove('opacity-0');
-        }
-    }
-    
-    if (nextBtn) {
-        if (recentlyViewedCurrentIndex >= maxIndex) {
-            nextBtn.classList.add('opacity-0');
-        } else {
-            nextBtn.classList.remove('opacity-0');
-        }
-    }
-}
-function updateRecentlyViewedNavigation(totalProducts) {
-    const prevBtn = document.getElementById('recentlyViewedPrevBtn');
-    const nextBtn = document.getElementById('recentlyViewedNextBtn');
-    
-    if (!prevBtn || !nextBtn) return;
-    
-    // Only show navigation buttons on desktop (lg: 1024px+) if more than what can fit on screen
-    const isDesktop = window.innerWidth >= 1024;
-    
-    if (isDesktop && totalProducts > 5) {
-        prevBtn.classList.remove('hidden');
-        prevBtn.classList.add('lg:block');
-        nextBtn.classList.remove('hidden');
-        nextBtn.classList.add('lg:block');
-        
-        // Set initial state
-        prevBtn.classList.add('opacity-0');
-        nextBtn.classList.remove('opacity-0');
-        
-        // Reset index
-        recentlyViewedCurrentIndex = 0;
-        
-        // Reset transform (only for desktop)
-        const track = document.getElementById('recently-viewed-container');
-        if (track) {
-            track.style.transform = 'translateX(0px)';
-        }
-    } else {
-        // Hide navigation buttons on mobile or if 5 or fewer products
-        prevBtn.classList.add('hidden');
-        nextBtn.classList.add('hidden');
-        
-        // Remove transform on mobile
-        const track = document.getElementById('recently-viewed-container');
-        if (track && !isDesktop) {
-            track.style.transform = '';
-        }
-    }
-}
-
-// Returns Info Popup Functions
-function toggleReturnsInfo() {
-    const popup = document.getElementById('returns-info-popup');
-    const backdrop = document.querySelector('.returns-popup-backdrop');
-    
-    if (popup.classList.contains('hidden')) {
-        // Show popup
-        popup.classList.remove('hidden');
-        
-        // Add backdrop
-        if (!backdrop) {
-            const backdropEl = document.createElement('div');
-            backdropEl.className = 'returns-popup-backdrop';
-            backdropEl.onclick = closeReturnsInfo;
-            document.body.appendChild(backdropEl);
-        }
-    } else {
-        closeReturnsInfo();
-    }
+    // Recently viewed is handled by partials/recently-viewed-section.blade.php
 }
 
 function closeReturnsInfo() {
     const popup = document.getElementById('returns-info-popup');
-    const backdrop = document.querySelector('.returns-popup-backdrop');
-    
-    popup.classList.add('hidden');
-    if (backdrop) {
-        backdrop.remove();
+    if (!popup) {
+        return;
     }
+    popup.classList.add('hidden');
 }
 
 // Close popup on Escape key
@@ -3819,28 +3723,6 @@ document.addEventListener('keydown', function(e) {
         closeReturnsInfo();
     }
 });
-
-// Toggle Description Function
-function toggleDescription() {
-    const descriptionPreview = document.getElementById('description-preview');
-    const descriptionFull = document.getElementById('description-full');
-    const toggleText = document.getElementById('description-toggle-text');
-    const toggleIcon = document.getElementById('description-toggle-icon');
-    
-    if (descriptionFull.classList.contains('hidden')) {
-        // Show full description
-        descriptionPreview.classList.add('hidden');
-        descriptionFull.classList.remove('hidden');
-        toggleText.textContent = 'Show Less';
-        toggleIcon.style.transform = 'rotate(180deg)';
-    } else {
-        // Show preview only
-        descriptionPreview.classList.remove('hidden');
-        descriptionFull.classList.add('hidden');
-        toggleText.textContent = 'Show More';
-        toggleIcon.style.transform = 'rotate(0deg)';
-    }
-}
 
 // Cart Functions
 function addToCart() {
@@ -3861,19 +3743,12 @@ function addToCart() {
     // Validate required customizations first
     const validation = validateRequiredCustomizations();
     if (!validation.isValid) {
-        const message = validation.needToEnableCustomization 
-            ? `<div class="text-left">
-                    <p class="mb-3 text-gray-600">This product requires personalization. Please enable "Add Personalization" and fill in:</p>
-                    <ul class="list-disc list-inside space-y-1 text-gray-700">
-                        ${validation.missingFields.map(field => `<li>${field}</li>`).join('')}
-                    </ul>
-                </div>`
-            : `<div class="text-left">
-                    <p class="mb-3 text-gray-600">Please fill in all required personalization information:</p>
-                    <ul class="list-disc list-inside space-y-1 text-gray-700">
-                        ${validation.missingFields.map(field => `<li>${field}</li>`).join('')}
-                    </ul>
-                </div>`;
+        const message = `<div class="text-left">
+                <p class="mb-3 text-gray-600">Please fill in all required personalization fields:</p>
+                <ul class="list-disc list-inside space-y-1 text-gray-700">
+                    ${validation.missingFields.map(field => `<li>${field}</li>`).join('')}
+                </ul>
+            </div>`;
         
         showAlert({
             icon: 'warning',
@@ -3887,14 +3762,7 @@ function addToCart() {
             }
         });
         
-        // Scroll to customization section and auto-enable if needed
-        if (validation.needToEnableCustomization) {
-            const enableCheckbox = document.getElementById('enable-customization');
-            if (enableCheckbox) {
-                enableCheckbox.checked = true;
-                toggleCustomization();
-            }
-        }
+        expandCustomization();
         
         const customizationContainer = document.getElementById('customization-container');
         if (customizationContainer) {
@@ -3933,21 +3801,8 @@ function addToCart() {
     if (cartLoading) cartLoading.classList.remove('hidden');
     if (cartText) cartText.textContent = 'Adding...';
     
-    const rawVariantPrice = selectedVariant && selectedVariant.price != null
-        ? selectedVariant.price
-        : {{ (float)($product->price ?? $product->base_price ?? 0) }};
-    const variantPrice = Number(rawVariantPrice) || 0;
-    
-    // Calculate customization total
+    const totalPriceValue = getCartUnitPriceWithCustomizations();
     const customizations = getSelectedCustomizations();
-    let customizationTotal = 0;
-    Object.values(customizations).forEach(customization => {
-        customizationTotal += parseFloat(customization.price) || 0;
-    });
-    
-    // Total price including customizations
-    const totalPrice = variantPrice + customizationTotal;
-    const totalPriceValue = Math.round((totalPrice + Number.EPSILON) * 100) / 100;
     
     // Get current product data
     const productData = {
@@ -3965,7 +3820,7 @@ function addToCart() {
             }
         @endphp',
         shop: '{{ $product->shop->name ?? "Unknown Shop" }}',
-        quantity: 1,
+        quantity: getProductQuantity(),
         selectedVariant: selectedVariant,
         customizations: customizations,
         addedAt: Date.now()
@@ -3985,7 +3840,7 @@ function addToCart() {
         });
     }
 
-    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    // Event tracking Ä‘Æ°á»£c xá»­ lÃ½ bá»Ÿi GTM thÃ´ng qua dataLayer
     if (typeof dataLayer !== 'undefined') {
         const gaItem = {
             item_id: '{{ $product->sku ?? $product->id }}',
@@ -3993,7 +3848,7 @@ function addToCart() {
             item_category: @json($primaryCategory),
             item_variant: selectedVariant && selectedVariant.attributes ? Object.values(selectedVariant.attributes).join(' / ') : undefined,
             price: totalPriceValue,
-            quantity: 1
+            quantity: getProductQuantity()
         };
         if (!gaItem.item_variant) {
             delete gaItem.item_variant;
@@ -4001,7 +3856,7 @@ function addToCart() {
         dataLayer.push({
             'event': 'add_to_cart',
             'currency': CURRENT_CURRENCY,
-            'value': totalPriceValue,
+            'value': totalPriceValue * getProductQuantity(),
             'items': [gaItem]
         });
     }
@@ -4015,7 +3870,7 @@ function addToCart() {
                 quantity: productData.quantity || 1,
                 price: totalPriceValue
             }],
-            value: totalPriceValue,
+            value: totalPriceValue * (productData.quantity || 1),
             currency: CURRENT_CURRENCY
         };
 
@@ -4064,6 +3919,7 @@ function addToCart() {
             // Show cart popup
             console.log('About to show cart popup with productData:', productData);
             showCartPopup(productData);
+            handlePostAddToCartPromo();
         });
 }
 
@@ -4082,8 +3938,11 @@ function addToLocalCart(productData) {
     });
     
     if (existingIndex !== -1) {
-        // Update quantity
-        cart[existingIndex].quantity += 1;
+        cart[existingIndex].quantity += productData.quantity || 1;
+        cart[existingIndex].price = productData.price;
+        if (productData.customizations) {
+            cart[existingIndex].customizations = productData.customizations;
+        }
     } else {
         // Add new item
         cart.push(productData);
@@ -4128,14 +3987,84 @@ function syncCartToBackend(productData) {
     });
 }
 
+function syncPdpFlashPrice(variant) {
+    const row = document.querySelector('.product-show-purchase__price-row--flash');
+    if (!row || !variant) {
+        return;
+    }
+
+    const origEl = document.getElementById('flash-original-price');
+    const saveEl = document.getElementById('flash-save-badge');
+    const saleUsd = parseFloat(variant.price_usd != null ? variant.price_usd : variant.price) || 0;
+    const listUsd = parseFloat(variant.list_price_usd != null ? variant.list_price_usd : 0) || 0;
+    const listConverted = parseFloat(variant.list_price != null ? variant.list_price : 0) || 0;
+    const currencySymbol = typeof CURRENCY_SYMBOL !== 'undefined' ? CURRENCY_SYMBOL : '$';
+    const pct = parseInt(variant.flash_percent, 10) || 0;
+
+    if (origEl) {
+        if (listUsd > saleUsd && listConverted > 0) {
+            origEl.textContent = `${currencySymbol}${listConverted.toFixed(2)}`;
+            origEl.dataset.price = String(listUsd);
+            origEl.dataset.priceConverted = String(listConverted);
+            origEl.classList.remove('hidden');
+        } else {
+            origEl.classList.add('hidden');
+        }
+    }
+
+    if (saveEl && pct > 0) {
+        saveEl.textContent = `${pct}% OFF`;
+        saveEl.classList.remove('hidden');
+    }
+
+    const savingsEl = document.querySelector('.product-show-flash-sale__savings strong');
+    if (savingsEl && listUsd > saleUsd) {
+        savingsEl.textContent = `${currencySymbol}${(listUsd - saleUsd).toFixed(2)}`;
+    }
+}
+
+function syncPdpListPrice(variant) {
+    if (document.querySelector('.product-show-purchase__price-row--flash')) {
+        return;
+    }
+
+    const listEl = document.getElementById('list-price');
+    const saveEl = document.getElementById('list-save-badge');
+    if (!listEl) {
+        return;
+    }
+
+    const saleUsd = parseFloat(variant.price_usd != null ? variant.price_usd : variant.price) || 0;
+    const listUsd = parseFloat(variant.list_price_usd != null ? variant.list_price_usd : 0) || 0;
+    const listConverted = parseFloat(variant.list_price != null ? variant.list_price : listEl.dataset.priceConverted) || 0;
+    const currencySymbol = typeof CURRENCY_SYMBOL !== 'undefined' ? CURRENCY_SYMBOL : '$';
+
+    if (listUsd > saleUsd && listConverted > 0) {
+        listEl.textContent = `${currencySymbol}${listConverted.toFixed(2)}`;
+        listEl.dataset.price = String(listUsd);
+        listEl.dataset.priceConverted = String(listConverted);
+        listEl.classList.remove('hidden');
+        if (saveEl) {
+            const pct = Math.round(((listUsd - saleUsd) / listUsd) * 100);
+            saveEl.textContent = `Save ${pct}%`;
+            saveEl.classList.toggle('hidden', pct <= 0);
+        }
+    } else {
+        listEl.classList.add('hidden');
+        if (saveEl) {
+            saveEl.classList.add('hidden');
+        }
+    }
+}
+
 function getSelectedVariant() {
     const variantsDataElement = document.getElementById('variants-data');
     if (!variantsDataElement) return null;
     
-    const variants = JSON.parse(variantsDataElement.textContent);
+    const parsedVariants = JSON.parse(variantsDataElement.textContent);
     
     // Find matching variant based on selected attributes
-    const matchingVariant = variants.find(variant => {
+    const matchingVariant = parsedVariants.find(variant => {
         if (!variant.attributes) return false;
         
         // Check if all selected attributes match
@@ -4149,15 +4078,47 @@ function getSelectedVariant() {
     });
     
     // Return full variant info including price
-    const variant = matchingVariant || variants[0] || null;
+    const variant = matchingVariant || parsedVariants[0] || null;
     return variant ? { 
         id: variant.id,
         attributes: variant.attributes,
         price: variant.price,
+        price_usd: variant.price_usd,
+        list_price: variant.list_price,
+        list_price_usd: variant.list_price_usd,
         quantity: variant.quantity,
         variant_name: variant.variant_name,
         media: variant.media
     } : null;
+}
+
+function getCurrentUnitBasePrice() {
+    const basePriceEl = document.getElementById('base-price');
+    if (basePriceEl) {
+        const converted = parseFloat(basePriceEl.dataset.priceConverted);
+        if (!Number.isNaN(converted)) {
+            return converted;
+        }
+    }
+
+    const selectedVariant = getSelectedVariant();
+    if (selectedVariant && selectedVariant.price != null) {
+        return Number(selectedVariant.price) || 0;
+    }
+
+    return Number({{ $productPriceConverted }}) || 0;
+}
+
+function getCartUnitPriceWithCustomizations() {
+    const basePrice = getCurrentUnitBasePrice();
+    const customizations = getSelectedCustomizations();
+    let customizationTotal = 0;
+
+    Object.values(customizations).forEach(customization => {
+        customizationTotal += parseFloat(customization.price) || 0;
+    });
+
+    return Math.round((basePrice + customizationTotal + Number.EPSILON) * 100) / 100;
 }
 
 function getSelectedCustomizations() {
@@ -4165,27 +4126,7 @@ function getSelectedCustomizations() {
     const inputs = document.querySelectorAll('.customization-input');
     
     inputs.forEach(input => {
-        let label = input.name; // fallback to name
-        
-        // Try to get friendly label from data attribute or nearby element
-        if (input.dataset.label) {
-            label = input.dataset.label;
-        } else {
-            // Look for label element
-            const labelElement = document.querySelector(`label[for="${input.id}"]`);
-            if (labelElement) {
-                label = labelElement.textContent.trim();
-            } else {
-                // Look for nearby text (for custom inputs without proper labels)
-                const container = input.closest('.customization-group');
-                if (container) {
-                    const titleElement = container.querySelector('.customization-title');
-                    if (titleElement) {
-                        label = titleElement.textContent.trim();
-                    }
-                }
-            }
-        }
+        const label = input.dataset.label || input.name;
         
         if (input.type === 'radio' && input.checked) {
             customizations[label] = {
@@ -4197,7 +4138,14 @@ function getSelectedCustomizations() {
                 value: input.value,
                 price: parseFloat(input.dataset.price) || 0
             };
-        } else if (input.type === 'text' || input.type === 'textarea') {
+        } else if (input.type === 'file') {
+            if (input.files && input.files.length > 0) {
+                customizations[label] = {
+                    value: input.files[0].name,
+                    price: parseFloat(input.dataset.price) || 0
+                };
+            }
+        } else if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
             if (input.value.trim() !== '') {
                 customizations[label] = {
                     value: input.value.trim(),
@@ -4210,92 +4158,135 @@ function getSelectedCustomizations() {
     return customizations;
 }
 
-// Kiểm tra required customizations
-function validateRequiredCustomizations() {
-    const enableCustomizationCheckbox = document.getElementById('enable-customization');
-    const customizationContainer = document.getElementById('customization-container');
-    
-    // Nếu không có customization container, không cần validate
-    if (!customizationContainer) {
-        return { isValid: true, missingFields: [] };
+function isCustomizationExpanded() {
+    const container = document.getElementById('customization-container');
+    return container && !container.classList.contains('is-collapsed');
+}
+
+function setCustomizationExpanded(expanded) {
+    const section = document.getElementById('product-show-customization');
+    const container = document.getElementById('customization-container');
+    const toggle = document.getElementById('customization-toggle');
+
+    if (!container) {
+        return;
     }
-    
-    const missingFields = [];
-    
-    // Tìm tất cả các customization boxes
-    const customizationBoxes = customizationContainer.querySelectorAll('.border.border-gray-200.rounded-lg.p-4.bg-white');
-    
-    // Kiểm tra xem có customization nào là required không
-    let hasRequiredCustomizations = false;
-    
-    customizationBoxes.forEach(box => {
-        const requiredBadge = box.querySelector('.bg-red-100.text-red-800');
-        if (requiredBadge) {
-            hasRequiredCustomizations = true;
+
+    if (section && section.dataset.required === 'true') {
+        expanded = true;
+    }
+
+    container.classList.toggle('is-collapsed', !expanded);
+
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        const label = toggle.querySelector('[data-toggle-label]');
+        if (label) {
+            label.textContent = expanded ? 'Hide' : 'Show';
+        }
+    }
+
+    if (expanded) {
+        updateCustomizationPrice();
+    } else {
+        clearOptionalCustomizationInputs();
+        const priceDisplay = document.getElementById('customization-price-display');
+        if (priceDisplay) {
+            priceDisplay.classList.add('hidden');
+        }
+    }
+}
+
+function expandCustomization() {
+    setCustomizationExpanded(true);
+}
+
+function clearOptionalCustomizationInputs() {
+    const container = document.getElementById('customization-container');
+    if (!container) {
+        return;
+    }
+
+    container.querySelectorAll('.customization-input').forEach(input => {
+        if (input.type === 'radio' || input.type === 'checkbox') {
+            input.checked = false;
+        } else if (input.type === 'file') {
+            input.value = '';
+        } else {
+            input.value = '';
         }
     });
-    
-    // Nếu có required customizations nhưng checkbox chưa được check
-    if (hasRequiredCustomizations && (!enableCustomizationCheckbox || !enableCustomizationCheckbox.checked)) {
-        customizationBoxes.forEach(box => {
-            const titleElement = box.querySelector('h4');
-            const requiredBadge = box.querySelector('.bg-red-100.text-red-800');
-            
-            if (requiredBadge && titleElement) {
-                const customizationLabel = titleElement.textContent.trim();
-                missingFields.push(customizationLabel);
+}
+
+function clearCustomizationFieldErrors() {
+    document.querySelectorAll('.product-show-customization__box').forEach(box => {
+        box.classList.remove('is-invalid');
+        const error = box.querySelector('[data-field-error]');
+        if (error) {
+            error.textContent = '';
+            error.classList.add('hidden');
+        }
+    });
+}
+
+function markCustomizationFieldInvalid(box, message) {
+    box.classList.add('is-invalid');
+    const error = box.querySelector('[data-field-error]');
+    if (error) {
+        error.textContent = message;
+        error.classList.remove('hidden');
+    }
+}
+
+function validateRequiredCustomizations() {
+    const container = document.getElementById('customization-container');
+
+    if (!container) {
+        return { isValid: true, missingFields: [] };
+    }
+
+    clearCustomizationFieldErrors();
+
+    if (!isCustomizationExpanded()) {
+        const hasRequired = container.querySelector('.product-show-customization__box[data-required="true"]');
+        if (hasRequired) {
+            expandCustomization();
+        }
+    }
+
+    const missingFields = [];
+    const requiredBoxes = container.querySelectorAll('.product-show-customization__box[data-required="true"]');
+
+    requiredBoxes.forEach(box => {
+        const label = box.dataset.fieldLabel || 'Personalization field';
+        let hasValidInput = false;
+        const inputs = box.querySelectorAll('.customization-input');
+
+        inputs.forEach(input => {
+            if (input.type === 'radio' || input.type === 'checkbox') {
+                if (input.checked) {
+                    hasValidInput = true;
+                }
+            } else if (input.type === 'file') {
+                if (input.files && input.files.length > 0) {
+                    hasValidInput = true;
+                }
+            } else if (input.value.trim() !== '') {
+                hasValidInput = true;
             }
         });
-        
-        return {
-            isValid: false,
-            missingFields: missingFields,
-            needToEnableCustomization: true
-        };
-    }
-    
-    // Nếu checkbox được check, kiểm tra các required fields
-    if (enableCustomizationCheckbox && enableCustomizationCheckbox.checked) {
-        customizationBoxes.forEach(box => {
-            const titleElement = box.querySelector('h4');
-            const requiredBadge = box.querySelector('.bg-red-100.text-red-800');
-            
-            // Chỉ kiểm tra nếu có required badge
-            if (requiredBadge && titleElement) {
-                const customizationLabel = titleElement.textContent.trim();
-                let hasValidInput = false;
-                
-                // Tìm các input trong box này
-                const inputs = box.querySelectorAll('.customization-input');
-                
-                inputs.forEach(input => {
-                    if (input.type === 'radio' || input.type === 'checkbox') {
-                        if (input.checked) {
-                            hasValidInput = true;
-                        }
-                    } else if (input.type === 'text' || input.type === 'textarea') {
-                        if (input.value.trim() !== '') {
-                            hasValidInput = true;
-                        }
-                    }
-                });
-                
-                // Nếu là radio button, kiểm tra xem có input nào trong group được checked không
-                if (!hasValidInput && inputs.length > 0) {
-                    if (inputs[0].type === 'radio') {
-                        const inputName = inputs[0].name;
-                        const radioInputs = customizationContainer.querySelectorAll(`input[name="${inputName}"]`);
-                        hasValidInput = Array.from(radioInputs).some(radio => radio.checked);
-                    }
-                }
-                
-                if (!hasValidInput) {
-                    missingFields.push(customizationLabel);
-                }
-            }
-        });
-    }
-    
+
+        if (!hasValidInput && inputs.length > 0 && inputs[0].type === 'radio') {
+            const radioName = inputs[0].name;
+            hasValidInput = container.querySelector(`input[name="${radioName}"]:checked`) !== null;
+        }
+
+        if (!hasValidInput) {
+            missingFields.push(label);
+            markCustomizationFieldInvalid(box, 'This field is required.');
+        }
+    });
+
     return {
         isValid: missingFields.length === 0,
         missingFields: missingFields,
@@ -4319,56 +4310,488 @@ function updateCartCount() {
 }
 
 function showCartSuccess(message = 'Added to cart successfully!') {
-    // Create success notification
     const notification = document.createElement('div');
-    notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-2';
+    notification.className = 'fixed top-4 right-4 z-[60] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border border-green-100 bg-green-50 text-green-700';
     notification.innerHTML = `
-        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <svg class="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
             <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
         </svg>
-        <span>${message}</span>
+        <span class="text-sm font-semibold">${message}</span>
     `;
-    
     document.body.appendChild(notification);
-    
-    // Remove notification after 3 seconds
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
+    setTimeout(() => notification.remove(), 3000);
 }
-function showCartPopup(addedProduct) {
-    console.log('showCartPopup called with:', addedProduct);
-    
-    // Remove any existing popup first
-    const existingPopup = document.getElementById('cart-popup-overlay');
-    if (existingPopup) {
-        existingPopup.remove();
+
+function hasCartPromoBeenClaimedLocally() {
+    try {
+        return sessionStorage.getItem(CART_PROMO_CLAIMED_KEY) === '1';
+    } catch (e) {
+        return false;
     }
-    
-    // Create popup overlay
-    const overlay = document.createElement('div');
-    overlay.id = 'cart-popup-overlay';
-    overlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
-    
-    console.log('Created overlay element');
-    
-    // Create popup content
-    const popup = document.createElement('div');
-    popup.className = 'bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto cart-popup-content';
-    
-    // Show loading state
-    popup.innerHTML = `
-        <div class="flex items-center justify-center p-12">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-[#005366]"></div>
+}
+
+function markCartPromoClaimedLocally() {
+    try {
+        sessionStorage.setItem(CART_PROMO_CLAIMED_KEY, '1');
+    } catch (e) {}
+}
+
+function resolveSelectedShippingZoneId() {
+    let selectedZoneId = localStorage.getItem('selectedShippingZoneId');
+
+    if (selectedZoneId) {
+        let zoneIdToCheck = selectedZoneId;
+        if (selectedZoneId.includes(':')) {
+            zoneIdToCheck = selectedZoneId.split(':')[0];
+        }
+
+        if (zoneIdToCheck.toString().startsWith('general_')) {
+            const existsInZonesWithCountries = SHIPPING_ZONES_WITH_COUNTRIES && SHIPPING_ZONES_WITH_COUNTRIES.some(z => z.id === zoneIdToCheck);
+            const existsInZones = SHIPPING_ZONES && SHIPPING_ZONES.some(z => z.id === zoneIdToCheck);
+            if (!existsInZonesWithCountries && !existsInZones) {
+                selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
+            }
+        } else {
+            const parsed = parseInt(zoneIdToCheck);
+            if (!isNaN(parsed)) {
+                const existsInZonesWithCountries = SHIPPING_ZONES_WITH_COUNTRIES && SHIPPING_ZONES_WITH_COUNTRIES.some(z => z.id === parsed);
+                const existsInZones = SHIPPING_ZONES && SHIPPING_ZONES.some(z => z.id === parsed);
+                if (!existsInZonesWithCountries && !existsInZones) {
+                    selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
+                }
+            } else {
+                selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
+            }
+        }
+    } else {
+        selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
+    }
+
+    return selectedZoneId;
+}
+
+function getShippingZoneDisplayLabel(zoneId, shippingInfo) {
+    if (AUTH_USER?.country) {
+        return AUTH_USER.country;
+    }
+
+    if (zoneId && typeof zoneId === 'string' && zoneId.includes(':')) {
+        for (const zone of (SHIPPING_ZONES_WITH_COUNTRIES || [])) {
+            for (const country of (zone.country_options || [])) {
+                if (country.value === zoneId) {
+                    return country.label;
+                }
+            }
+        }
+    }
+
+    if (zoneId != null) {
+        const parsed = typeof zoneId === 'string' && !zoneId.toString().startsWith('general_') && !isNaN(zoneId)
+            ? parseInt(zoneId, 10)
+            : zoneId;
+        const match = (SHIPPING_ZONES || []).find(z => z.id === parsed);
+        if (match) {
+            return match.display_name || match.name;
+        }
+    }
+
+    return shippingInfo?.zoneName || shippingInfo?.name || 'Standard';
+}
+
+function qualifiesForFreeShipping(baseSubtotalUsd) {
+    return baseSubtotalUsd >= FREE_SHIPPING_THRESHOLD_USD;
+}
+
+function applyFreeShippingToCost(shippingInfo, baseSubtotalUsd) {
+    if (!shippingInfo || shippingInfo.available === false) {
+        return { costConverted: 0, isFree: false, unavailable: true };
+    }
+
+    if (qualifiesForFreeShipping(baseSubtotalUsd)) {
+        return { costConverted: 0, isFree: true, unavailable: false };
+    }
+
+    return { costConverted: shippingInfo.costConverted, isFree: false, unavailable: false };
+}
+
+function buildShippingZoneOptionsHtml(selectedZoneId) {
+    let html = '';
+
+    if (SHIPPING_ZONES_WITH_COUNTRIES && SHIPPING_ZONES_WITH_COUNTRIES.length > 0) {
+        html += SHIPPING_ZONES_WITH_COUNTRIES.map(zone => `
+            <optgroup label="${zone.name}">
+                ${zone.country_options.map(country => `
+                    <option value="${country.value}" ${selectedZoneId === country.value || (selectedZoneId === country.zone_id && !selectedZoneId?.toString().includes(':')) ? 'selected' : ''}>
+                        ${country.label}
+                    </option>
+                `).join('')}
+            </optgroup>
+        `).join('');
+    }
+
+    if (SHIPPING_ZONES && SHIPPING_ZONES.length > 0) {
+        html += SHIPPING_ZONES.map(zone => `
+            <option value="${zone.id}" ${selectedZoneId === zone.id ? 'selected' : ''}>
+                ${zone.display_name || zone.name}
+            </option>
+        `).join('');
+    }
+
+    return html;
+}
+
+function hasShippingZonePicker() {
+    return (SHIPPING_ZONES && SHIPPING_ZONES.length > 0)
+        || (SHIPPING_ZONES_WITH_COUNTRIES && SHIPPING_ZONES_WITH_COUNTRIES.length > 0);
+}
+
+function shouldHideShippingZonePicker() {
+    return !!AUTH_USER?.country;
+}
+
+function renderFreeShippingBar(baseSubtotalUsd, currency, currencyRate) {
+    const threshold = FREE_SHIPPING_THRESHOLD_USD;
+    const progress = Math.min(100, (baseSubtotalUsd / threshold) * 100);
+    const remainingUsd = Math.max(0, threshold - baseSubtotalUsd);
+    const remainingDisplay = currency !== 'USD' && currencyRate > 0
+        ? remainingUsd * currencyRate
+        : remainingUsd;
+
+    if (qualifiesForFreeShipping(baseSubtotalUsd)) {
+        return `
+            <div class="cart-drawer-freeship cart-drawer-freeship--done" id="cart-popup-freeship">
+                <span class="cart-drawer-freeship__icon" aria-hidden="true">✓</span>
+                <span>You&apos;ve unlocked free shipping!</span>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="cart-drawer-freeship" id="cart-popup-freeship">
+            <p class="cart-drawer-freeship__text">Add <strong>${CURRENCY_SYMBOL}${remainingDisplay.toFixed(2)}</strong> more for <strong>FREE SHIPPING</strong></p>
+            <div class="cart-drawer-freeship__track" aria-hidden="true">
+                <span class="cart-drawer-freeship__fill" id="cart-popup-freeship-fill" style="width: ${progress.toFixed(1)}%"></span>
+            </div>
         </div>
     `;
-    
-    overlay.appendChild(popup);
-    document.body.appendChild(overlay);
-    
-    console.log('Overlay appended to body');
-    
-    // Fetch cart data from backend
+}
+
+function renderCartDrawerBill({
+    totalItems,
+    subtotal,
+    baseSubtotalUsd,
+    shippingInfo,
+    shippingCost,
+    shippingIsFree,
+    totalPrice,
+    currency,
+    currencyRate,
+    selectedZoneId,
+    zoneLabel,
+}) {
+    const itemLabel = totalItems === 1 ? 'item' : 'items';
+    const hideZonePicker = shouldHideShippingZonePicker();
+    const showZoneEdit = hasShippingZonePicker() && !hideZonePicker;
+
+    let shippingRowHtml = '';
+    if (shippingInfo.available === false) {
+        shippingRowHtml = `
+            <div class="cart-drawer-bill__row cart-drawer-bill__row--error">
+                <span id="cart-popup-shipping-label">Shipping not available for this area</span>
+                <span class="cart-drawer-bill__row-value cart-drawer-bill__row--error" id="cart-popup-shipping-value">N/A</span>
+            </div>
+        `;
+    } else {
+        const shippingLabelText = hideZonePicker
+            ? 'Shipping'
+            : `Shipping — ${zoneLabel}`;
+        const shippingValueText = shippingIsFree
+            ? 'FREE'
+            : `${CURRENCY_SYMBOL}${shippingCost.toFixed(2)}`;
+        const valueClass = shippingIsFree ? 'cart-drawer-bill__row-value cart-drawer-bill__row-value--free' : 'cart-drawer-bill__row-value';
+
+        shippingRowHtml = `
+            <div class="cart-drawer-bill__row">
+                <span class="cart-drawer-bill__shipping-label" id="cart-popup-shipping-label">
+                    ${shippingLabelText}
+                    ${showZoneEdit ? `
+                        <button type="button" class="cart-drawer-bill__zone-edit" onclick="toggleShippingZoneEditor()" aria-label="Change shipping region" title="Change region">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                        </button>
+                    ` : ''}
+                </span>
+                <span class="${valueClass}" id="cart-popup-shipping-value">${shippingValueText}</span>
+            </div>
+        `;
+    }
+
+    const exchangeHtml = currency !== 'USD' && currencyRate !== 1.0
+        ? `<div class="cart-drawer-bill__row" id="cart-popup-exchange-rate"><span>Rate: 1 USD = ${currencyRate.toFixed(4)} ${currency}</span></div>`
+        : '';
+
+    const zoneEditorHtml = showZoneEdit
+        ? `
+            <div class="cart-popup-zone-editor cart-popup-zone-editor--hidden" id="cart-popup-zone-editor">
+                <select id="shipping-zone-select" onchange="updateShippingZone(this.value)" class="cart-popup-zone-editor__select" aria-label="Shipping region">
+                    ${buildShippingZoneOptionsHtml(selectedZoneId)}
+                </select>
+            </div>
+        `
+        : '';
+
+    return `
+        ${renderFreeShippingBar(baseSubtotalUsd, currency, currencyRate)}
+        <div class="cart-drawer-bill" id="cart-popup-bill">
+            ${exchangeHtml}
+            <div class="cart-drawer-bill__row">
+                <span id="cart-popup-subtotal-label">Subtotal (${totalItems} ${itemLabel})</span>
+                <span class="cart-drawer-bill__row-value" id="cart-popup-subtotal-value">${CURRENCY_SYMBOL}${subtotal.toFixed(2)}</span>
+            </div>
+            ${shippingRowHtml}
+            <div class="cart-drawer-bill__total">
+                <span>Total</span>
+                <span class="cart-drawer-bill__total-value" id="cart-popup-total-value">${CURRENCY_SYMBOL}${parseFloat(totalPrice).toFixed(2)}</span>
+            </div>
+        </div>
+        ${zoneEditorHtml}
+    `;
+}
+
+function updateCartDrawerBillTotals(cartItems, summary, currency, currencyRate) {
+    const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+    let baseSubtotal = 0;
+    if (summary.base_subtotal !== undefined && summary.base_subtotal !== null) {
+        baseSubtotal = parseFloat(summary.base_subtotal);
+    } else if (cartItems && cartItems.length > 0) {
+        baseSubtotal = calculateBaseSubtotalUsd(cartItems, currency, currencyRate);
+    } else if (summary.subtotal !== undefined && summary.subtotal !== null) {
+        const providedSubtotal = parseFloat(summary.subtotal);
+        baseSubtotal = currency !== 'USD' && currencyRate > 0
+            ? providedSubtotal / currencyRate
+            : providedSubtotal;
+    }
+
+    const subtotal = cartItems && cartItems.length > 0
+        ? calculateCartSubtotalFromItems(cartItems)
+        : (summary.converted_subtotal !== undefined
+            ? parseFloat(summary.converted_subtotal)
+            : (currency !== 'USD' ? baseSubtotal * currencyRate : baseSubtotal));
+
+    const selectedZoneId = resolveSelectedShippingZoneId();
+    const shippingInfo = calculateShippingCost(cartItems, baseSubtotal, selectedZoneId);
+    const shippingApplied = applyFreeShippingToCost(shippingInfo, baseSubtotal);
+    const shippingCost = shippingApplied.costConverted;
+    const totalPrice = subtotal + shippingCost;
+    const zoneLabel = getShippingZoneDisplayLabel(selectedZoneId, shippingInfo);
+
+    const freeshipEl = document.getElementById('cart-popup-freeship');
+    if (freeshipEl) {
+        freeshipEl.outerHTML = renderFreeShippingBar(baseSubtotal, currency, currencyRate);
+    }
+
+    const itemLabel = totalItems === 1 ? 'item' : 'items';
+    const subtotalLabel = document.getElementById('cart-popup-subtotal-label');
+    const subtotalValue = document.getElementById('cart-popup-subtotal-value');
+    const shippingLabel = document.getElementById('cart-popup-shipping-label');
+    const shippingValue = document.getElementById('cart-popup-shipping-value');
+    const totalValue = document.getElementById('cart-popup-total-value');
+    const headSub = document.querySelector('.cart-popup-head__sub');
+    const zoneSelect = document.getElementById('shipping-zone-select');
+
+    if (subtotalLabel) subtotalLabel.textContent = `Subtotal (${totalItems} ${itemLabel})`;
+    if (subtotalValue) subtotalValue.textContent = `${CURRENCY_SYMBOL}${subtotal.toFixed(2)}`;
+    if (headSub) headSub.textContent = `${totalItems} ${totalItems === 1 ? 'item' : 'items'} in your cart`;
+
+    if (shippingLabel && shippingValue) {
+        if (shippingInfo.available === false) {
+            shippingLabel.textContent = 'Shipping not available for this area';
+            shippingValue.textContent = 'N/A';
+            shippingValue.className = 'cart-drawer-bill__row-value cart-drawer-bill__row--error';
+        } else {
+            const hideZonePicker = shouldHideShippingZonePicker();
+            const labelText = hideZonePicker ? 'Shipping' : `Shipping — ${zoneLabel}`;
+            shippingLabel.innerHTML = hideZonePicker || !hasShippingZonePicker()
+                ? labelText
+                : `${labelText}
+                    <button type="button" class="cart-drawer-bill__zone-edit" onclick="toggleShippingZoneEditor()" aria-label="Change shipping region" title="Change region">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                    </button>`;
+            shippingValue.textContent = shippingApplied.isFree ? 'FREE' : `${CURRENCY_SYMBOL}${shippingCost.toFixed(2)}`;
+            shippingValue.className = shippingApplied.isFree
+                ? 'cart-drawer-bill__row-value cart-drawer-bill__row-value--free'
+                : 'cart-drawer-bill__row-value';
+        }
+    }
+
+    if (zoneSelect) {
+        zoneSelect.value = selectedZoneId || '';
+    }
+
+    if (totalValue) {
+        totalValue.textContent = `${CURRENCY_SYMBOL}${totalPrice.toFixed(2)}`;
+    }
+
+    return { totalItems, subtotal, baseSubtotal, shippingInfo, shippingCost, shippingApplied, totalPrice, selectedZoneId, zoneLabel };
+}
+
+function toggleShippingZoneEditor() {
+    const editor = document.getElementById('cart-popup-zone-editor');
+    if (!editor) {
+        return;
+    }
+
+    editor.classList.toggle('cart-popup-zone-editor--hidden');
+    if (!editor.classList.contains('cart-popup-zone-editor--hidden')) {
+        editor.querySelector('select')?.focus();
+    }
+}
+
+function renderCartPromoOfferBlock() {
+    if (AUTH_USER?.email || hasCartPromoBeenClaimedLocally()) {
+        return '';
+    }
+
+    return `
+        <div class="cart-drawer-promo" id="cart-promo-offer">
+            <div class="cart-drawer-promo__head">
+                <span class="cart-drawer-promo__code" aria-hidden="true">CART5</span>
+                <div>
+                    <p class="cart-drawer-promo__title">Get 5% off your order</p>
+                    <p class="cart-drawer-promo__sub">Enter your email — we&apos;ll send the code instantly.</p>
+                </div>
+            </div>
+            <form class="cart-drawer-promo__form" onsubmit="submitCartPromoEmail(event)">
+                <input type="email" name="email" required autocomplete="email" placeholder="Your email" class="cart-drawer-promo__input" aria-label="Email for promo code">
+                <button type="submit" class="cart-drawer-promo__submit">Get code</button>
+            </form>
+        </div>
+    `;
+}
+
+function handlePostAddToCartPromo() {
+    if (!AUTH_USER?.email || hasCartPromoBeenClaimedLocally()) {
+        return;
+    }
+
+    fetch('/api/promo/claim-cart', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            return;
+        }
+
+        markCartPromoClaimedLocally();
+
+        if (!data.already_sent) {
+            showCartSuccess(`Code ${data.code} sent to ${AUTH_USER.email}!`);
+        }
+    })
+    .catch(() => {});
+}
+
+async function submitCartPromoEmail(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const emailInput = form.querySelector('[name="email"]');
+    const email = emailInput?.value?.trim();
+    if (!email) {
+        return;
+    }
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+    }
+
+    try {
+        const response = await fetch('/api/promo/claim-cart', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ email })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            markCartPromoClaimedLocally();
+
+            const block = document.getElementById('cart-promo-offer');
+            if (block) {
+                block.className = 'cart-drawer-promo cart-drawer-promo--success';
+                block.innerHTML = `<span aria-hidden="true">✓</span><span>Code <strong>${data.code}</strong> sent — check your inbox at <strong>${email}</strong></span>`;
+            }
+
+            showCartSuccess(
+                data.already_sent
+                    ? `Code ${data.code} was already sent — check your email!`
+                    : `Code ${data.code} sent to ${email}!`
+            );
+        } else {
+            showAlert({
+                title: 'Could not send code',
+                message: data.message || 'Please try again later.',
+                type: 'error'
+            });
+        }
+    } catch (error) {
+        showAlert({
+            title: 'Error',
+            message: 'Could not send promo code. Please try again.',
+            type: 'error'
+        });
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+        }
+    }
+}
+
+function showCartPopup(addedProduct) {
+    closeCartPopup();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'cart-drawer-backdrop';
+    backdrop.className = 'cart-drawer-backdrop';
+    backdrop.setAttribute('aria-hidden', 'true');
+
+    const drawer = document.createElement('aside');
+    drawer.id = 'cart-drawer';
+    drawer.className = 'cart-drawer';
+    drawer.setAttribute('role', 'dialog');
+    drawer.setAttribute('aria-modal', 'true');
+    drawer.setAttribute('aria-label', 'Shopping cart');
+
+    drawer.innerHTML = `
+        <div class="cart-popup-loading">
+            <div class="animate-spin rounded-full h-10 w-10 border-2 border-[#005366] border-t-transparent"></div>
+        </div>
+    `;
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(drawer);
+    document.body.classList.add('cart-drawer-open');
+
+    requestAnimationFrame(function () {
+        backdrop.classList.add('is-open');
+        drawer.classList.add('is-open');
+    });
+
     fetch('/api/cart/get', {
         method: 'GET',
         headers: {
@@ -4379,56 +4802,49 @@ function showCartPopup(addedProduct) {
         credentials: 'same-origin'
     })
     .then(response => {
-        console.log('Response status:', response.status);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         return response.json();
     })
     .then(data => {
-        console.log('Cart API Response:', data); // Debug log
         if (data.success) {
-            const cartItems = data.cart_items || [];
-            console.log('Cart Items count:', cartItems.length);
-            if (cartItems.length > 0) {
-                console.log('First item:', cartItems[0]);
-                console.log('First item product:', cartItems[0].product);
-                console.log('First item media:', cartItems[0].product?.media);
-            }
-            renderCartPopup(popup, cartItems, data.summary || {}, data.shipping_details || null);
+            renderCartPopup(drawer, data.cart_items || [], data.summary || {}, data.shipping_details || null);
         } else {
-            console.warn('Backend returned failed status');
-            renderCartPopup(popup, [], {}, null);
+            renderCartPopup(drawer, [], {}, null);
         }
     })
     .catch(error => {
         console.error('Failed to fetch cart:', error);
-        popup.innerHTML = `
-            <div class="p-6 text-center">
-                <p class="text-red-600 mb-4">Unable to load cart. Please try again.</p>
-                <p class="text-sm text-gray-600 mb-4">Error: ${error.message}</p>
-                <button onclick="closeCartPopup()" class="bg-[#005366] text-white px-6 py-2 rounded-lg hover:bg-[#003d4d]">
-                    Close
+        drawer.innerHTML = `
+            <div class="cart-popup-head">
+                <div class="cart-popup-head__title-wrap">
+                    <h2 class="cart-popup-head__title">Unable to load cart</h2>
+                </div>
+                <button type="button" onclick="closeCartPopup()" class="cart-popup-head__close" aria-label="Close">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
+            </div>
+            <div class="cart-drawer__scroll">
+                <div class="cart-popup-body">
+                    <p class="text-[#e2150c] mb-2 font-semibold">Something went wrong. Please try again.</p>
+                    <p class="text-sm text-gray-500 mb-4">${error.message}</p>
+                    <button type="button" onclick="closeCartPopup()" class="btn-outline-petrol">Close</button>
+                </div>
             </div>
         `;
     });
-    
-    // Close on overlay click
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-            closeCartPopup();
-        }
-    });
-    
-    // Close on escape key
-    const handleEscape = (e) => {
-        if (e.key === 'Escape') {
-            closeCartPopup();
-            document.removeEventListener('keydown', handleEscape);
-        }
-    };
-    document.addEventListener('keydown', handleEscape);
+
+    backdrop.addEventListener('click', closeCartPopup);
+
+    if (!window._cartDrawerEscapeHandler) {
+        window._cartDrawerEscapeHandler = function (e) {
+            if (e.key === 'Escape' && document.getElementById('cart-drawer')) {
+                closeCartPopup();
+            }
+        };
+        document.addEventListener('keydown', window._cartDrawerEscapeHandler);
+    }
 }
 
 
@@ -4447,214 +4863,99 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
         CURRENT_CURRENCY_RATE: CURRENT_CURRENCY_RATE
     });
     
-    // Calculate base subtotal
+    // Subtotal/shipping base — unit price already includes customization fees.
     let baseSubtotal = 0;
-    
-    // Priority 1: Use base_subtotal if explicitly provided (should be in USD)
+
     if (summary.base_subtotal !== undefined && summary.base_subtotal !== null) {
         baseSubtotal = parseFloat(summary.base_subtotal);
-    } 
-    // Priority 2: Calculate from cart items (most reliable)
-    // item.price is usually in current currency (converted), so we need to convert back to USD
-    else if (cartItems && cartItems.length > 0) {
-        cartItems.forEach(item => {
-            const itemPrice = parseFloat(item.price) || 0;
-            // If item has base_price_usd, use it directly (already in USD)
-            // Otherwise, assume item.price is in current currency and convert back to USD
-            let basePrice = 0;
-            if (item.base_price_usd !== undefined && item.base_price_usd !== null) {
-                basePrice = parseFloat(item.base_price_usd);
-            } else {
-                // Convert from current currency to USD
-                basePrice = currency !== 'USD' && currencyRate > 0 
-                    ? itemPrice / currencyRate 
-                    : itemPrice;
-            }
-            
-            let customizationTotal = 0;
-            if (item.customizations) {
-                Object.values(item.customizations).forEach(customization => {
-                    if (customization && customization.price) {
-                        const customPrice = parseFloat(customization.price) || 0;
-                        // Convert customization price back to USD if needed
-                        let baseCustomPrice = 0;
-                        if (customization.base_price_usd !== undefined && customization.base_price_usd !== null) {
-                            baseCustomPrice = parseFloat(customization.base_price_usd);
-                        } else {
-                            baseCustomPrice = currency !== 'USD' && currencyRate > 0
-                                ? customPrice / currencyRate
-                                : customPrice;
-                        }
-                        customizationTotal += baseCustomPrice;
-                    }
-                });
-            }
-            
-            baseSubtotal += (basePrice + customizationTotal) * item.quantity;
-        });
-    }
-    // Priority 3: Fallback to summary.subtotal (assume it's in current currency if not USD)
-    else if (summary.subtotal !== undefined && summary.subtotal !== null) {
+    } else if (cartItems && cartItems.length > 0) {
+        baseSubtotal = calculateBaseSubtotalUsd(cartItems, currency, currencyRate);
+    } else if (summary.subtotal !== undefined && summary.subtotal !== null) {
         const providedSubtotal = parseFloat(summary.subtotal);
-        // If currency is not USD, convert back to USD
-        // If currency is USD, subtotal is already in USD
-        baseSubtotal = currency !== 'USD' && currencyRate > 0 
-            ? providedSubtotal / currencyRate 
+        baseSubtotal = currency !== 'USD' && currencyRate > 0
+            ? providedSubtotal / currencyRate
             : providedSubtotal;
     }
-    
-    // Use converted subtotal if available, otherwise convert from base
-    const subtotal = summary.converted_subtotal !== undefined 
-        ? parseFloat(summary.converted_subtotal) 
-        : (currency !== 'USD' ? baseSubtotal * currencyRate : baseSubtotal);
-    
-    // Get selected zone from localStorage or use default
-    let selectedZoneId = localStorage.getItem('selectedShippingZoneId');
-    if (selectedZoneId) {
-        // Check if it's in format "zone_id:country_code" or just zone_id
-        let zoneIdToCheck = selectedZoneId;
-        if (selectedZoneId.includes(':')) {
-            zoneIdToCheck = selectedZoneId.split(':')[0];
-        }
-        
-        // Check if it's a general domain zone (starts with 'general_') or a numeric ID
-        if (zoneIdToCheck.toString().startsWith('general_')) {
-            // Keep as string for general domain zones
-            // Verify zone exists in zones with countries or regular zones
-            const existsInZonesWithCountries = SHIPPING_ZONES_WITH_COUNTRIES && SHIPPING_ZONES_WITH_COUNTRIES.some(z => z.id === zoneIdToCheck);
-            const existsInZones = SHIPPING_ZONES && SHIPPING_ZONES.some(z => z.id === zoneIdToCheck);
-            if (!existsInZonesWithCountries && !existsInZones) {
-                selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
-            }
-        } else {
-            // Parse as integer for regular zones
-            const parsed = parseInt(zoneIdToCheck);
-            if (!isNaN(parsed)) {
-                // Verify zone exists
-                const existsInZonesWithCountries = SHIPPING_ZONES_WITH_COUNTRIES && SHIPPING_ZONES_WITH_COUNTRIES.some(z => z.id === parsed);
-                const existsInZones = SHIPPING_ZONES && SHIPPING_ZONES.some(z => z.id === parsed);
-                if (!existsInZonesWithCountries && !existsInZones) {
-                    selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
-                }
-            } else {
-                selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
-            }
-        }
-    } else {
-        selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
-    }
-    
-    // Calculate shipping cost
+
+    const subtotal = cartItems && cartItems.length > 0
+        ? calculateCartSubtotalFromItems(cartItems)
+        : (summary.converted_subtotal !== undefined
+            ? parseFloat(summary.converted_subtotal)
+            : (currency !== 'USD' ? baseSubtotal * currencyRate : baseSubtotal));
+
+    const selectedZoneId = resolveSelectedShippingZoneId();
     const shippingInfo = calculateShippingCost(cartItems, baseSubtotal, selectedZoneId);
-    const shippingCost = shippingInfo.costConverted;
-    
-    // Calculate total price including shipping
+    const shippingApplied = applyFreeShippingToCost(shippingInfo, baseSubtotal);
+    const shippingCost = shippingApplied.costConverted;
     const totalPrice = subtotal + shippingCost;
-    
+    const zoneLabel = getShippingZoneDisplayLabel(selectedZoneId, shippingInfo);
+
     popup.innerHTML = `
-        <!-- Header -->
-        <div class="bg-white border-b border-gray-200 p-6 flex items-center justify-between">
-            <h2 class="text-2xl font-bold text-gray-900">Shopping Cart</h2>
-            <button onclick="closeCartPopup()" class="text-gray-400 hover:text-gray-600 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        <div class="cart-popup-head">
+            <div class="cart-popup-head__title-wrap">
+                <span class="cart-popup-head__icon" aria-hidden="true">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </span>
+                <div>
+                    <h2 class="cart-popup-head__title">Added to cart</h2>
+                    <p class="cart-popup-head__sub">${totalItems} ${totalItems === 1 ? 'item' : 'items'} in your cart</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeCartPopup()" class="cart-popup-head__close" aria-label="Close">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
             </button>
         </div>
-        
-        <!-- Cart Items -->
-        <div class="p-6">
-            <div class="space-y-4" id="cart-popup-items">
-                ${generateCartPopupItems(cartItems)}
-            </div>
-        </div>
-        
-        <!-- Total Section -->
-        <div class="border-t border-gray-200 p-6 bg-gray-50">
-            <div class="space-y-2 mb-4">
-                <!-- Exchange Rate Display (only show if currency is not USD) -->
-                ${currency !== 'USD' && currencyRate !== 1.0 ? 
-                    `<div class="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-200 mb-3">
-                        <div class="flex justify-between items-center">
-                            <span>Exchange Rate:</span>
-                            <span class="font-medium">1 USD = ${currencyRate.toFixed(4)} ${currency}</span>
-                        </div>
-                        <div class="text-[10px] text-gray-400 mt-1">
-                            Prices converted from USD
-                        </div>
-                    </div>` : ''
-                }
-                
-                <div class="flex justify-between text-gray-600">
-                    <span>Subtotal (${totalItems} items)</span>
-                    <span class="font-semibold">${CURRENCY_SYMBOL}${subtotal.toFixed(2)}</span>
+
+        <div class="cart-drawer__scroll">
+            <div class="cart-popup-body">
+                <div class="cart-popup-items" id="cart-popup-items">
+                    ${generateCartPopupItems(cartItems)}
                 </div>
-                
-                <!-- Shipping Zone Selector -->
-                ${(SHIPPING_ZONES && SHIPPING_ZONES.length > 0) || (SHIPPING_ZONES_WITH_COUNTRIES && SHIPPING_ZONES_WITH_COUNTRIES.length > 0) ? `
-                    <div class="mb-2">
-                        <label for="shipping-zone-select" class="block text-sm font-medium text-gray-600 mb-1">Shipping Zone:</label>
-                        <select id="shipping-zone-select" 
-                                onchange="updateShippingZone(this.value)" 
-                                class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#005366] focus:border-transparent">
-                            ${SHIPPING_ZONES_WITH_COUNTRIES && SHIPPING_ZONES_WITH_COUNTRIES.length > 0 ? SHIPPING_ZONES_WITH_COUNTRIES.map(zone => `
-                                <optgroup label="${zone.name}">
-                                    ${zone.country_options.map(country => `
-                                        <option value="${country.value}" ${selectedZoneId === country.value || (selectedZoneId === country.zone_id && !selectedZoneId.toString().includes(':')) ? 'selected' : ''}>
-                                            ${country.label}
-                                        </option>
-                                    `).join('')}
-                                </optgroup>
-                            `).join('') : ''}
-                            ${SHIPPING_ZONES && SHIPPING_ZONES.length > 0 ? SHIPPING_ZONES.map(zone => `
-                                <option value="${zone.id}" ${selectedZoneId === zone.id ? 'selected' : ''}>
-                                    ${zone.display_name || zone.name}
-                                </option>
-                            `).join('') : ''}
-                        </select>
-                    </div>
-                ` : ''}
-                
-                <div class="flex justify-between text-gray-600">
-                    <span class="${shippingInfo.available === false ? 'text-red-600' : ''}">${shippingInfo.available === false ? 'Shipping not available for this area' : `Shipping${shippingInfo.zoneName ? ` (${shippingInfo.zoneName})` : shippingInfo.name ? ` (${shippingInfo.name})` : ''}`}</span>
-                    <span class="font-semibold ${shippingInfo.available === false ? 'text-red-600' : ''}">${shippingInfo.available === false ? 'N/A' : `${CURRENCY_SYMBOL}${shippingCost.toFixed(2)}`}</span>
+            </div>
+
+            <div class="cart-popup-recs">
+                <h3 class="cart-popup-recs__title">You may also like</h3>
+                <div class="cart-popup-recs__grid" id="cross-sell-products">
+                    ${generateCrossSellProducts()}
                 </div>
-                
-            </div>
-            <div class="border-t pt-3 flex justify-between items-center text-xl font-bold">
-                <span>Total:</span>
-                <span class="text-[#005366]">${CURRENCY_SYMBOL}${parseFloat(totalPrice).toFixed(2)}</span>
             </div>
         </div>
-        
-        <!-- Checkout Section -->
-        <div class="p-6 bg-white">
-            <!-- Checkout Buttons -->
-            <div class="flex space-x-3 mb-3">
-                <button onclick="goToCheckoutFromPopup()" 
-                        class="flex-1 bg-[#005366] hover:bg-[#003d4d] text-white font-bold py-4 px-6 rounded-xl transition-colors">
-                    Checkout
-                </button>
-                <button onclick="closeCartPopup(); window.location.href='{{ route('cart.index') }}'" 
-                        class="flex-1 bg-white text-gray-800 font-semibold py-4 px-6 rounded-xl border-2 border-gray-300 hover:border-gray-400 transition-colors">
-                    View cart
-                </button>
+
+        <div class="cart-drawer__footer">
+            <div class="cart-popup-summary">
+                ${renderCartDrawerBill({
+                    totalItems,
+                    subtotal,
+                    baseSubtotalUsd: baseSubtotal,
+                    shippingInfo,
+                    shippingCost,
+                    shippingIsFree: shippingApplied.isFree,
+                    totalPrice,
+                    currency,
+                    currencyRate,
+                    selectedZoneId,
+                    zoneLabel,
+                })}
             </div>
-            
-            <!-- Continue Shopping -->
-            <div class="text-center">
-                <button onclick="closeCartPopup(); window.location.href='{{ route('products.index') }}'" 
-                        class="text-[#005366] hover:underline font-medium">
-                    Continue Shopping
+
+            ${renderCartPromoOfferBlock()}
+
+            <div class="cart-popup-actions">
+                <div class="cart-popup-actions__buttons">
+                    <button type="button" onclick="goToCheckoutFromPopup()" class="btn-cta">
+                        Checkout
+                    </button>
+                    <button type="button" onclick="closeCartPopup(); window.location.href='{{ route('cart.index') }}'" class="btn-outline-petrol">
+                        View cart
+                    </button>
+                </div>
+                <button type="button" onclick="closeCartPopup(); window.location.href='{{ route('products.index') }}'" class="cart-popup-actions__continue">
+                    Continue shopping
                 </button>
-            </div>
-        </div>
-        
-        <!-- You may also like -->
-        <div class="p-6 bg-gray-50 border-t border-gray-200">
-            <h3 class="font-bold text-gray-900 mb-4">You may also like</h3>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" id="cross-sell-products">
-                ${generateCrossSellProducts()}
             </div>
         </div>
     `;
@@ -4667,14 +4968,11 @@ function renderCartPopup(popup, cartItems, summary, shippingDetails) {
 
 // Setup event delegation for cart popup buttons
 function setupCartPopupEventDelegation() {
-    const cartPopupOverlay = document.getElementById('cart-popup-overlay');
-    if (!cartPopupOverlay) return;
-    
-    // Remove existing listener if any
-    cartPopupOverlay.removeEventListener('click', handleCartPopupClick);
-    
-    // Add event listener
-    cartPopupOverlay.addEventListener('click', handleCartPopupClick);
+    const drawer = document.getElementById('cart-drawer');
+    if (!drawer) return;
+
+    drawer.removeEventListener('click', handleCartPopupClick);
+    drawer.addEventListener('click', handleCartPopupClick);
 }
 
 // Handle all cart popup clicks
@@ -4743,19 +5041,41 @@ function handleCartPopupClick(e) {
 }
 
 
-// Calculate item total including customizations (same as Cart model getTotalPrice())
-function calculateItemTotal(item) {
-    let total = parseFloat(item.price) * item.quantity;
-    
-    // Add customization prices
-    if (item.customizations && typeof item.customizations === 'object') {
-        Object.values(item.customizations).forEach(customization => {
-            const customPrice = parseFloat(customization.price || 0);
-            total += customPrice * item.quantity;
-        });
+// Resolve unit/line totals — `price` includes customization; legacy rows use effective_unit_price from API.
+function getCartItemUnitPrice(item) {
+    if (item.effective_unit_price !== undefined && item.effective_unit_price !== null) {
+        return parseFloat(item.effective_unit_price) || 0;
     }
-    
-    return total;
+
+    return parseFloat(item.price) || 0;
+}
+
+function calculateItemTotal(item) {
+    const quantity = parseInt(item.quantity, 10) || 1;
+    return getCartItemUnitPrice(item) * quantity;
+}
+
+function calculateCartSubtotalFromItems(cartItems) {
+    if (!cartItems || cartItems.length === 0) {
+        return 0;
+    }
+
+    return cartItems.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+}
+
+function calculateBaseSubtotalUsd(cartItems, currency, currencyRate) {
+    if (!cartItems || cartItems.length === 0) {
+        return 0;
+    }
+
+    return cartItems.reduce((sum, item) => {
+        const unitPrice = getCartItemUnitPrice(item);
+        const basePriceUsd = currency !== 'USD' && currencyRate > 0
+            ? unitPrice / currencyRate
+            : unitPrice;
+
+        return sum + basePriceUsd * (parseInt(item.quantity, 10) || 1);
+    }, 0);
 }
 
 /**
@@ -5053,112 +5373,119 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
 
 function generateCartPopupItems(cartItems) {
     if (!cartItems || cartItems.length === 0) {
-        return '<p class="text-gray-500 text-center py-8">Your cart is empty</p>';
+        return '<p class="cart-popup-empty">Your cart is empty</p>';
+    }
+
+    function cartLineName(item) {
+        return item.display_name
+            || (item.customizations && item.customizations._studio && item.customizations._studio.title)
+            || (item.product && item.product.name)
+            || 'Custom product';
+    }
+
+    function cartLineImage(item, product) {
+        if (item.display_image) return item.display_image;
+        if (item.customizations && item.customizations._studio && item.customizations._studio.image) {
+            return item.customizations._studio.image;
+        }
+        if (item.is_studio_custom) return null;
+        if (product.media) {
+            if (Array.isArray(product.media) && product.media.length > 0) {
+                const firstMedia = product.media[0];
+                return typeof firstMedia === 'object' ? (firstMedia.url || firstMedia) : firstMedia;
+            }
+            if (typeof product.media === 'string') return product.media;
+        }
+        return null;
+    }
+
+    function visibleCustomizations(item) {
+        const rows = item.customizations || {};
+        return Object.entries(rows).filter(function (entry) {
+            return String(entry[0]).charAt(0) !== '_';
+        });
     }
     
     return cartItems.map((item) => {
         const product = item.product || {};
         const shop = product.shop || {};
-        
-        // Debug log for media
-        console.log('Product media:', product.media);
-        
-        // Handle both array of URLs and array of objects
-        let productImage = null;
-        if (product.media) {
-            if (Array.isArray(product.media) && product.media.length > 0) {
-                const firstMedia = product.media[0];
-                productImage = typeof firstMedia === 'object' ? (firstMedia.url || firstMedia) : firstMedia;
-            } else if (typeof product.media === 'string') {
-                // If media is a string (single URL)
-                productImage = product.media;
-            }
-        }
-        
-        console.log('Final product image:', productImage); // Debug
+        const isStudio = !!(item.is_studio_custom || (item.customizations && item.customizations._studio && item.customizations._studio.standalone));
+        const name = cartLineName(item);
+        const productImage = cartLineImage(item, product);
+        const customs = visibleCustomizations(item);
         
         return `
-            <div class="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
-                <div class="flex gap-4">
-            <!-- Product Image -->
-                    <div class="flex-shrink-0">
+            <article class="cart-popup-item">
+                <div class="cart-popup-item__inner">
+                    <div class="cart-popup-item__media">
                         ${productImage && productImage !== 'undefined' && productImage !== '' ? `
-                            <img src="${productImage}" alt="${product.name || ''}" class="w-20 h-20 object-cover rounded-lg" onerror="this.parentElement.innerHTML='<div class=\\'w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center\\'><svg class=\\'w-8 h-8 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'></path></svg></div>'">
+                            <img src="${productImage}" alt="${name || ''}" onerror="this.parentElement.innerHTML='<div class=\\'cart-popup-item__media-fallback\\'><svg class=\\'w-8 h-8\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2 2v12a2 2 0 002 2z\\'/></svg></div>'">
                         ` : `
-                            <div class="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center">
-                                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            <div class="cart-popup-item__media-fallback">
+                                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                                 </svg>
                             </div>
                         `}
                     </div>
-                    
-                    <!-- Product Info -->
-            <div class="flex-1 min-w-0">
-                        <div class="flex justify-between items-start mb-2">
-                            <div class="flex-1">
-                                <h4 class="font-semibold text-gray-900 text-sm line-clamp-2 mb-1">${product.name || 'Unknown Product'}</h4>
-                                ${shop.name ? `
-                                    <p class="text-xs text-gray-500">Sold by: <a href="/shops/${shop.shop_slug || ''}" class="text-[#005366] font-medium hover:underline">${shop.name}</a></p>
-                                ` : ''}
-                            </div>
-                            <button class="remove-cart-item ml-2 p-1 text-gray-400 hover:text-red-500 transition-colors" data-cart-item-id="${item.id}">
+
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-start gap-2 mb-1">
+                            <h4 class="cart-popup-item__name">${name || 'Custom product'}</h4>
+                            <button type="button" class="cart-popup-item__remove remove-cart-item" data-cart-item-id="${item.id}" aria-label="Remove item">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                 </svg>
                             </button>
                         </div>
-                        
-                        <!-- Variants -->
-                        ${item.selected_variant && item.selected_variant.attributes ? `
-                            <div class="flex flex-wrap gap-1 mb-2">
-                                ${Object.entries(item.selected_variant.attributes).map(([key, value]) => `
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                                        ${key}: ${value}
-                                    </span>
-                                `).join('')}
-                </div>
+
+                        ${!isStudio && shop.name ? `
+                            <p class="cart-popup-item__shop">Sold by <a href="/shops/${shop.shop_slug || ''}">${shop.name}</a></p>
                         ` : ''}
-                
-                <!-- Customizations -->
-                ${item.customizations && Object.keys(item.customizations).length > 0 ? `
-                    <div class="text-xs text-gray-600 mb-2">
-                        ${Object.entries(item.customizations).map(([key, custom]) => 
-                                    `<div>${key}: ${custom.value}${custom.price > 0 ? ` (+${CURRENCY_SYMBOL}${parseFloat(custom.price).toFixed(2)})` : ''}</div>`
+
+                        ${item.selected_variant && item.selected_variant.attributes ? `
+                            <div class="mb-2">
+                                ${Object.entries(item.selected_variant.attributes).map(([key, value]) => `
+                                    <span class="cart-popup-item__variant">${key}: ${value}</span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+
+                        ${customs.length > 0 ? `
+                            <div class="cart-popup-item__custom">
+                                ${customs.map(([key, custom]) =>
+                                    `<div>${key}: ${custom && custom.value ? custom.value : ''}${custom && custom.price > 0 ? ` (+${CURRENCY_SYMBOL}${parseFloat(custom.price).toFixed(2)})` : ''}</div>`
                                 ).join('')}
-                    </div>
-                ` : ''}
-                
-                <!-- Price and Quantity -->
-                        <div class="flex items-center justify-between mt-3">
-                    <div class="flex items-center space-x-2">
-                                <button class="decrease-quantity w-7 h-7 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors ${item.quantity <= 1 ? 'opacity-50 cursor-not-allowed' : ''}" 
-                                        data-cart-item-id="${item.id}" 
+                            </div>
+                        ` : ''}
+
+                        <div class="cart-popup-item__footer">
+                            <div class="cart-popup-qty">
+                                <button type="button" class="cart-popup-qty__btn decrease-quantity ${item.quantity <= 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+                                        data-cart-item-id="${item.id}"
                                         data-new-quantity="${item.quantity - 1}"
-                                        ${item.quantity <= 1 ? 'disabled' : ''}>
-                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
-                            </svg>
-                        </button>
-                                <span class="text-sm font-semibold min-w-[1.5rem] text-center" id="quantity-${item.id}">${item.quantity}</span>
-                                <button class="increase-quantity w-7 h-7 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors" 
-                                        data-cart-item-id="${item.id}" 
-                                        data-new-quantity="${item.quantity + 1}">
-                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                            </svg>
-                        </button>
-                    </div>
-                            <div class="text-right">
-                                <p class="text-lg font-bold text-[#005366]">${CURRENCY_SYMBOL}${calculateItemTotal(item).toFixed(2)}</p>
+                                        ${item.quantity <= 1 ? 'disabled' : ''}
+                                        aria-label="Decrease quantity">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                                </button>
+                                <span class="cart-popup-qty__value" id="quantity-${item.id}">${item.quantity}</span>
+                                <button type="button" class="cart-popup-qty__btn increase-quantity"
+                                        data-cart-item-id="${item.id}"
+                                        data-new-quantity="${item.quantity + 1}"
+                                        aria-label="Increase quantity">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                </button>
+                            </div>
+                            <div>
+                                <p class="cart-popup-item__price">${CURRENCY_SYMBOL}${calculateItemTotal(item).toFixed(2)}</p>
                                 ${item.quantity > 1 ? `
-                                    <p class="text-xs text-gray-500">${CURRENCY_SYMBOL}${parseFloat(item.price).toFixed(2)} each</p>
+                                    <p class="cart-popup-item__unit">${CURRENCY_SYMBOL}${getCartItemUnitPrice(item).toFixed(2)} each</p>
                                 ` : ''}
-                </div>
-            </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </article>
         `;
     }).join('');
 }
@@ -5328,201 +5655,11 @@ function refreshCartPopupContent() {
                 cartItemsContainer.innerHTML = generateCartPopupItems(data.cart_items);
             }
             
-            // Update totals
-            const totalItems = data.cart_items.reduce((sum, item) => sum + item.quantity, 0);
             const summary = data.summary || {};
             const currency = data.currency || CURRENT_CURRENCY || 'USD';
             const currencyRate = parseFloat(data.currency_rate || 1.0);
-            
-            // Calculate base subtotal in USD for shipping calculation
-            let baseSubtotal = 0;
-            if (summary.base_subtotal !== undefined && summary.base_subtotal !== null) {
-                baseSubtotal = parseFloat(summary.base_subtotal);
-            } else if (data.cart_items && data.cart_items.length > 0) {
-                data.cart_items.forEach(item => {
-                    const itemPrice = parseFloat(item.price) || 0;
-                    let basePrice = 0;
-                    if (item.base_price_usd !== undefined && item.base_price_usd !== null) {
-                        basePrice = parseFloat(item.base_price_usd);
-                    } else {
-                        basePrice = currency !== 'USD' && currencyRate > 0 
-                            ? itemPrice / currencyRate 
-                            : itemPrice;
-                    }
-                    
-                    let customizationTotal = 0;
-                    if (item.customizations) {
-                        Object.values(item.customizations).forEach(customization => {
-                            if (customization && customization.price) {
-                                const customPrice = parseFloat(customization.price) || 0;
-                                let baseCustomPrice = 0;
-                                if (customization.base_price_usd !== undefined && customization.base_price_usd !== null) {
-                                    baseCustomPrice = parseFloat(customization.base_price_usd);
-                                } else {
-                                    baseCustomPrice = currency !== 'USD' && currencyRate > 0
-                                        ? customPrice / currencyRate
-                                        : customPrice;
-                                }
-                                customizationTotal += baseCustomPrice;
-                            }
-                        });
-                    }
-                    
-                    baseSubtotal += (basePrice + customizationTotal) * item.quantity;
-                });
-            } else if (summary.subtotal !== undefined && summary.subtotal !== null) {
-                const providedSubtotal = parseFloat(summary.subtotal);
-                baseSubtotal = currency !== 'USD' && currencyRate > 0 
-                    ? providedSubtotal / currencyRate 
-                    : providedSubtotal;
-            }
-            
-            // Calculate converted subtotal for display
-            const convertedSubtotal = summary.converted_subtotal !== undefined 
-                ? parseFloat(summary.converted_subtotal) 
-                : (currency !== 'USD' ? baseSubtotal * currencyRate : baseSubtotal);
-            
-            // Get selected zone from localStorage or use default
-            let selectedZoneId = localStorage.getItem('selectedShippingZoneId');
-            if (selectedZoneId) {
-                // Check if it's in format "zone_id:country_code" or just zone_id
-                let zoneIdToCheck = selectedZoneId;
-                if (selectedZoneId.includes(':')) {
-                    zoneIdToCheck = selectedZoneId.split(':')[0];
-                }
-                
-                // Check if it's a general domain zone (starts with 'general_') or a numeric ID
-                if (zoneIdToCheck.toString().startsWith('general_')) {
-                    // Keep as string for general domain zones
-                    // Verify zone exists in zones with countries or regular zones
-                    const existsInZonesWithCountries = SHIPPING_ZONES_WITH_COUNTRIES && SHIPPING_ZONES_WITH_COUNTRIES.some(z => z.id === zoneIdToCheck);
-                    const existsInZones = SHIPPING_ZONES && SHIPPING_ZONES.some(z => z.id === zoneIdToCheck);
-                    if (!existsInZonesWithCountries && !existsInZones) {
-                        selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
-                    }
-                } else {
-                    // Parse as integer for regular zones
-                    const parsed = parseInt(zoneIdToCheck);
-                    if (!isNaN(parsed)) {
-                        // Verify zone exists
-                        const existsInZonesWithCountries = SHIPPING_ZONES_WITH_COUNTRIES && SHIPPING_ZONES_WITH_COUNTRIES.some(z => z.id === parsed);
-                        const existsInZones = SHIPPING_ZONES && SHIPPING_ZONES.some(z => z.id === parsed);
-                        if (!existsInZonesWithCountries && !existsInZones) {
-                            selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
-                        }
-                    } else {
-                        selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
-                    }
-                }
-            } else {
-                selectedZoneId = DEFAULT_SHIPPING_ZONE_ID;
-            }
-            
-            // Calculate shipping cost
-            const shippingInfo = calculateShippingCost(data.cart_items, baseSubtotal, selectedZoneId);
-            const shippingCost = shippingInfo.costConverted;
-            
-            // Update dropdown if exists
-            const zoneSelect = document.getElementById('shipping-zone-select');
-            if (zoneSelect) {
-                zoneSelect.value = selectedZoneId || '';
-            }
-            
-            // Calculate total price including shipping
-            const totalPrice = convertedSubtotal + shippingCost;
-            
-            // Update subtotal - find by text content "Subtotal"
-            const allTotalElements = document.querySelectorAll('#cart-popup-overlay .space-y-2 .flex.justify-between');
-            allTotalElements.forEach(element => {
-                const firstSpan = element.querySelector('span:first-child');
-                if (firstSpan && firstSpan.textContent.includes('Subtotal')) {
-                    const subtotalSpan = element.querySelector('span:last-child');
-                    const subtotalLabel = element.querySelector('span:first-child');
-                    if (subtotalSpan) subtotalSpan.textContent = `${CURRENCY_SYMBOL}${convertedSubtotal.toFixed(2)}`;
-                    if (subtotalLabel) subtotalLabel.textContent = `Subtotal (${totalItems} items)`;
-                }
-                
-                // Update shipping cost
-                if (firstSpan && firstSpan.textContent.includes('Shipping')) {
-                    const shippingSpan = element.querySelector('span:last-child');
-                    if (shippingInfo.available === false) {
-                        if (shippingSpan) {
-                            shippingSpan.textContent = 'N/A';
-                            shippingSpan.classList.add('text-red-600');
-                        }
-                        if (firstSpan) {
-                            firstSpan.textContent = 'Shipping not available for this area';
-                            firstSpan.classList.add('text-red-600');
-                        }
-                    } else {
-                        if (shippingSpan) {
-                            shippingSpan.textContent = `${CURRENCY_SYMBOL}${shippingCost.toFixed(2)}`;
-                            shippingSpan.classList.remove('text-red-600');
-                        }
-                        // Update shipping label with zone name or rate name
-                        if (firstSpan) {
-                            firstSpan.textContent = `Shipping${shippingInfo.zoneName ? ` (${shippingInfo.zoneName})` : shippingInfo.name ? ` (${shippingInfo.name})` : ''}`;
-                            firstSpan.classList.remove('text-red-600');
-                        }
-                    }
-                }
-            });
-            
-            // If shipping row doesn't exist, add it
-            const hasShippingRow = Array.from(allTotalElements).some(element => {
-                const firstSpan = element.querySelector('span:first-child');
-                return firstSpan && firstSpan.textContent.includes('Shipping');
-            });
-            
-            if (!hasShippingRow) {
-                const totalsSection = document.querySelector('#cart-popup-overlay .space-y-2');
-                if (totalsSection) {
-                    const shippingRow = document.createElement('div');
-                    shippingRow.className = 'flex justify-between text-gray-600';
-                    shippingRow.innerHTML = `
-                        <span>Shipping${shippingInfo.name ? ` (${shippingInfo.name})` : ''}</span>
-                        <span class="font-semibold">${CURRENCY_SYMBOL}${shippingCost.toFixed(2)}</span>
-                    `;
-                    // Insert before the border-t element (total row)
-                    const totalRow = totalsSection.parentElement.querySelector('.border-t.pt-3');
-                    if (totalRow) {
-                        totalsSection.insertBefore(shippingRow, totalRow);
-                    } else {
-                        totalsSection.appendChild(shippingRow);
-                    }
-                }
-            }
-            
-            
-            // Update exchange rate display if needed
-            const exchangeRateDisplay = document.querySelector('#cart-popup-overlay .text-xs.text-gray-500.bg-gray-50');
-            if (currency !== 'USD' && currencyRate !== 1.0) {
-                if (!exchangeRateDisplay) {
-                    // Add exchange rate display before subtotal
-                    if (totalsSection) {
-                        const exchangeRateDiv = document.createElement('div');
-                        exchangeRateDiv.className = 'text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-200 mb-3';
-                        exchangeRateDiv.innerHTML = `
-                            <div class="flex justify-between items-center">
-                                <span>Exchange Rate:</span>
-                                <span class="font-medium">1 USD = ${currencyRate.toFixed(4)} ${currency}</span>
-                            </div>
-                            <div class="text-[10px] text-gray-400 mt-1">
-                                Prices converted from USD
-                            </div>
-                        `;
-                        totalsSection.insertBefore(exchangeRateDiv, totalsSection.firstChild);
-                    }
-                }
-            } else if (exchangeRateDisplay) {
-                exchangeRateDisplay.remove();
-            }
-            
-            // Update total
-            const totalElement = document.querySelector('#cart-popup-overlay .border-t.pt-3 span:last-child');
-            if (totalElement) {
-                totalElement.textContent = `${CURRENCY_SYMBOL}${totalPrice.toFixed(2)}`;
-            }
+
+            updateCartDrawerBillTotals(data.cart_items, summary, currency, currencyRate);
             
             // Update header cart count
             updateCartCount();
@@ -5556,18 +5693,23 @@ function refreshCartPopupContent() {
 }
 
 function closeCartPopup() {
-    const overlay = document.getElementById('cart-popup-overlay');
-    if (overlay) {
-        const popup = overlay.querySelector('.cart-popup-content');
-        if (popup) {
-            popup.classList.add('cart-popup-exit');
-            setTimeout(() => {
-                overlay.remove();
-            }, 200);
-        } else {
-            overlay.remove();
-        }
+    const backdrop = document.getElementById('cart-drawer-backdrop');
+    const drawer = document.getElementById('cart-drawer');
+
+    if (!drawer) {
+        backdrop?.remove();
+        document.body.classList.remove('cart-drawer-open');
+        return;
     }
+
+    drawer.classList.remove('is-open');
+    backdrop?.classList.remove('is-open');
+
+    setTimeout(function () {
+        drawer.remove();
+        backdrop?.remove();
+        document.body.classList.remove('cart-drawer-open');
+    }, 280);
 }
 
 /**
@@ -5620,80 +5762,12 @@ function updateShippingZone(zoneId) {
             const summary = data.summary || {};
             const currency = data.currency || CURRENT_CURRENCY || 'USD';
             const currencyRate = parseFloat(data.currency_rate || 1.0);
-            
-            // Calculate base subtotal in USD
-            let baseSubtotal = 0;
-            if (summary.base_subtotal !== undefined && summary.base_subtotal !== null) {
-                baseSubtotal = parseFloat(summary.base_subtotal);
-            } else if (data.cart_items && data.cart_items.length > 0) {
-                data.cart_items.forEach(item => {
-                    const itemPrice = parseFloat(item.price) || 0;
-                    let basePrice = 0;
-                    if (item.base_price_usd !== undefined && item.base_price_usd !== null) {
-                        basePrice = parseFloat(item.base_price_usd);
-                    } else {
-                        basePrice = currency !== 'USD' && currencyRate > 0 
-                            ? itemPrice / currencyRate 
-                            : itemPrice;
-                    }
-                    
-                    let customizationTotal = 0;
-                    if (item.customizations) {
-                        Object.values(item.customizations).forEach(customization => {
-                            if (customization && customization.price) {
-                                const customPrice = parseFloat(customization.price) || 0;
-                                let baseCustomPrice = 0;
-                                if (customization.base_price_usd !== undefined && customization.base_price_usd !== null) {
-                                    baseCustomPrice = parseFloat(customization.base_price_usd);
-                                } else {
-                                    baseCustomPrice = currency !== 'USD' && currencyRate > 0
-                                        ? customPrice / currencyRate
-                                        : customPrice;
-                                }
-                                customizationTotal += baseCustomPrice;
-                            }
-                        });
-                    }
-                    
-                    baseSubtotal += (basePrice + customizationTotal) * item.quantity;
-                });
-            } else if (summary.subtotal !== undefined && summary.subtotal !== null) {
-                const providedSubtotal = parseFloat(summary.subtotal);
-                baseSubtotal = currency !== 'USD' && currencyRate > 0 
-                    ? providedSubtotal / currencyRate 
-                    : providedSubtotal;
-            }
-            
-            // Calculate converted subtotal
-            const subtotal = summary.converted_subtotal !== undefined 
-                ? parseFloat(summary.converted_subtotal) 
-                : (currency !== 'USD' ? baseSubtotal * currencyRate : baseSubtotal);
-            
-            // Calculate shipping cost with new zone
-            const shippingInfo = calculateShippingCost(data.cart_items, baseSubtotal, zoneId);
-            const shippingCost = shippingInfo.costConverted;
-            const totalPrice = subtotal + shippingCost;
-            
-            // Update shipping cost display
-            const allTotalElements = document.querySelectorAll('#cart-popup-overlay .space-y-2 .flex.justify-between');
-            allTotalElements.forEach(element => {
-                const firstSpan = element.querySelector('span:first-child');
-                if (firstSpan && firstSpan.textContent.includes('Shipping')) {
-                    const shippingSpan = element.querySelector('span:last-child');
-                    if (shippingSpan) {
-                        shippingSpan.textContent = `${CURRENCY_SYMBOL}${shippingCost.toFixed(2)}`;
-                    }
-                    // Update shipping label
-                    if (firstSpan) {
-                        firstSpan.textContent = `Shipping${shippingInfo.zoneName ? ` (${shippingInfo.zoneName})` : shippingInfo.name ? ` (${shippingInfo.name})` : ''}`;
-                    }
-                }
-            });
-            
-            // Update total
-            const totalElement = document.querySelector('#cart-popup-overlay .border-t.pt-3 span:last-child');
-            if (totalElement) {
-                totalElement.textContent = `${CURRENCY_SYMBOL}${totalPrice.toFixed(2)}`;
+
+            updateCartDrawerBillTotals(data.cart_items, summary, currency, currencyRate);
+
+            const editor = document.getElementById('cart-popup-zone-editor');
+            if (editor) {
+                editor.classList.add('cart-popup-zone-editor--hidden');
             }
         }
     })
@@ -5744,14 +5818,14 @@ function triggerCheckoutTrackingFromLocalCart() {
             num_items: cart.length
         });
 
-        console.log('✅ Facebook Pixel: InitiateCheckout tracked from popup/cart', {
+        console.log('âœ… Facebook Pixel: InitiateCheckout tracked from popup/cart', {
             items: cart.length,
             total: cartTotal.toFixed(2),
             ids: productIds
         });
     }
 
-    // Event tracking được xử lý bởi GTM thông qua dataLayer
+    // Event tracking Ä‘Æ°á»£c xá»­ lÃ½ bá»Ÿi GTM thÃ´ng qua dataLayer
     if (typeof dataLayer !== 'undefined') {
         dataLayer.push({
             'event': 'begin_checkout',
@@ -5760,7 +5834,7 @@ function triggerCheckoutTrackingFromLocalCart() {
             'items': gaItems
         });
 
-        console.log('✅ GTM: begin_checkout tracked from popup/cart', {
+        console.log('âœ… GTM: begin_checkout tracked from popup/cart', {
             items: gaItems.length,
             value: cartTotal.toFixed(2)
         });
@@ -5774,7 +5848,7 @@ function goToCheckoutFromPopup() {
 }
 
 @php
-    $crossSellData = $relatedProducts->map(function($product) {
+    $crossSellData = $fbtProducts->map(function($product) {
         $media = $product->getEffectiveMedia();
         
         // Get image URL safely
@@ -5791,7 +5865,8 @@ function goToCheckoutFromPopup() {
             'id' => $product->id,
             'name' => $product->name,
             'slug' => $product->slug,
-            'price' => $product->base_price,
+            'price' => $product->getEffectivePrice(),
+            'originalPrice' => $product->getCompareAtPrice(),
             'image' => $imageUrl,
             'has_variants' => $product->variants()->count() > 0,
         ];
@@ -5799,18 +5874,16 @@ function goToCheckoutFromPopup() {
 @endphp
 
 function generateCrossSellProducts() {
-    // Get related products from the page
     const relatedProducts = @json($crossSellData ?? []);
     
     if (!relatedProducts || relatedProducts.length === 0) {
-        return '<p class="col-span-2 sm:col-span-4 text-center text-gray-500 py-4">No recommendations available</p>';
+        return '<p class="cart-popup-recs__empty">No recommendations available</p>';
     }
     
-    // Take first 4 related products for cross-sell
     const crossSellProducts = relatedProducts.slice(0, 4);
     
     return crossSellProducts.map(product => `
-        <div class="border border-gray-200 rounded-lg p-3 hover:border-[#005366] transition-colors cursor-pointer cross-sell-product relative" 
+        <div class="cross-sell-product"
              data-product-id="${product.id}"
              data-product-name="${product.name}"
              data-product-price="${product.price}"
@@ -5818,46 +5891,32 @@ function generateCrossSellProducts() {
              data-product-slug="${product.slug}"
              data-has-variants="${product.has_variants}">
             ${product.image && product.image !== 'undefined' && product.image !== '' ? `
-                <div class="relative">
-                    <img src="${product.image}" 
-                     alt="${product.name}" 
-                         class="w-full h-24 object-cover rounded-md mb-2"
-                         onerror="this.parentElement.innerHTML='<div class=\\'w-full h-24 bg-gray-200 rounded-md mb-2 flex items-center justify-center\\'><svg class=\\'w-8 h-8 text-gray-400\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'></path></svg></div>'">
-                    ${product.has_variants ? `
-                        <div class="absolute top-1 left-1 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-medium flex items-center space-x-0.5">
-                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
-                            </svg>
-                            <span>Options</span>
-                        </div>
-                    ` : ''}
+                <div class="cross-sell-product__media">
+                    <img src="${product.image}" alt="${product.name}"
+                         onerror="this.parentElement.innerHTML='<div class=\\'cross-sell-product__media flex items-center justify-center text-gray-400\\'><svg class=\\'w-8 h-8\\' fill=\\'none\\' stroke=\\'currentColor\\' viewBox=\\'0 0 24 24\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'/></svg></div>'">
+                    ${product.has_variants ? `<span class="cross-sell-product__badge">Options</span>` : ''}
                 </div>
             ` : `
-                <div class="w-full h-24 bg-gray-200 rounded-md mb-2 flex items-center justify-center">
-                    <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                <div class="cross-sell-product__media flex items-center justify-center text-gray-400">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
                 </div>
             `}
-            <h4 class="font-medium text-gray-900 text-xs line-clamp-2 mb-1">${product.name}</h4>
-            <div class="flex items-center justify-between">
-                <div class="flex flex-col">
-                    <span class="text-sm font-bold text-[#005366]">${CURRENCY_SYMBOL}${product.price}</span>
+            <h4 class="cross-sell-product__name">${product.name}</h4>
+            <div class="cross-sell-product__footer">
+                <div>
+                    <span class="cross-sell-product__price">${CURRENCY_SYMBOL}${product.price}</span>
                     ${product.originalPrice && product.originalPrice > product.price ? `
-                        <span class="text-xs text-gray-500 line-through">${CURRENCY_SYMBOL}${product.originalPrice}</span>
+                        <span class="cross-sell-product__price-old">${CURRENCY_SYMBOL}${product.originalPrice}</span>
                     ` : ''}
                 </div>
-                <button class="cross-sell-add-btn bg-[#005366] text-white text-xs px-3 py-1 rounded hover:bg-[#003d4d] transition-colors flex items-center space-x-1">
+                <button type="button" class="cross-sell-add-btn">
                     ${product.has_variants ? `
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                        </svg>
-                        <span>Select</span>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        <span>View</span>
                     ` : `
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                        </svg>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         <span>Add</span>
                     `}
                 </button>
@@ -5877,7 +5936,8 @@ function handleCrossSellClick(productId, productName, productPrice, productImage
     }
 }
 
-function addCrossSellToCart(productId, productName, productPrice, productImage) {
+function addCrossSellToCart(productId, productName, productPrice, productImage, options) {
+    options = options || {};
     const crossSellProduct = {
         id: productId,
         name: productName,
@@ -5887,11 +5947,9 @@ function addCrossSellToCart(productId, productName, productPrice, productImage) 
         addedAt: Date.now()
     };
     
-    // Add to localStorage
     addToLocalCart(crossSellProduct);
     
-    // Sync with backend
-    fetch('/api/cart/add', {
+    return fetch('/api/cart/add', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -5909,22 +5967,101 @@ function addCrossSellToCart(productId, productName, productPrice, productImage) 
     .then(data => {
         if (data.success) {
             syncLocalStorageWithBackend();
-            // Refresh popup content
-            refreshCartPopupContent();
-            showCartSuccess('Product added to cart successfully!');
+            if (!options.silent) {
+                refreshCartPopupContent();
+                showCartSuccess('Product added to cart successfully!');
+            }
         }
+        return data;
     })
     .catch(error => {
         console.error('Failed to add cross-sell product:', error);
-        showAlert({
-            icon: 'error',
-            title: 'Unable to Add',
-            text: 'An error occurred while adding the product to cart',
-            confirmButtonText: 'Close',
-            confirmButtonColor: '#005366'
-        });
+        if (!options.silent) {
+            showAlert({
+                icon: 'error',
+                title: 'Unable to Add',
+                text: 'An error occurred while adding the product to cart',
+                confirmButtonText: 'Close',
+                confirmButtonColor: '#005366'
+            });
+        }
+        throw error;
     });
 }
+
+function addFbtBundleToCart() {
+    const dataEl = document.getElementById('fbt-bundle-data');
+    const btn = document.getElementById('fbt-bundle-add-btn');
+    if (!dataEl || !btn) return;
+
+    let bundleItems = [];
+    try {
+        bundleItems = JSON.parse(dataEl.textContent || '[]');
+    } catch (e) {
+        return;
+    }
+
+    const companionItems = bundleItems.filter(function (item) { return !item.isCurrent; });
+    const variantItems = companionItems.filter(function (item) { return item.hasVariants; });
+
+    if (variantItems.length > 0) {
+        showAlert({
+            icon: 'info',
+            title: 'Select options first',
+            html: '<p class="text-left text-sm text-gray-600">Some bundle items have variants. Open each product to choose size or color, or add this item alone first.</p>',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#005366'
+        });
+        return;
+    }
+
+    const validation = validateRequiredCustomizations();
+    if (!validation.isValid) {
+        showAlert({
+            icon: 'warning',
+            title: 'Complete this item first',
+            text: 'Please finish personalization for the current product before adding the bundle.',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#005366'
+        });
+        expandCustomization();
+        const customizationContainer = document.getElementById('customization-container');
+        if (customizationContainer) {
+            customizationContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+    }
+
+    btn.disabled = true;
+    const originalLabel = btn.textContent;
+    btn.textContent = 'Adding...';
+
+    addToCart();
+
+    Promise.all(companionItems.map(function (item) {
+        return addCrossSellToCart(item.id, item.name, item.price, item.image, { silent: true });
+    })).then(function () {
+        refreshCartPopupContent();
+        showCartSuccess('Bundle added to cart!');
+    }).catch(function () {
+        showCartSuccess('Items saved locally');
+    }).finally(function () {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+    });
+}
+
+document.addEventListener('click', function (event) {
+    const quickAddBtn = event.target.closest('[data-pdp-quick-add]');
+    if (!quickAddBtn) return;
+    event.preventDefault();
+    addCrossSellToCart(
+        parseInt(quickAddBtn.dataset.productId, 10),
+        quickAddBtn.dataset.productName,
+        parseFloat(quickAddBtn.dataset.productPrice),
+        quickAddBtn.dataset.productImage
+    );
+});
 
 
 // Legacy functions for backward compatibility - redirecting to new functions
@@ -5956,10 +6093,10 @@ function syncLocalStorageWithBackend() {
             const backendCart = data.cart_items.map(item => {
                 const product = item.product || {};
                 const shop = product.shop || {};
-                
-                // Get image from media
-                let productImage = null;
-                if (product.media) {
+                const isStudio = !!(item.is_studio_custom || (item.customizations && item.customizations._studio && item.customizations._studio.standalone));
+
+                let productImage = item.display_image || null;
+                if (!productImage && product.media && !isStudio) {
                     if (Array.isArray(product.media) && product.media.length > 0) {
                         const firstMedia = product.media[0];
                         productImage = typeof firstMedia === 'object' ? (firstMedia.url || firstMedia) : firstMedia;
@@ -5970,13 +6107,13 @@ function syncLocalStorageWithBackend() {
                 
                 return {
                     cart_item_id: item.id, // Backend cart item ID
-                id: item.product_id,
-                    name: product.name || 'Unknown Product',
-                    slug: product.slug || '',
+                id: item.product_id || item.id,
+                    name: item.display_name || (item.customizations && item.customizations._studio && item.customizations._studio.title) || product.name || 'Custom product',
+                    slug: isStudio ? '' : (product.slug || ''),
                 price: parseFloat(item.price),
                     image: productImage,
-                    shop: shop.name || 'Unknown Shop',
-                    shop_slug: shop.shop_slug || '',
+                    shop: isStudio ? '' : (shop.name || 'Unknown Shop'),
+                    shop_slug: isStudio ? '' : (shop.shop_slug || ''),
                 quantity: item.quantity,
                 selectedVariant: item.selected_variant,
                 customizations: item.customizations,
@@ -6000,76 +6137,55 @@ function syncLocalStorageWithBackend() {
 
 // Initialize cart count on page load
 document.addEventListener('DOMContentLoaded', function() {
-    // Try to sync localStorage with backend on page load
     syncLocalStorageWithBackend();
+
+    if (document.getElementById('customization-container')) {
+        setCustomizationExpanded(true);
+    }
 });
 
 // Customization Functions
 function toggleCustomization() {
-    const checkbox = document.getElementById('enable-customization');
     const container = document.getElementById('customization-container');
-    const priceDisplay = document.getElementById('customization-price-display');
-    
-    if (checkbox.checked) {
-        container.classList.remove('hidden');
-        updateCustomizationPrice();
-    } else {
-        container.classList.add('hidden');
-        priceDisplay.classList.add('hidden');
-        
-        // Clear all customization inputs
-        const inputs = container.querySelectorAll('.customization-input');
-        inputs.forEach(input => {
-            if (input.type === 'radio' || input.type === 'checkbox') {
-                input.checked = false;
-            } else {
-                input.value = '';
-            }
-        });
-        
-        updateCustomizationPrice();
+    if (!container) {
+        return;
     }
+
+    setCustomizationExpanded(container.classList.contains('is-collapsed'));
 }
 
 function updateCustomizationPrice() {
-    const checkbox = document.getElementById('enable-customization');
-    
-    // If customization is not enabled, don't calculate
-    if (!checkbox || !checkbox.checked) {
+    if (!isCustomizationExpanded()) {
         return;
     }
     
     let customizationTotal = 0;
     
-    // Get all customization inputs
     const inputs = document.querySelectorAll('.customization-input');
     
     inputs.forEach(input => {
         if (input.type === 'radio') {
-            // For radio buttons, only count if checked
             if (input.checked) {
                 const price = parseFloat(input.dataset.price) || 0;
                 customizationTotal += price;
             }
         } else if (input.type === 'checkbox') {
-            // For checkboxes, only count if checked
             if (input.checked) {
                 const price = parseFloat(input.dataset.price) || 0;
                 customizationTotal += price;
             }
-        } else {
-            // For text/textarea inputs, count if has value
-            if (input.value.trim() !== '') {
+        } else if (input.type === 'file') {
+            if (input.files && input.files.length > 0) {
                 const price = parseFloat(input.dataset.price) || 0;
                 customizationTotal += price;
             }
+        } else if (input.value.trim() !== '') {
+            const price = parseFloat(input.dataset.price) || 0;
+            customizationTotal += price;
         }
     });
     
-    // Update display
-    const basePriceElement = document.getElementById('base-price');
-    // Sử dụng data-price-converted (đã convert) thay vì data-price (USD gốc)
-    const basePrice = parseFloat(basePriceElement.dataset.priceConverted || basePriceElement.dataset.price) || 0;
+    const basePrice = getCurrentUnitBasePrice();
     const totalPrice = basePrice + customizationTotal;
     
     const customizationPriceElement = document.getElementById('customization-price');
@@ -6082,6 +6198,9 @@ function updateCustomizationPrice() {
         totalPriceElement.textContent = CURRENCY_SYMBOL + totalPrice.toFixed(2);
     } else {
         priceDisplay.classList.add('hidden');
+        if (totalPriceElement) {
+            totalPriceElement.textContent = CURRENCY_SYMBOL + basePrice.toFixed(2);
+        }
     }
 }
 
@@ -6176,76 +6295,70 @@ const sizeData = {
 
 function openSizeGuide() {
     const modal = document.getElementById('size-guide-modal');
+    if (!modal) return;
     modal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('size-guide-open');
     updateSizeTable();
 }
 
 function closeSizeGuide() {
     const modal = document.getElementById('size-guide-modal');
+    if (!modal) return;
     modal.classList.add('hidden');
-    document.body.style.overflow = 'auto';
+    document.body.classList.remove('size-guide-open');
 }
 
 function selectGender(gender) {
     currentGender = gender;
-    
-    // Update button styles
-    document.querySelectorAll('[id^="gender-"]').forEach(btn => {
-        btn.classList.remove('bg-[#005366]', 'text-white');
-        btn.classList.add('bg-gray-100', 'text-gray-700');
+    document.querySelectorAll('[data-size-guide-gender]').forEach(function (btn) {
+        var active = btn.getAttribute('data-size-guide-gender') === gender;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
     });
-    
-    document.getElementById(`gender-${gender}`).classList.remove('bg-gray-100', 'text-gray-700');
-    document.getElementById(`gender-${gender}`).classList.add('bg-[#005366]', 'text-white');
-    
     updateSizeTable();
 }
 
 function selectUnit(unit) {
     currentUnit = unit;
-    
-    // Update button styles
-    document.querySelectorAll('[id^="unit-"]').forEach(btn => {
-        btn.classList.remove('bg-[#005366]', 'text-white');
-        btn.classList.add('bg-gray-100', 'text-gray-700');
+    document.querySelectorAll('[data-size-guide-unit]').forEach(function (btn) {
+        btn.classList.toggle('is-active', btn.getAttribute('data-size-guide-unit') === unit);
     });
-    
-    document.getElementById(`unit-${unit}`).classList.remove('bg-gray-100', 'text-gray-700');
-    document.getElementById(`unit-${unit}`).classList.add('bg-[#005366]', 'text-white');
-    
     updateSizeTable();
 }
+
 function updateSizeTable() {
-    const productType = document.getElementById('product-type-selector').value;
+    const productTypeEl = document.getElementById('product-type-selector');
     const tableBody = document.getElementById('size-table-body');
-    
+    if (!productTypeEl || !tableBody) return;
+
+    const productType = productTypeEl.value;
+
     if (!sizeData[productType] || !sizeData[productType][currentGender]) {
-        tableBody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-gray-500">No size data available for this selection</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="9" class="size-guide-table__empty">No size data available for this selection</td></tr>';
         return;
     }
-    
+
     const measurements = sizeData[productType][currentGender];
     const sizes = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
-    
     let tableHTML = '';
-    
-    Object.entries(measurements).forEach(([measurement, values]) => {
-        tableHTML += '<tr class="border-b border-gray-100">';
-        tableHTML += `<td class="py-2 font-medium text-gray-700">${measurement}:</td>`;
-        
-        sizes.forEach(size => {
-            let value = values[size] || '-';
-            if (value !== '-' && currentUnit === 'inches') {
-                // Convert cm to inches (1 cm = 0.393701 inches)
+
+    Object.entries(measurements).forEach(function (entry) {
+        const measurement = entry[0];
+        const values = entry[1];
+        tableHTML += '<tr class="size-guide-table__row">';
+        tableHTML += '<td class="size-guide-table__measure">' + measurement + '</td>';
+
+        sizes.forEach(function (size) {
+            let value = values[size] || '—';
+            if (value !== '—' && currentUnit === 'inches') {
                 value = Math.round(value * 0.393701);
             }
-            tableHTML += `<td class="text-center py-2 text-gray-600">${value}</td>`;
+            tableHTML += '<td>' + value + '</td>';
         });
-        
+
         tableHTML += '</tr>';
     });
-    
+
     tableBody.innerHTML = tableHTML;
 }
 
@@ -6261,97 +6374,116 @@ document.addEventListener('DOMContentLoaded', function() {
     const sizeGuideModal = document.getElementById('size-guide-modal');
     if (sizeGuideModal) {
         sizeGuideModal.addEventListener('click', function(e) {
-            if (e.target === this) {
+            if (e.target === sizeGuideModal) {
                 closeSizeGuide();
             }
         });
     }
+
+    var pdpFlashSale = document.getElementById('pdpFlashSale');
+    if (pdpFlashSale) {
+        var flashEndsAt = new Date(pdpFlashSale.dataset.endsAt).getTime();
+        var pdpFlashHours = document.getElementById('pdpFlashHours');
+        var pdpFlashMinutes = document.getElementById('pdpFlashMinutes');
+        var pdpFlashSeconds = document.getElementById('pdpFlashSeconds');
+
+        function padPdpFlashTime(value) {
+            return String(Math.max(0, value)).padStart(2, '0');
+        }
+
+        function tickPdpFlashCountdown() {
+            var diff = flashEndsAt - Date.now();
+            if (diff <= 0) {
+                if (pdpFlashHours) pdpFlashHours.textContent = '00';
+                if (pdpFlashMinutes) pdpFlashMinutes.textContent = '00';
+                if (pdpFlashSeconds) pdpFlashSeconds.textContent = '00';
+                return;
+            }
+
+            var totalSeconds = Math.floor(diff / 1000);
+            var hours = Math.floor(totalSeconds / 3600);
+            var minutes = Math.floor((totalSeconds % 3600) / 60);
+            var seconds = totalSeconds % 60;
+
+            if (pdpFlashHours) pdpFlashHours.textContent = padPdpFlashTime(hours);
+            if (pdpFlashMinutes) pdpFlashMinutes.textContent = padPdpFlashTime(minutes);
+            if (pdpFlashSeconds) pdpFlashSeconds.textContent = padPdpFlashTime(seconds);
+        }
+
+        tickPdpFlashCountdown();
+        setInterval(tickPdpFlashCountdown, 1000);
+    }
 });
 </script>
 <!-- Size Guide Modal -->
-<div id="size-guide-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <!-- Modal Header -->
-        <div class="flex items-center justify-between p-6 border-b border-gray-200">
-            <h2 class="text-2xl font-bold text-gray-900">Size & Fit Info</h2>
-            <button onclick="closeSizeGuide()" class="text-gray-400 hover:text-gray-600 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+<div id="size-guide-modal" class="size-guide-modal hidden" role="dialog" aria-modal="true" aria-labelledby="size-guide-modal-title">
+    <div class="size-guide-modal__panel">
+        <div class="size-guide-modal__head">
+            <h2 id="size-guide-modal-title" class="size-guide-modal__title">Size &amp; Fit Info</h2>
+            <button type="button" class="size-guide-modal__close" onclick="closeSizeGuide()" aria-label="Close size guide">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
             </button>
         </div>
-        
-        <!-- Modal Content -->
-        <div class="p-6">
-            <!-- Introduction Text -->
-            <p class="text-gray-700 mb-6">
-                If you're in between sizes, order a size up as our items can shrink up to half a size in the wash.
+
+        <div class="size-guide-modal__body">
+            <p class="size-guide-modal__intro">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span>If you're in between sizes, order a size up — our items can shrink up to half a size in the wash.</span>
             </p>
-            
-            <!-- Gender/Age Selection Tabs -->
-            <div class="flex flex-wrap gap-2 mb-6">
-                <button onclick="selectGender('male')" id="gender-male" class="px-4 py-2 rounded-lg font-medium transition-colors bg-[#005366] text-white">
-                    Male
-                </button>
-                <button onclick="selectGender('female')" id="gender-female" class="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
-                    Female
-                </button>
-                <button onclick="selectGender('youth')" id="gender-youth" class="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
-                    Youth
-                </button>
-                <button onclick="selectGender('unisex')" id="gender-unisex" class="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
-                    Unisex
-                </button>
-                <button onclick="selectGender('kids')" id="gender-kids" class="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
-                    Kids
-                </button>
+
+            <div class="size-guide-modal__section">
+                <span class="size-guide-modal__label" id="size-guide-gender-label">Fit profile</span>
+                <div class="size-guide-gender" role="tablist" aria-labelledby="size-guide-gender-label">
+                    <button type="button" class="size-guide-chip is-active" data-size-guide-gender="male" onclick="selectGender('male')" role="tab" aria-selected="true">Male</button>
+                    <button type="button" class="size-guide-chip" data-size-guide-gender="female" onclick="selectGender('female')" role="tab" aria-selected="false">Female</button>
+                    <button type="button" class="size-guide-chip" data-size-guide-gender="youth" onclick="selectGender('youth')" role="tab" aria-selected="false">Youth</button>
+                    <button type="button" class="size-guide-chip" data-size-guide-gender="unisex" onclick="selectGender('unisex')" role="tab" aria-selected="false">Unisex</button>
+                    <button type="button" class="size-guide-chip" data-size-guide-gender="kids" onclick="selectGender('kids')" role="tab" aria-selected="false">Kids</button>
+                </div>
             </div>
-            
-            <!-- Product Type Dropdown -->
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Product Type</label>
-                <select id="product-type-selector" onchange="updateSizeTable()" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#005366] focus:border-transparent">
+
+            <div class="size-guide-modal__section">
+                <label class="size-guide-modal__label" for="product-type-selector">Product type</label>
+                <select id="product-type-selector" onchange="updateSizeTable()" class="size-guide-modal__select">
                     <option value="baseball-jackets">Baseball Jackets</option>
                     <option value="t-shirts">T-Shirts</option>
                     <option value="hoodies">Hoodies</option>
-                    <option value="tank-tops">Tank Tops</option>
-                    <option value="long-sleeve">Long Sleeve</option>
+                    <option value="t-shirts">Tank Tops</option>
+                    <option value="t-shirts">Long Sleeve</option>
                 </select>
             </div>
-            
-            <!-- Size Table -->
-            <div class="bg-gray-50 rounded-lg p-4 mb-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Product Measurements</h3>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+
+            <div class="size-guide-table-card">
+                <div class="size-guide-table-card__head">
+                    <h3 class="size-guide-table-card__title">Product measurements</h3>
+                    <div class="size-guide-unit" role="group" aria-label="Measurement unit">
+                        <button type="button" class="size-guide-unit__btn is-active" data-size-guide-unit="cm" onclick="selectUnit('cm')">cm</button>
+                        <button type="button" class="size-guide-unit__btn" data-size-guide-unit="inches" onclick="selectUnit('inches')">in</button>
+                    </div>
+                </div>
+                <div class="size-guide-table-wrap">
+                    <table class="size-guide-table">
                         <thead>
-                            <tr class="border-b border-gray-200">
-                                <th class="text-left py-2 font-medium text-gray-700">Size</th>
-                                <th class="text-center py-2 font-medium text-gray-700">S</th>
-                                <th class="text-center py-2 font-medium text-gray-700">M</th>
-                                <th class="text-center py-2 font-medium text-gray-700">L</th>
-                                <th class="text-center py-2 font-medium text-gray-700">XL</th>
-                                <th class="text-center py-2 font-medium text-gray-700">2XL</th>
-                                <th class="text-center py-2 font-medium text-gray-700">3XL</th>
-                                <th class="text-center py-2 font-medium text-gray-700">4XL</th>
-                                <th class="text-center py-2 font-medium text-gray-700">5XL</th>
+                            <tr>
+                                <th scope="col">Measure</th>
+                                <th scope="col">S</th>
+                                <th scope="col">M</th>
+                                <th scope="col">L</th>
+                                <th scope="col">XL</th>
+                                <th scope="col">2XL</th>
+                                <th scope="col">3XL</th>
+                                <th scope="col">4XL</th>
+                                <th scope="col">5XL</th>
                             </tr>
                         </thead>
-                        <tbody id="size-table-body">
-                            <!-- Table content will be populated by JavaScript -->
-                        </tbody>
+                        <tbody id="size-table-body"></tbody>
                     </table>
                 </div>
-            </div>
-            
-            <!-- Unit Selection -->
-            <div class="flex items-center justify-end space-x-2">
-                <button onclick="selectUnit('cm')" id="unit-cm" class="px-4 py-2 rounded-lg font-medium transition-colors bg-[#005366] text-white">
-                    cm
-                </button>
-                <button onclick="selectUnit('inches')" id="unit-inches" class="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">
-                    inches
-                </button>
+                <span class="size-guide-table-scroll-hint">Swipe horizontally to see all sizes</span>
             </div>
         </div>
     </div>
@@ -6474,7 +6606,6 @@ document.addEventListener('DOMContentLoaded', function() {
 function updateDeliveryLocation() {
     const customerLocationEl = document.getElementById('customer-location');
     const deliveryEstimateEl = document.getElementById('delivery-estimate');
-    const deliveryShippingRateEl = document.getElementById('delivery-shipping-rate');
     
     if (!customerLocationEl || !deliveryEstimateEl) return;
     
@@ -6487,11 +6618,6 @@ function updateDeliveryLocation() {
         // Use description from default shipping rate if available
         if (DEFAULT_SHIPPING_RATE.description) {
             deliveryEstimate = DEFAULT_SHIPPING_RATE.description;
-        }
-        
-        // Update shipping rate name if element exists
-        if (deliveryShippingRateEl && DEFAULT_SHIPPING_RATE.name) {
-            deliveryShippingRateEl.textContent = DEFAULT_SHIPPING_RATE.name;
         }
         
         // Use zone name from default shipping rate if available
@@ -6610,6 +6736,111 @@ function updateDeliveryLocation() {
     deliveryEstimateEl.textContent = deliveryEstimate;
 }
 </script>
+
+@if($product->shop)
+<div id="pdpContactModal" class="catalog-modal hidden" role="dialog" aria-modal="true" aria-labelledby="pdp-contact-modal-title">
+    <div class="catalog-modal__panel">
+        <div class="catalog-modal__head">
+            <h2 id="pdp-contact-modal-title" class="catalog-modal__title">Message {{ $product->shop->shop_name }}</h2>
+            <button type="button" class="catalog-modal__close" data-pdp-contact-close aria-label="Close">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <form id="pdpContactForm">
+            <label class="catalog-modal__label" for="pdpContactSubject">Subject</label>
+            <input type="text" id="pdpContactSubject" name="subject" required class="catalog-modal__input" value="Question about {{ $product->name }}">
+
+            <label class="catalog-modal__label" for="pdpContactMessage">Message</label>
+            <textarea id="pdpContactMessage" name="message" rows="4" required class="catalog-modal__textarea" placeholder="Ask about customization, sizing, or delivery before you order."></textarea>
+
+            <div class="catalog-modal__actions">
+                <button type="button" class="btn-outline-petrol" data-pdp-contact-close>Cancel</button>
+                <button type="submit" class="btn-cta">Send message</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var pdpContactModal = document.getElementById('pdpContactModal');
+    var pdpContactForm = document.getElementById('pdpContactForm');
+    var pdpContactOpen = document.getElementById('pdpContactShopBtn');
+    var pdpContactUrl = @json(route('shops.contact', $product->shop));
+
+    function openPdpContactModal() {
+        if (!pdpContactModal) return;
+        pdpContactModal.classList.remove('hidden');
+    }
+    function closePdpContactModal() {
+        if (!pdpContactModal) return;
+        pdpContactModal.classList.add('hidden');
+    }
+
+    if (pdpContactOpen) {
+        pdpContactOpen.addEventListener('click', openPdpContactModal);
+    }
+    document.querySelectorAll('[data-pdp-contact-close]').forEach(function (btn) {
+        btn.addEventListener('click', closePdpContactModal);
+    });
+    if (pdpContactModal) {
+        pdpContactModal.addEventListener('click', function (e) {
+            if (e.target === pdpContactModal) closePdpContactModal();
+        });
+    }
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closePdpContactModal();
+    });
+
+    if (pdpContactForm) {
+        pdpContactForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var submitBtn = pdpContactForm.querySelector('[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            fetch(pdpContactUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    subject: document.getElementById('pdpContactSubject').value,
+                    message: document.getElementById('pdpContactMessage').value
+                })
+            })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    if (typeof showNotification === 'function') {
+                        showNotification(data.message, 'success');
+                    }
+                    pdpContactForm.reset();
+                    var subjectEl = document.getElementById('pdpContactSubject');
+                    if (subjectEl) {
+                        subjectEl.value = @json('Question about ' . $product->name);
+                    }
+                    closePdpContactModal();
+                } else if (typeof showNotification === 'function') {
+                    showNotification(data.message || 'Could not send message.', 'error');
+                }
+            })
+            .catch(function () {
+                if (typeof showNotification === 'function') {
+                    showNotification('An error occurred. Please try again.', 'error');
+                }
+            })
+            .finally(function () {
+                if (submitBtn) submitBtn.disabled = false;
+            });
+        });
+    }
+});
+</script>
+@endif
 
 
 @endsection

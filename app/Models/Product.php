@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Product extends Model
 {
@@ -118,13 +120,20 @@ class Product extends Model
                             }
 
                             // Get price, quantity, media from TemplateVariant if available
-                            $variantPrice = null;
-                            $variantQuantity = 0;
+                            $variantPrice = $product->price;
+                            $variantListPrice = $product->list_price;
+                            $variantQuantity = 100;
                             $variantMedia = null;
 
+                            if ($product->template) {
+                                $variantPrice = $product->template->base_price ?? $variantPrice;
+                                $variantListPrice = $product->template->list_price ?? $variantListPrice;
+                            }
+
                             if ($freshTemplateVariant) {
-                                $variantPrice = $freshTemplateVariant->price;
-                                $variantQuantity = $freshTemplateVariant->quantity ?? 0;
+                                $variantPrice = $freshTemplateVariant->price ?? $variantPrice;
+                                $variantListPrice = $freshTemplateVariant->list_price ?? $variantListPrice;
+                                $variantQuantity = $freshTemplateVariant->quantity ?? 100;
                                 $variantMedia = $freshTemplateVariant->media;
                             }
 
@@ -136,6 +145,7 @@ class Product extends Model
                                 'attributes' => $attributes,
                                 'sku' => $sku, // SKU is required by database
                                 'price' => $variantPrice, // From TemplateVariant
+                                'list_price' => $variantListPrice,
                                 'quantity' => $variantQuantity, // From TemplateVariant
                                 'media' => $variantMedia, // From TemplateVariant
                             ]);
@@ -193,6 +203,41 @@ class Product extends Model
                 }
             }
         });
+
+        static::saved(function ($product) {
+            $keywordChanged = $product->wasRecentlyCreated || $product->wasChanged('keywords');
+            $aiChanged = $keywordChanged
+                || $product->wasChanged('name')
+                || $product->wasChanged('description')
+                || $product->wasChanged('category_id');
+
+            if ($keywordChanged) {
+                try {
+                    app(\App\Services\CollectionKeywordSyncService::class)->syncProduct($product);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Failed to sync product to keyword collections', [
+                        'product_id' => $product->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if ($aiChanged) {
+                try {
+                    $matcher = app(\App\Services\CollectionAiMatchService::class);
+                    if ($product->wasRecentlyCreated) {
+                        $matcher->matchProduct($product);
+                    } else {
+                        \App\Jobs\MatchProductToCollectionsWithAi::dispatch($product->id)->afterResponse();
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Failed to match product to collections with AI', [
+                        'product_id' => $product->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        });
     }
 
     /**
@@ -233,16 +278,23 @@ class Product extends Model
     }
     protected $fillable = [
         'template_id',
+        'category_id',
         'user_id',
         'shop_id',
         'name',
         'slug',
         'sku',
         'price',
+        'list_price',
         'description',
+        'allow_customization',
+        'customizations',
+        'keywords',
         'media',
         'quantity',
         'status',
+        'flash_deal_auto_enroll',
+        'flash_deal_min_price',
         'created_by',
         'api_token_id',
         // Meta fields for export
@@ -263,14 +315,74 @@ class Product extends Model
 
     protected $casts = [
         'price' => 'decimal:2',
+        'list_price' => 'decimal:2',
+        'flash_deal_min_price' => 'decimal:2',
+        'flash_deal_auto_enroll' => 'boolean',
+        'customizations' => 'array',
         'media' => 'array',
+        'keywords' => 'array',
         'quantity' => 'integer',
     ];
+
+    protected function allowCustomization(): Attribute
+    {
+        return Attribute::make(
+            get: function ($value) {
+                if ($value === true || $value === 1 || $value === '1') {
+                    return true;
+                }
+                if ($value === false || $value === 0 || $value === '0') {
+                    return false;
+                }
+
+                return (bool) $this->template?->allow_customization;
+            },
+            set: fn ($value) => $value === null ? null : (int) (bool) $value,
+        );
+    }
+
+    /**
+     * Keywords as comma-separated string for forms.
+     */
+    public function getKeywordsTextAttribute(): string
+    {
+        return implode(', ', $this->keywords ?? []);
+    }
 
     // Relationships
     public function template(): BelongsTo
     {
         return $this->belongsTo(ProductTemplate::class, 'template_id');
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    public function resolvedCategoryId(): ?int
+    {
+        $own = $this->getAttributes()['category_id'] ?? null;
+        if ($own) {
+            return (int) $own;
+        }
+
+        $fromTemplate = $this->template?->category_id;
+
+        return $fromTemplate ? (int) $fromTemplate : null;
+    }
+
+    public function scopeInCategoryIds($query, array $categoryIds)
+    {
+        return $query->where(function ($q) use ($categoryIds) {
+            $q->whereIn('category_id', $categoryIds)
+                ->orWhere(function ($inner) use ($categoryIds) {
+                    $inner->whereNull('category_id')
+                        ->whereHas('template', function ($templateQuery) use ($categoryIds) {
+                            $templateQuery->whereIn('category_id', $categoryIds);
+                        });
+                });
+        });
     }
 
     public function user(): BelongsTo
@@ -281,6 +393,51 @@ class Product extends Model
     public function shop(): BelongsTo
     {
         return $this->belongsTo(Shop::class);
+    }
+
+    public function activeFlashDeal(): HasOne
+    {
+        return $this->hasOne(FlashDeal::class)
+            ->where('is_active', true)
+            ->where('starts_at', '<=', now())
+            ->where('ends_at', '>', now());
+    }
+
+    /**
+     * Flash discount percent (0 if no active deal).
+     */
+    public function flashDiscountPercent(): int
+    {
+        $deal = $this->activeFlashDeal;
+        if (!$deal) {
+            return 0;
+        }
+
+        $pct = (int) $deal->discount_percent;
+        if ($pct > 0) {
+            return min(90, max(0, $pct));
+        }
+
+        $original = (float) $deal->original_price;
+        $sale = (float) $deal->sale_price;
+        if ($original > 0 && $sale < $original) {
+            return (int) round((($original - $sale) / $original) * 100);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Multiplier to apply to pre-deal prices (e.g. 0.65 for 35% off).
+     */
+    public function flashPriceMultiplier(): ?float
+    {
+        $pct = $this->flashDiscountPercent();
+        if ($pct <= 0) {
+            return null;
+        }
+
+        return max(0.1, 1 - ($pct / 100));
     }
 
     public function variants(): HasMany
@@ -311,6 +468,11 @@ class Product extends Model
         return $this->hasMany(CartItem::class);
     }
 
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
     // Accessors
     public function getBasePriceAttribute(): float
     {
@@ -324,9 +486,83 @@ class Product extends Model
         return !empty($media) ? $media[0] : null;
     }
 
-    public function getCategoryAttribute()
+    public function getDisplayCategoryName(): ?string
     {
-        return $this->template->category ?? null;
+        return $this->resolveDisplayCategory()['name'] ?? null;
+    }
+
+    /**
+     * @return array{name: ?string, category: ?Category}
+     */
+    public function resolveDisplayCategory(): array
+    {
+        $ownCategory = $this->relationLoaded('category') ? $this->getRelation('category') : $this->category;
+        $templateCategory = $this->template->category ?? null;
+        $baseCategory = $ownCategory ?? $templateCategory;
+        $inferredName = static::inferCategoryNameFromText(strtolower((string) $this->name));
+        $displayName = $inferredName ?? optional($baseCategory)->name;
+
+        $linkCategory = $baseCategory;
+        if ($inferredName !== null) {
+            $matched = Category::query()->where('name', $inferredName)->first();
+            if ($matched) {
+                $linkCategory = $matched;
+            }
+        }
+
+        return [
+            'name' => $displayName,
+            'category' => $linkCategory,
+        ];
+    }
+
+    public function getDisplayTitle(int $maxLength = 58): string
+    {
+        $name = trim((string) $this->name);
+        if ($name === '') {
+            return '';
+        }
+
+        if (str_contains($name, ':')) {
+            $short = trim(explode(':', $name, 2)[0]);
+            if (mb_strlen($short) >= 12) {
+                $name = $short;
+            }
+        }
+
+        if (mb_strlen($name) <= $maxLength) {
+            return $name;
+        }
+
+        return \Illuminate\Support\Str::limit($name, $maxLength);
+    }
+
+    protected static function inferCategoryNameFromText(string $text): ?string
+    {
+        $patterns = [
+            'Hoodie' => ['hoodie', 'sweatshirt', 'pullover'],
+            'T-Shirt' => ['t-shirt', 'tshirt', ' tee ', ' tee,', ' tee.'],
+            'Tank Top' => ['tank top', 'tank-top'],
+            'Long Sleeve' => ['long sleeve', 'long-sleeve'],
+            'Sweater' => ['sweater', 'jumper'],
+            'Mug' => [' mug', 'coffee mug'],
+            'Poster' => [' poster'],
+            'Canvas' => ['canvas print', ' canvas'],
+            'Phone Case' => ['phone case'],
+            'Tote Bag' => ['tote bag'],
+            'Sticker' => [' sticker'],
+            'Hat' => [' cap ', 'baseball cap', ' dad hat'],
+        ];
+
+        foreach ($patterns as $label => $keywords) {
+            foreach ($keywords as $keyword) {
+                if (str_contains($text, $keyword)) {
+                    return $label;
+                }
+            }
+        }
+
+        return null;
     }
 
     // Helper methods
@@ -336,9 +572,64 @@ class Product extends Model
         return $this->price ?? 0;
     }
 
+    /**
+     * MSRP / compare-at price shown with a strikethrough when higher than the selling price.
+     */
+    public function getCompareAtPrice(): float
+    {
+        $list = (float) ($this->list_price ?? $this->template?->list_price ?? 0);
+        if ($list > 0) {
+            return $list;
+        }
+
+        return (float) ($this->template?->base_price ?? 0);
+    }
+
     public function getEffectiveDescription(): string
     {
-        return $this->description ?? $this->template->description;
+        return $this->description ?? $this->template->description ?? '';
+    }
+
+    public function hasCustomization(): bool
+    {
+        $allowed = $this->getAttributes()['allow_customization'] ?? null;
+        if ($allowed === null) {
+            return (bool) $this->template?->hasCustomization();
+        }
+
+        return (bool) $allowed && ! empty($this->resolvedCustomizations());
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    public function resolvedCustomizations(): array
+    {
+        $stored = $this->getAttributes()['customizations'] ?? null;
+        if ($stored !== null) {
+            return is_array($this->customizations) ? $this->customizations : [];
+        }
+
+        return $this->template?->customizations ?? [];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getNormalizedCustomizations(): array
+    {
+        return ProductTemplate::normalizeCustomizationList($this->resolvedCustomizations());
+    }
+
+    public function hasRequiredCustomizations(): bool
+    {
+        foreach ($this->getNormalizedCustomizations() as $customization) {
+            if ($customization['required'] ?? false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function getEffectiveMedia(): array
@@ -353,6 +644,52 @@ class Product extends Model
         }
 
         return is_array($media) ? $media : [];
+    }
+
+    /**
+     * Front/back product images for virtual try-on.
+     *
+     * @return array{image: ?string, back: ?string}
+     */
+    public function tryOnImages(): array
+    {
+        $urls = [];
+        $back = null;
+
+        foreach ($this->getEffectiveMedia() as $item) {
+            $raw = is_array($item) ? ($item['url'] ?? $item['path'] ?? null) : $item;
+            if (! is_string($raw) || $raw === '') {
+                continue;
+            }
+            $lower = strtolower($raw);
+            if (str_contains($lower, '.mp4') || str_contains($lower, '.mov') || str_contains($lower, '.avi') || str_contains($lower, '.webm')) {
+                continue;
+            }
+            if (! preg_match('#^https?://#i', $raw) && ! str_starts_with($raw, '//')) {
+                $raw = url($raw);
+            }
+            $label = strtolower(is_array($item) ? implode(' ', array_filter([
+                $item['alt'] ?? null,
+                $item['name'] ?? null,
+                $item['view'] ?? null,
+                $item['side'] ?? null,
+                $item['label'] ?? null,
+                $raw,
+            ])) : $raw);
+            if ($back === null && (str_contains($label, 'back') || str_contains($label, 'rear'))) {
+                $back = $raw;
+
+                continue;
+            }
+            $urls[] = $raw;
+        }
+
+        $image = $urls[0] ?? $back;
+
+        return [
+            'image' => $image,
+            'back' => ($back && $back !== $image) ? $back : null,
+        ];
     }
 
     // Check if current user can edit this product
@@ -434,11 +771,27 @@ class Product extends Model
     }
 
     /**
+     * Total units sold (sum of order item quantities).
+     */
+    public function getSoldCount(): int
+    {
+        if (isset($this->order_items_sum_quantity)) {
+            return (int) $this->order_items_sum_quantity;
+        }
+
+        return (int) $this->orderItems()->sum('quantity');
+    }
+
+    /**
      * Get average rating for this product
      */
     public function getAverageRating(): float
     {
-        return $this->approvedReviews()->avg('rating') ?? 0;
+        if (isset($this->approved_reviews_avg_rating)) {
+            return (float) $this->approved_reviews_avg_rating;
+        }
+
+        return (float) ($this->approvedReviews()->avg('rating') ?? 0);
     }
 
     /**
@@ -446,6 +799,10 @@ class Product extends Model
      */
     public function getTotalReviews(): int
     {
+        if (isset($this->approved_reviews_count)) {
+            return (int) $this->approved_reviews_count;
+        }
+
         return $this->approvedReviews()->count();
     }
 

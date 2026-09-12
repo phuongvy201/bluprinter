@@ -246,12 +246,16 @@ class ProductsImport implements
                 // Prepare data array - explicitly exclude 'id' to ensure auto-increment
                 $productData = [
                     'template_id' => $templateId,
+                    'category_id' => $template->category_id,
                     'user_id' => $this->user->id, // Product owner
                     'shop_id' => $this->user->hasShop() ? $this->user->shop->id : null, // Shop ID
                     'name' => $productName,
                     'slug' => $slug,
                     'price' => $finalPrice,
+                    'list_price' => $template->list_price,
                     'description' => $description,
+                    'allow_customization' => (bool) $template->allow_customization,
+                    'customizations' => $template->customizations,
                     'quantity' => $row['quantity'] ?? 0,
                     'status' => $row['status'] ?? 'active',
                     'media' => $mediaUrls ?: null, // Laravel auto-cast to JSON via $casts
@@ -260,34 +264,29 @@ class ProductsImport implements
                 // Ensure 'id' is not in the data (even if somehow included)
                 unset($productData['id']);
 
-                // Create product - variants will be created after import completes
-                $product = new Product($productData);
+                // Persist immediately so keyword + AI collection matching run on the created event
+                $product = Product::create($productData);
 
-                // Store template info for creating variants after import (batch insert doesn't trigger created event)
                 if ($template->variants && $template->variants->count() > 0) {
-                    // Only store essential data from variants, not the whole collection
-                    // This prevents serialization issues and ensures we only get attributes
-                    // Store only variant names - we'll query attributes from database when creating variants (same as ProductController)
-                    // This ensures we always get fresh, clean attributes from database
                     $variantsData = [];
                     foreach ($template->variants as $tv) {
                         $variantsData[] = [
                             'variant_name' => $tv->variant_name,
-                            // Don't store attributes here - query fresh from database when creating variants
                         ];
                     }
 
                     $this->importedProducts[] = [
-                        'slug' => $slug,
+                        'slug' => $product->slug,
                         'template_id' => $templateId,
-                        'template_variants' => $variantsData, // Store only essential data
+                        'template_variants' => $variantsData,
                     ];
                 }
 
                 $this->successCount++;
                 $this->processedRows++;
                 $this->updateProgress();
-                return $product;
+
+                return null;
             } catch (QueryException $e) {
                 // Handle duplicate entry or other database errors
                 if ($e->getCode() == 23000) { // Integrity constraint violation

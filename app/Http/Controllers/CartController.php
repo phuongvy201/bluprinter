@@ -28,16 +28,19 @@ class CartController extends Controller
             })
             ->get();
 
-        // Transform cart items to include media using getEffectiveMedia()
+        // Transform cart items to include media and resolved pricing
         $cartItems->each(function ($item) {
             if ($item->product) {
                 $item->product->media = $item->product->getEffectiveMedia();
             }
+
+            $item->effective_unit_price = $item->getEffectiveUnitPrice();
+            $item->line_total = $item->getTotalPrice();
         });
 
-        // Calculate totals (without tax) including customizations
+        // Subtotal uses stored unit prices (already include customization).
         $subtotal = $cartItems->sum(function ($item) {
-            return $item->getTotalPriceWithCustomizations();
+            return $item->getTotalPrice();
         });
 
         // Get current domain (needed for shipping zone filtering even if cart is empty)
@@ -71,8 +74,9 @@ class CartController extends Controller
             // Prepare cart items for shipping calculation
             // Shipping calculator expects USD prices, so we need to convert back to USD
             $items = $cartItems->map(function ($item) use ($currency, $currencyRate) {
-                // Convert price back to USD for shipping calculation
-                $priceInUSD = $currency !== 'USD' ? $item->price / $currencyRate : $item->price;
+                $unitPrice = $item->getEffectiveUnitPrice();
+                $priceInUSD = $currency !== 'USD' ? $unitPrice / $currencyRate : $unitPrice;
+
                 return [
                     'product_id' => $item->product_id,
                     'quantity' => $item->quantity,

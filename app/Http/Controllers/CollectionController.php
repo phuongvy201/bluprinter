@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Collection;
+use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\Request;
 
@@ -13,9 +14,23 @@ class CollectionController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Collection::with(['shop', 'products'])
+        $collectionGroups = $this->buildCollectionGroups();
+        $groupSlug = $request->get('group');
+
+        $query = Collection::with(['shop'])
+            ->withDisplayableProductsCount()
+            ->global()
             ->active()
-            ->approved();
+            ->approved()
+            ->hasDisplayableProducts();
+
+        if ($groupSlug) {
+            $groupIds = $this->collectionIdsForGroup($groupSlug);
+            if ($groupIds->isEmpty()) {
+                abort(404);
+            }
+            $query->whereIn('id', $groupIds);
+        }
 
         // Filter by type
         if ($request->has('type') && in_array($request->type, ['manual', 'automatic'])) {
@@ -44,7 +59,7 @@ class CollectionController extends Controller
                 $query->oldest();
                 break;
             case 'products':
-                $query->withCount('products')->orderBy('products_count', 'desc');
+                $query->orderBy('displayable_products_count', 'desc');
                 break;
             case 'featured':
             default:
@@ -54,18 +69,89 @@ class CollectionController extends Controller
                 break;
         }
 
-        $collections = $query->paginate(12)->withQueryString();
+        $collections = $query->paginate(20)->withQueryString();
 
-        // Get featured collections for sidebar
-        $featuredCollections = Collection::with(['shop'])
+        $hero = config('catalog.collections_index.hero', []);
+
+        return view('collections.index', compact(
+            'collections',
+            'collectionGroups',
+            'groupSlug',
+            'hero'
+        ));
+    }
+
+    private function buildCollectionGroups()
+    {
+        $collections = Collection::query()
+            ->withDisplayableProductsCount()
+            ->global()
             ->active()
             ->approved()
-            ->featured()
-            ->orderBy('sort_order')
-            ->limit(6)
-            ->get();
+            ->hasDisplayableProducts()
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
-        return view('collections.index', compact('collections', 'featuredCollections'));
+        $groups = [];
+
+        foreach ($collections as $collection) {
+            $key = $this->collectionGroupKey($collection->name);
+
+            if (! isset($groups[$key])) {
+                $groups[$key] = [
+                    'slug' => $key,
+                    'label' => $this->collectionGroupLabel($collection->name),
+                    'collections_count' => 0,
+                    'products_count' => 0,
+                ];
+            }
+
+            $groups[$key]['collections_count']++;
+            $groups[$key]['products_count'] += (int) $collection->displayable_products_count;
+        }
+
+        return collect($groups)
+            ->sortByDesc('products_count')
+            ->filter(function ($group) {
+                return $group['collections_count'] > 1
+                    || str_contains(strtolower($group['label']), 'collection');
+            })
+            ->take(6)
+            ->values();
+    }
+
+    private function collectionIdsForGroup(string $groupSlug)
+    {
+        return Collection::query()
+            ->global()
+            ->active()
+            ->approved()
+            ->hasDisplayableProducts()
+            ->get(['id', 'name'])
+            ->filter(fn ($collection) => $this->collectionGroupKey($collection->name) === $groupSlug)
+            ->pluck('id');
+    }
+
+    private function collectionGroupKey(string $name): string
+    {
+        if (preg_match('/^(.+?\s+collection)\b/i', $name, $matches)) {
+            return \Illuminate\Support\Str::slug($matches[1]);
+        }
+
+        $prefix = \Illuminate\Support\Str::before($name, ' - ');
+
+        return \Illuminate\Support\Str::slug($prefix !== $name ? $prefix : \Illuminate\Support\Str::words($name, 2, ''));
+    }
+
+    private function collectionGroupLabel(string $name): string
+    {
+        if (preg_match('/^(.+?\s+collection)\b/i', $name, $matches)) {
+            return \Illuminate\Support\Str::upper($matches[1]);
+        }
+
+        $prefix = \Illuminate\Support\Str::before($name, ' - ');
+
+        return \Illuminate\Support\Str::upper($prefix !== $name ? $prefix : $name);
     }
 
     /**
@@ -102,41 +188,50 @@ class CollectionController extends Controller
         // Sorting
         $sortBy = $request->get('sort', 'default');
         switch ($sortBy) {
+            case 'price_low':
             case 'price_asc':
                 $query->orderBy('price');
                 break;
+            case 'price_high':
             case 'price_desc':
                 $query->orderBy('price', 'desc');
                 break;
             case 'name':
-                $query->join('product_templates', 'products.template_id', '=', 'product_templates.id')
-                    ->orderBy('product_templates.name');
+                $query->orderBy('name');
                 break;
             case 'newest':
-                $query->latest();
+                $query->orderBy('products.created_at', 'desc');
                 break;
+            case 'featured':
             case 'default':
             default:
-                // Order by pivot sort_order if available
                 $query->orderBy('product_collection.sort_order');
                 break;
         }
 
-        $products = $query->paginate(12)->withQueryString();
+        $products = $query->paginate(20)->withQueryString();
 
-        // Get related collections
-        $relatedCollections = Collection::with(['shop'])
-            ->where('id', '!=', $collection->id)
-            ->active()
-            ->approved()
-            ->when($collection->shop_id, function ($q) use ($collection) {
-                // If collection belongs to a shop, show collections from same shop
-                $q->where('shop_id', $collection->shop_id);
-            })
-            ->inRandomOrder()
-            ->limit(4)
+        $filterCategories = Category::query()
+            ->whereIn('id', $collection->activeProducts()
+                ->availableForDisplay()
+                ->join('product_templates', 'products.template_id', '=', 'product_templates.id')
+                ->pluck('product_templates.category_id')
+                ->unique()
+                ->filter())
+            ->orderBy('name')
             ->get();
 
-        return view('collections.show', compact('collection', 'products', 'relatedCollections'));
+        $breadcrumbs = [
+            ['name' => 'Home', 'url' => route('home')],
+            ['name' => 'Collections', 'url' => route('collections.index')],
+            ['name' => $collection->name, 'url' => null],
+        ];
+
+        return view('collections.show', compact(
+            'collection',
+            'products',
+            'filterCategories',
+            'breadcrumbs'
+        ));
     }
 }

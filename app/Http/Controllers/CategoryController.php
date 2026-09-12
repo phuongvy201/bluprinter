@@ -4,44 +4,57 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Shop;
 use Illuminate\Http\Request;
 
 class CategoryController extends Controller
 {
     public function show($slug, Request $request)
     {
-        $category = Category::where('slug', $slug)
-            ->whereNull('parent_id')
-            ->with(['templates.products' => function ($query) {
-                $query->where('status', 'active');
-            }])
-            ->firstOrFail();
+        $category = Category::where('slug', $slug)->firstOrFail();
+        $parentCategory = $category->parent_id
+            ? Category::find($category->parent_id)
+            : null;
 
-        // Get subcategory IDs
-        $subcategoryIds = Category::where('parent_id', $category->id)->pluck('id')->toArray();
+        if ($category->parent_id) {
+            $allCategoryIds = [$category->id];
+            $subcategories = collect();
+        } else {
+            $subcategoryIds = Category::where('parent_id', $category->id)->pluck('id')->toArray();
+            $allCategoryIds = array_merge([$category->id], $subcategoryIds);
+            $subcategories = Category::where('parent_id', $category->id)
+                ->orderBy('name')
+                ->get();
+        }
 
-        // Combine category ID with subcategory IDs
-        $allCategoryIds = array_merge([$category->id], $subcategoryIds);
-
-        // Get products in this category AND its subcategories (chỉ lấy đủ điều kiện hiển thị)
-        $productsQuery = Product::whereHas('template', function ($query) use ($allCategoryIds) {
-            $query->whereIn('category_id', $allCategoryIds);
+        $productsQuery = Product::where(function ($query) use ($allCategoryIds) {
+            $query->inCategoryIds($allCategoryIds);
         })
             ->availableForDisplay()
             ->with(['template', 'shop']);
 
-        // Handle search
-        if ($request->has('search') && $request->search) {
+        if ($request->filled('search')) {
             $searchTerm = $request->search;
-            $productsQuery->where('name', 'like', '%' . $searchTerm . '%');
+            $productsQuery->where(function ($query) use ($searchTerm) {
+                $query->where('name', 'like', '%' . $searchTerm . '%')
+                    ->orWhere('description', 'like', '%' . $searchTerm . '%')
+                    ->orWhereHas('shop', function ($shopQuery) use ($searchTerm) {
+                        $shopQuery->where('shop_name', 'like', '%' . $searchTerm . '%');
+                    });
+            });
         }
 
-        // Handle sort
-        $sort = $request->get('sort', 'default');
+        if ($request->filled('shop')) {
+            $productsQuery->where('shop_id', $request->shop);
+        }
+
+        $sort = $request->get('sort', 'newest');
         switch ($sort) {
+            case 'price_low':
             case 'price_asc':
                 $productsQuery->orderBy('price', 'asc');
                 break;
+            case 'price_high':
             case 'price_desc':
                 $productsQuery->orderBy('price', 'desc');
                 break;
@@ -49,48 +62,54 @@ class CategoryController extends Controller
                 $productsQuery->orderBy('name', 'asc');
                 break;
             case 'newest':
-                $productsQuery->orderBy('created_at', 'desc');
-                break;
             default:
                 $productsQuery->orderBy('created_at', 'desc');
                 break;
         }
 
-        $products = $productsQuery->paginate(12)->withQueryString();
+        $products = $productsQuery->paginate(20)->withQueryString();
 
-        // Get subcategories
-        $subcategories = Category::where('parent_id', $category->id)
-            ->orderBy('name')
-            ->get();
-
-        // Get related categories (other main categories)
         $relatedCategories = Category::whereNull('parent_id')
             ->where('id', '!=', $category->id)
+            ->whereHas('templates.products', function ($query) {
+                $query->availableForDisplay();
+            })
             ->withCount(['templates as products_count' => function ($query) {
                 $query->whereHas('products', function ($q) {
-                    $q->where('status', 'active');
+                    $q->availableForDisplay();
                 });
             }])
             ->orderBy('products_count', 'desc')
             ->limit(6)
             ->get();
 
-        // Get featured products from this category AND its subcategories (chỉ lấy đủ điều kiện hiển thị)
-        $featuredProducts = Product::whereHas('template', function ($query) use ($allCategoryIds) {
-            $query->whereIn('category_id', $allCategoryIds);
-        })
-            ->availableForDisplay()
-            ->with(['template', 'shop'])
-            ->orderBy('created_at', 'desc')
-            ->limit(6)
+        $shops = Shop::where('shop_status', 'active')
+            ->whereHas('products', function ($query) use ($allCategoryIds) {
+                $query->availableForDisplay()
+                    ->inCategoryIds($allCategoryIds);
+            })
+            ->orderBy('shop_name')
             ->get();
+
+        $breadcrumbs = [
+            ['name' => 'Home', 'url' => route('home')],
+            ['name' => 'Products', 'url' => route('products.index')],
+        ];
+
+        if ($parentCategory) {
+            $breadcrumbs[] = ['name' => $parentCategory->name, 'url' => route('category.show', $parentCategory->slug)];
+        }
+
+        $breadcrumbs[] = ['name' => $category->name, 'url' => null];
 
         return view('categories.show', compact(
             'category',
             'products',
             'subcategories',
             'relatedCategories',
-            'featuredProducts'
+            'shops',
+            'breadcrumbs',
+            'parentCategory'
         ));
     }
 }
