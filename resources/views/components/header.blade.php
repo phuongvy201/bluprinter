@@ -3,7 +3,7 @@
     $domain = \App\Services\CurrencyService::getCurrentDomain();
     $currency = \App\Services\CurrencyService::getCurrencyForDomain($domain);
     $currencyRate = \App\Services\CurrencyService::getCurrencyRateForDomain($domain) ?? 1.0;
-    $freeShippingThreshold = 100;
+    $freeShippingThreshold = \App\Support\CatalogPageSettings::freeShippingThresholdUsd();
     $convertedThreshold = $currency !== 'USD'
         ? \App\Services\CurrencyService::convertFromUSDWithRate($freeShippingThreshold, $currency, $currencyRate)
         : $freeShippingThreshold;

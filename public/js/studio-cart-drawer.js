@@ -1,6 +1,6 @@
 (function () {
     const CART_PROMO_KEY = 'cart_promo_claimed';
-    const FREE_SHIPPING_USD = 100;
+    const FREE_SHIPPING_USD = parseFloat(window.FREE_SHIPPING_THRESHOLD_USD) || 100;
 
     function csrf() {
         return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';

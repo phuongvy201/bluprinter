@@ -560,6 +560,14 @@
                             'volumeTiers' => $volumeTiers,
                             'subtotal' => $subtotal,
                         ])
+
+                        @include('checkout.partials.free-shipping-progress', [
+                            'freeShippingThresholdUsd' => \App\Support\CatalogPageSettings::freeShippingThresholdUsd(),
+                            'freeShippingSubtotalUsd' => $discountedBaseSubtotalUsd,
+                            'currency' => $currentCurrency,
+                            'currencyRate' => $currentCurrencyRate,
+                            'idPrefix' => 'cart-freeship',
+                        ])
                         
                         <div class="space-y-3 mb-6">
                             <div class="flex justify-between text-gray-600">
@@ -735,10 +743,11 @@ const SHIPPING_ZONES_WITH_COUNTRIES = @json($zonesWithCountries);
 const DEFAULT_SHIPPING_RATE = @json($defaultShippingRateData);
 const DEFAULT_SHIPPING_ZONE_ID = @json($defaultShippingRate ? $defaultShippingRate->shipping_zone_id : null);
 const SELECTED_ZONE_VALUE = @json($selectedZoneValue);
-const BASE_SUBTOTAL = {{ $discountedBaseSubtotalUsd ?? $baseSubtotal }};
+let BASE_SUBTOTAL = {{ $discountedBaseSubtotalUsd ?? $baseSubtotal }};
 const CART_RAW_SUBTOTAL = {{ (float) $subtotal }};
-const CART_DISCOUNTED_SUBTOTAL = {{ (float) $discountedSubtotal }};
-const CART_DISCOUNT_AMOUNT = {{ (float) $discountAmount }};
+let CART_DISCOUNTED_SUBTOTAL = {{ (float) $discountedSubtotal }};
+let CART_DISCOUNT_AMOUNT = {{ (float) $discountAmount }};
+const CART_FREE_SHIPPING_THRESHOLD_USD = {{ (float) \App\Support\CatalogPageSettings::freeShippingThresholdUsd() }};
 
 
 function updateQuantity(cartItemId, newQuantity) {
@@ -1474,9 +1483,21 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
     }
     
     // Convert to current currency if needed
-    const costConverted = CURRENT_CURRENCY !== 'USD' && CURRENT_CURRENCY_RATE > 0
+    let costConverted = CURRENT_CURRENCY !== 'USD' && CURRENT_CURRENCY_RATE > 0
         ? totalShippingCost * CURRENT_CURRENCY_RATE
         : totalShippingCost;
+
+    // Free shipping based on discounted subtotal (USD)
+    const discountedSubtotalUsd = typeof BASE_SUBTOTAL === 'number'
+        ? BASE_SUBTOTAL
+        : (CURRENT_CURRENCY !== 'USD' && CURRENT_CURRENCY_RATE > 0
+            ? (parseFloat(CART_DISCOUNTED_SUBTOTAL) || 0) / CURRENT_CURRENCY_RATE
+            : (parseFloat(CART_DISCOUNTED_SUBTOTAL) || 0));
+
+    if (discountedSubtotalUsd >= CART_FREE_SHIPPING_THRESHOLD_USD) {
+        totalShippingCost = 0;
+        costConverted = 0;
+    }
     
     return {
         cost: totalShippingCost, // Cost in USD
@@ -1485,7 +1506,8 @@ function calculateShippingCost(cartItems, baseSubtotal, zoneId = null) {
         name: shippingName || 'Standard Shipping',
         zoneId: zoneId,
         zoneName: zoneName,
-        available: true
+        available: true,
+        freeShipping: discountedSubtotalUsd >= CART_FREE_SHIPPING_THRESHOLD_USD
     };
 }
 
@@ -1547,13 +1569,27 @@ function updateShippingZone(zoneId) {
         }
         
         if (shippingLabelEl) {
-            shippingLabelEl.textContent = `Shipping${shippingInfo.zoneName ? ` (${shippingInfo.zoneName})` : shippingInfo.name ? ` (${shippingInfo.name})` : ''}`;
+            if (shippingInfo.freeShipping) {
+                shippingLabelEl.textContent = 'Shipping (FREE)';
+            } else {
+                shippingLabelEl.textContent = `Shipping${shippingInfo.zoneName ? ` (${shippingInfo.zoneName})` : shippingInfo.name ? ` (${shippingInfo.name})` : ''}`;
+            }
             shippingLabelEl.classList.remove('text-red-600');
         }
     }
     
     if (totalEl) {
         totalEl.textContent = formatPrice(total);
+    }
+
+    if (typeof window.syncFreeShippingProgress === 'function') {
+        window.syncFreeShippingProgress(BASE_SUBTOTAL, {
+            idPrefix: 'cart-freeship',
+            thresholdUsd: CART_FREE_SHIPPING_THRESHOLD_USD,
+            currency: CURRENT_CURRENCY,
+            currencyRate: CURRENT_CURRENCY_RATE,
+            currencySymbol: CURRENCY_SYMBOL,
+        });
     }
 }
 
@@ -1638,11 +1674,25 @@ function initializeShippingCost() {
     }
     
     if (shippingLabelEl) {
-        shippingLabelEl.textContent = `Shipping${shippingInfo.zoneName ? ` (${shippingInfo.zoneName})` : shippingInfo.name ? ` (${shippingInfo.name})` : ''}`;
+        if (shippingInfo.freeShipping) {
+            shippingLabelEl.textContent = 'Shipping (FREE)';
+        } else {
+            shippingLabelEl.textContent = `Shipping${shippingInfo.zoneName ? ` (${shippingInfo.zoneName})` : shippingInfo.name ? ` (${shippingInfo.name})` : ''}`;
+        }
     }
     
     if (totalEl) {
         totalEl.textContent = formatPrice(total);
+    }
+
+    if (typeof window.syncFreeShippingProgress === 'function') {
+        window.syncFreeShippingProgress(BASE_SUBTOTAL, {
+            idPrefix: 'cart-freeship',
+            thresholdUsd: CART_FREE_SHIPPING_THRESHOLD_USD,
+            currency: CURRENT_CURRENCY,
+            currencyRate: CURRENT_CURRENCY_RATE,
+            currencySymbol: CURRENCY_SYMBOL,
+        });
     }
 }
 
@@ -1702,6 +1752,16 @@ function applyCartDiscountResponse(data) {
 
     if (typeof window.syncDiscountExpiryBar === 'function') {
         window.syncDiscountExpiryBar(d.hold_remaining_seconds, d.hold_duration_seconds);
+    }
+
+    if (typeof window.syncFreeShippingProgress === 'function') {
+        window.syncFreeShippingProgress(BASE_SUBTOTAL, {
+            idPrefix: 'cart-freeship',
+            thresholdUsd: CART_FREE_SHIPPING_THRESHOLD_USD,
+            currency: CURRENT_CURRENCY,
+            currencyRate: CURRENT_CURRENCY_RATE,
+            currencySymbol: CURRENCY_SYMBOL,
+        });
     }
 
     initializeShippingCost();

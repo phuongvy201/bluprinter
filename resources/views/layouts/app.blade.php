@@ -35,12 +35,15 @@
         $siteCurrency = currency();
         $siteCurrencyRate = currency_rate();
         $siteCurrencySymbol = currency_symbol();
+        $freeShippingThresholdUsd = \App\Support\CatalogPageSettings::freeShippingThresholdUsd();
     @endphp
     
     <!-- Currency Configuration for JavaScript -->
     <script>
         window.SITE_CURRENCY = @json($siteCurrency);
         window.SITE_CURRENCY_SYMBOL = @json($siteCurrencySymbol);
+        window.SITE_CURRENCY_RATE = {{ (float) ($siteCurrencyRate ?? 1) }};
+        window.FREE_SHIPPING_THRESHOLD_USD = {{ (float) $freeShippingThresholdUsd }};
     </script>
 
     <!-- Cookie Script -->

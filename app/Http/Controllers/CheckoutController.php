@@ -184,9 +184,10 @@ class CheckoutController extends Controller
         $originalShippingCostUSD = $shippingCostUSD ?? 0;
 
         // Apply freeship logic in checkout index view as well
-        // Check freeship based on base USD amount (100 USD) after discounts
+        // Check freeship based on admin-configured USD threshold after discounts
+        $freeShippingThresholdUsd = \App\Support\CatalogPageSettings::freeShippingThresholdUsd();
         $baseSubtotal = $currency !== 'USD' ? $discountedSubtotal / $currencyRate : $discountedSubtotal;
-        $qualifiesForFreeShipping = $baseSubtotal >= 100;
+        $qualifiesForFreeShipping = $baseSubtotal >= $freeShippingThresholdUsd;
         $originalShippingCost = $shippingCost;
         $shippingCost = $qualifiesForFreeShipping ? 0 : $originalShippingCost;
 
@@ -338,7 +339,10 @@ class CheckoutController extends Controller
             'defaultZone',
             'defaultCountry',
             'paymentMethods',
-            'defaultPaymentMethod'
+            'defaultPaymentMethod',
+            'freeShippingThresholdUsd',
+            'qualifiesForFreeShipping',
+            'baseSubtotal'
         ));
     }
 
@@ -649,9 +653,10 @@ class CheckoutController extends Controller
             $orderDiscountType = $discountResult['discount_type'];
             $volumeDiscountPercent = $discountResult['volume_discount_percent'];
 
-            // Check freeship based on base USD amount (100 USD) after discounts
+            // Check freeship based on admin-configured USD threshold after discounts
+            $freeShippingThresholdUsd = \App\Support\CatalogPageSettings::freeShippingThresholdUsd();
             $baseSubtotalUSD = $orderCurrency !== 'USD' ? ($discountedSubtotal / $currencyRate) : $discountedSubtotal;
-            $qualifiesForFreeShipping = $baseSubtotalUSD >= 100;
+            $qualifiesForFreeShipping = $baseSubtotalUSD >= $freeShippingThresholdUsd;
 
             // Convert shipping cost from USD to order currency
             $convertedShippingCost = $orderCurrency !== 'USD'

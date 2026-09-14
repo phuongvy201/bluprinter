@@ -22,6 +22,7 @@ class ProductShowSettingsController extends Controller
     {
         $validated = $request->validate([
             'sale_ends_date' => ['nullable', 'date'],
+            'free_shipping_threshold_usd' => ['required', 'numeric', 'min:1', 'max:100000'],
             'volume_discounts' => ['nullable', 'array'],
             'volume_discounts.*.min_quantity' => ['required_with:volume_discounts', 'integer', 'min:2', 'max:999'],
             'volume_discounts.*.discount_percent' => ['required_with:volume_discounts', 'integer', 'min:1', 'max:90'],
@@ -47,6 +48,7 @@ class ProductShowSettingsController extends Controller
 
         CatalogPageSettings::saveProductShow([
             'sale_ends_date' => $validated['sale_ends_date'] ?? null,
+            'free_shipping_threshold_usd' => round((float) $validated['free_shipping_threshold_usd'], 2),
             'volume_discounts' => $tiers,
             'virtual_stats' => [
                 'views_base' => (int) ($validated['virtual_stats']['views_base'] ?? 800),

@@ -345,7 +345,7 @@ const AUTH_USER = {!! json_encode(auth()->check() ? [
     'country' => auth()->user()->country ?? null,
 ] : null) !!};
 const CART_PROMO_CLAIMED_KEY = 'cart_promo_claimed';
-const FREE_SHIPPING_THRESHOLD_USD = 100;
+const FREE_SHIPPING_THRESHOLD_USD = {{ (float) (($productShowSettings ?? \App\Support\CatalogPageSettings::productShow())['free_shipping_threshold_usd'] ?? \App\Support\CatalogPageSettings::freeShippingThresholdUsd()) }};
 const SHIPPING_RATES = @json($shippingRatesData);
 const SHIPPING_RATES_BY_ZONE = @json($shippingRatesByZone);
 const SHIPPING_ZONES = @json($zonesData);
@@ -1161,11 +1161,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="product-show-purchase__promo-divider" aria-hidden="true"></div>
                 @include('products.partials.show-volume-discounts', ['volumeDiscountTiers' => $volumeDiscountTiers])
                 @include('products.partials.show-customization', ['product' => $product])
-
-                <!-- Custom File Upload Section -->
-                @if($product->hasCustomization() || $product->allow_customization)
-                    <x-custom-file-upload :product="$product" />
-                @endif
 
                 <!-- Action Buttons -->
                 <div class="product-show-purchase__actions-bar">

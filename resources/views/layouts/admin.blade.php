@@ -43,12 +43,45 @@
             background: linear-gradient(to bottom, #2563eb, #7c3aed);
         }
         [x-cloak] { display: none !important; }
+
+        /* Admin sidebar collapse */
+        .admin-sidebar-shell {
+            width: 16rem; /* 256px */
+            transition: width 0.2s ease;
+        }
+        .admin-sidebar-shell.is-collapsed {
+            width: 4.5rem; /* 72px */
+        }
+        .admin-main-shell {
+            transition: margin-left 0.2s ease;
+        }
+        .admin-main-shell.is-collapsed {
+            margin-left: 4.5rem !important;
+        }
+        @media (max-width: 1023px) {
+            .admin-main-shell.is-collapsed {
+                margin-left: 0 !important;
+            }
+        }
+        details summary::-webkit-details-marker { display: none; }
     </style>
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('adminUi', {
+                sidebarOpen: false,
+                sidebarCollapsed: localStorage.getItem('bluprinter_admin_sidebar_collapsed') === '1',
+                toggleSidebarCollapsed() {
+                    this.sidebarCollapsed = !this.sidebarCollapsed;
+                    localStorage.setItem('bluprinter_admin_sidebar_collapsed', this.sidebarCollapsed ? '1' : '0');
+                },
+            });
+        });
+    </script>
 </head>
-<body class="font-sans antialiased bg-gray-50 overflow-x-hidden" style="font-family: 'Inter', sans-serif;" x-data="{ sidebarOpen: false }">
+<body class="font-sans antialiased bg-gray-50 overflow-x-hidden" style="font-family: 'Inter', sans-serif;" x-data>
     <div class="min-h-screen flex overflow-x-hidden max-w-full">
         <!-- Mobile sidebar overlay -->
-        <div x-show="sidebarOpen" 
+        <div x-show="$store.adminUi.sidebarOpen" 
              x-transition:enter="transition-opacity ease-linear duration-300"
              x-transition:enter-start="opacity-0"
              x-transition:enter-end="opacity-100"
@@ -56,22 +89,22 @@
              x-transition:leave-start="opacity-100"
              x-transition:leave-end="opacity-0"
              class="fixed inset-0 z-40 lg:hidden">
-            <div class="fixed inset-0 bg-gray-600 bg-opacity-75" @click="sidebarOpen = false"></div>
+            <div class="fixed inset-0 bg-gray-600 bg-opacity-75" @click="$store.adminUi.sidebarOpen = false"></div>
         </div>
 
         <!-- Sidebar -->
         <div class="hidden lg:flex lg:flex-shrink-0">
-            <div class="flex flex-col w-64 bg-white border-r border-gray-200 shadow-sm fixed left-0 top-0 h-screen overflow-y-auto sidebar-scroll z-40">
+            <div class="admin-sidebar-shell flex flex-col bg-white border-r border-gray-200 shadow-sm fixed left-0 top-0 h-screen overflow-y-auto sidebar-scroll z-40"
+                 :class="{ 'is-collapsed': $store.adminUi.sidebarCollapsed }">
                 <!-- Logo -->
-                <div class="flex items-center h-16 px-6 border-b border-gray-200">
-                    <div class="flex items-center">
+                <div class="flex items-center h-16 px-3 border-b border-gray-200 gap-2">
+                    <div class="flex items-center min-w-0 flex-1" :class="$store.adminUi.sidebarCollapsed ? 'justify-center' : ''">
                         <div class="flex-shrink-0">
                             <div class="w-10 h-10 overflow-hidden">
                                 <img src="{{ asset('images/logo nhỏ.png') }}" 
                                      alt="Bluprinter Logo" 
                                      class="w-full h-full object-contain"
                                      onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                <!-- Fallback SVG if image fails to load -->
                                 <div class="w-full h-full bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg" style="display: none;">
                                     <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
@@ -79,19 +112,36 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="ml-3">
-                            <h1 class="text-lg font-bold text-gray-900">{{ config('app.name', 'Bluprinter') }}</h1>
+                        <div class="ml-3 min-w-0" x-show="!$store.adminUi.sidebarCollapsed" x-cloak>
+                            <h1 class="text-lg font-bold text-gray-900 truncate">{{ config('app.name', 'Bluprinter') }}</h1>
                             <p class="text-xs text-gray-500">Admin Panel</p>
                         </div>
                     </div>
+                    <button type="button"
+                            class="hidden lg:inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                            @click="$store.adminUi.toggleSidebarCollapsed()"
+                            :title="$store.adminUi.sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+                            x-show="!$store.adminUi.sidebarCollapsed"
+                            x-cloak>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+                    </button>
                 </div>
+
+                <button type="button"
+                        class="mx-auto mt-2 mb-1 hidden lg:inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        @click="$store.adminUi.toggleSidebarCollapsed()"
+                        title="Expand sidebar"
+                        x-show="$store.adminUi.sidebarCollapsed"
+                        x-cloak>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
+                </button>
                 
                 @include('layouts.partials.admin-sidebar-nav')
             </div>
         </div>
 
         <!-- Mobile sidebar -->
-        <div x-show="sidebarOpen" 
+        <div x-show="$store.adminUi.sidebarOpen" 
              x-cloak
              x-transition:enter="transition ease-in-out duration-300 transform"
              x-transition:enter-start="-translate-x-full"
@@ -118,7 +168,7 @@
                         <p class="text-xs text-gray-500">Admin Panel</p>
                     </div>
                 </div>
-                <button type="button" @click="sidebarOpen = false" class="text-gray-400 hover:text-gray-700">
+                <button type="button" @click="$store.adminUi.sidebarOpen = false" class="text-gray-400 hover:text-gray-700">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
@@ -130,22 +180,32 @@
         </div>
 
         <!-- Main Content -->
-        <div class="flex-1 flex flex-col lg:ml-64 overflow-x-hidden max-w-full">
+        <div class="admin-main-shell flex-1 flex flex-col lg:ml-64 overflow-x-hidden max-w-full"
+             :class="{ 'is-collapsed': $store.adminUi.sidebarCollapsed }">
             <!-- Top Navigation -->
             <header class="bg-white border-b border-gray-200 sticky top-0 z-30">
                 <div class="px-4 sm:px-6 lg:px-8">
                     <div class="flex justify-between items-center h-16">
                         <!-- Mobile menu button -->
-                        <button @click="sidebarOpen = true" class="lg:hidden p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-colors">
+                        <button @click="$store.adminUi.sidebarOpen = true" class="lg:hidden p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-colors">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                             </svg>
                         </button>
-                        
-                        <div class="flex-1 lg:ml-0">
+
+                        <button type="button"
+                                class="hidden lg:inline-flex p-2 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 mr-2"
+                                @click="$store.adminUi.toggleSidebarCollapsed()"
+                                :title="$store.adminUi.sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"/>
+                            </svg>
+                        </button>
+
+                        <div class="flex-1 min-w-0">
                             <div class="flex items-center">
-                                <h1 class="text-xl sm:text-2xl font-bold text-gray-900">@yield('title', 'Dashboard')</h1>
-                                <div class="ml-4 hidden sm:block">
+                                <h1 class="text-xl sm:text-2xl font-bold text-gray-900 truncate">@yield('title', 'Dashboard')</h1>
+                                <div class="ml-4 hidden sm:block shrink-0">
                                     @if(auth()->user()->hasRole('admin'))
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                             Admin

@@ -61,6 +61,8 @@ return [
 
     'product_show' => [
         'sale_ends_date' => '2026-09-01',
+        // USD subtotal (after discount) required to unlock free shipping
+        'free_shipping_threshold_usd' => 100,
         'volume_discounts' => [
             ['min_quantity' => 2, 'discount_percent' => 10, 'is_popular' => false],
             ['min_quantity' => 3, 'discount_percent' => 20, 'is_popular' => true],

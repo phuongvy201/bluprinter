@@ -311,7 +311,7 @@ const CHECKOUT_RAW_SUBTOTAL = {{ $subtotal }};
 let CHECKOUT_DISCOUNT_AMOUNT = {{ $discountAmount ?? 0 }};
 const CHECKOUT_CONVERTED_TOTAL = {{ $convertedTotal ?? $total }};
 const CHECKOUT_CONVERTED_SHIPPING = {{ $convertedShipping ?? $shippingCost ?? 0 }};
-const CHECKOUT_FREE_SHIPPING_THRESHOLD_USD = 100;
+const CHECKOUT_FREE_SHIPPING_THRESHOLD_USD = {{ (float) ($freeShippingThresholdUsd ?? \App\Support\CatalogPageSettings::freeShippingThresholdUsd()) }};
 const CHECKOUT_CURRENCY_SYMBOL = @json(\App\Services\CurrencyService::getCurrencySymbol($currency ?? 'USD'));
 const CHECKOUT_CURRENT_DOMAIN = @json($currentDomain ?? null);
 const SHIPPING_RATES = @json($shippingRatesData);
@@ -1419,6 +1419,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         'appliedPromoCode' => $appliedPromoCode ?? null,
                         'volumeTiers' => $volumeTiers ?? [],
                         'subtotal' => $subtotal ?? 0,
+                    ])
+
+                    @include('checkout.partials.free-shipping-progress', [
+                        'freeShippingThresholdUsd' => $freeShippingThresholdUsd ?? \App\Support\CatalogPageSettings::freeShippingThresholdUsd(),
+                        'freeShippingSubtotalUsd' => $baseSubtotal ?? 0,
+                        'currency' => $currency ?? 'USD',
+                        'currencyRate' => $currencyRate ?? 1,
+                        'idPrefix' => 'checkout-freeship',
                     ])
 
                     <!-- Order Totals -->
@@ -3976,7 +3984,8 @@ document.addEventListener('DOMContentLoaded', function() {
             name: shippingName || 'Standard Shipping',
             zoneId: zoneId,
             zoneName: finalZoneName,
-            available: true
+            available: true,
+            freeShipping: discountedSubtotalUsd >= CHECKOUT_FREE_SHIPPING_THRESHOLD_USD
         };
     }
     
@@ -4027,8 +4036,12 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (shippingLabelEl) {
                 // Prioritize zoneName from shippingInfo (which comes from currentZoneName or rate.zone_name)
-                const displayZoneName = shippingInfo.zoneName || shippingInfo.name || null;
-                shippingLabelEl.textContent = `Shipping${displayZoneName ? ` (${displayZoneName})` : ''}`;
+                if (shippingInfo.freeShipping) {
+                    shippingLabelEl.textContent = 'Shipping (FREE)';
+                } else {
+                    const displayZoneName = shippingInfo.zoneName || shippingInfo.name || null;
+                    shippingLabelEl.textContent = `Shipping${displayZoneName ? ` (${displayZoneName})` : ''}`;
+                }
                 shippingLabelEl.classList.remove('text-red-600');
             }
             
@@ -4491,6 +4504,16 @@ function applyCheckoutDiscountResponse(data) {
 
     if (typeof window.syncDiscountExpiryBar === 'function') {
         window.syncDiscountExpiryBar(d.hold_remaining_seconds, d.hold_duration_seconds);
+    }
+
+    if (typeof window.syncFreeShippingProgress === 'function') {
+        window.syncFreeShippingProgress(CHECKOUT_BASE_SUBTOTAL, {
+            idPrefix: 'checkout-freeship',
+            thresholdUsd: CHECKOUT_FREE_SHIPPING_THRESHOLD_USD,
+            currency: CHECKOUT_CURRENCY,
+            currencyRate: CHECKOUT_CURRENCY_RATE,
+            currencySymbol: CHECKOUT_CURRENCY_SYMBOL,
+        });
     }
 
     if (typeof window.updateCheckoutTotal === 'function') {

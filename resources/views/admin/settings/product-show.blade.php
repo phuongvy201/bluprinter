@@ -6,7 +6,7 @@
 <div class="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-gray-900">Product page settings</h1>
-        <p class="mt-1 text-sm text-gray-600">Configure Buy More Save More tiers, sale end date, and virtual social proof stats.</p>
+        <p class="mt-1 text-sm text-gray-600">Configure Buy More Save More tiers, free shipping threshold, sale end date, and virtual social proof stats.</p>
     </div>
 
     @if(session('success'))
@@ -25,6 +25,22 @@
                        value="{{ old('sale_ends_date', $settings['sale_ends_date'] ?? '') }}"
                        class="w-full max-w-xs rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 <p class="mt-1 text-xs text-gray-500">Shown next to the discount badge on product pages.</p>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <h2 class="text-lg font-semibold text-gray-900">Free shipping</h2>
+            <div>
+                <label for="free_shipping_threshold_usd" class="block text-sm font-medium text-gray-700 mb-1">Threshold (USD)</label>
+                <input type="number" name="free_shipping_threshold_usd" id="free_shipping_threshold_usd"
+                       min="1" max="100000" step="0.01"
+                       value="{{ old('free_shipping_threshold_usd', $settings['free_shipping_threshold_usd'] ?? 100) }}"
+                       class="w-full max-w-xs rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                       required>
+                <p class="mt-1 text-xs text-gray-500">Cart / checkout unlock free shipping when the discounted subtotal reaches this USD amount. Progress bar uses the same value.</p>
+                @error('free_shipping_threshold_usd')
+                    <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                @enderror
             </div>
         </div>
 
