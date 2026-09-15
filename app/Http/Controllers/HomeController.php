@@ -101,7 +101,10 @@ class HomeController extends Controller
             : '50,000+';
 
         $homeSettings = HomeSettingsController::resolved();
-        $heroSlides = HomeSettingsController::resolvedHeroSlides();
+        $heroColumns = HomeSettingsController::resolvedHeroColumns();
+        $leftHeroSlides = $heroColumns['left'];
+        $rightHeroSlides = $heroColumns['right'];
+        $heroSlides = array_values(array_merge($leftHeroSlides, $rightHeroSlides));
         $canEditHome = Auth::check() && Auth::user()->hasRole('admin');
         $homeEditMode = $canEditHome && request()->boolean('edit');
 
@@ -121,6 +124,8 @@ class HomeController extends Controller
             'customerHappyCustomersLabel',
             'homeSettings',
             'heroSlides',
+            'leftHeroSlides',
+            'rightHeroSlides',
             'canEditHome',
             'homeEditMode',
         ));

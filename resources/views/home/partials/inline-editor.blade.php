@@ -256,24 +256,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     img.setAttribute('data-home-preview', key);
                     node.replaceWith(img);
                 }
-            } else if (key.indexOf('overlay_') !== -1) {
-                updateHeroOverlay(key, value);
             } else {
                 node.textContent = value;
             }
-        });
-    }
-
-    function updateHeroOverlay(key, value) {
-        var m = key.match(/hero\.slides\.(\d+)\.overlay_(from|to)/);
-        if (!m) return;
-        var idx = m[1];
-        document.querySelectorAll('[data-home-preview="hero.slides.' + idx + '.overlay"]').forEach(function (el) {
-            var fromInput = form.querySelector('[data-home-input="hero.slides.' + idx + '.overlay_from"]');
-            var toInput = form.querySelector('[data-home-input="hero.slides.' + idx + '.overlay_to"]');
-            var from = fromInput ? fromInput.value : 'rgba(0,0,0,0.45)';
-            var to = toInput ? toInput.value : 'rgba(0,0,0,0.65)';
-            el.style.background = 'linear-gradient(135deg, ' + from + ', ' + to + ')';
         });
     }
 });

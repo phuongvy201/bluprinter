@@ -4,7 +4,13 @@
     $fieldClass = $compact ? 'w-full rounded-lg border-gray-300 text-sm' : 'w-full rounded-xl border-gray-300';
     $fieldClassSm = $compact ? 'w-full rounded-md border-gray-300 text-xs' : 'w-full rounded-lg border-gray-300 text-sm';
     $boxClass = $compact ? 'p-3 rounded-lg border border-gray-200 bg-white space-y-3' : 'bg-white shadow-md rounded-2xl p-6 space-y-5';
-    $heroSlides = old('hero.slides', $settings['hero']['slides'] ?? []);
+    $leftHeroSlides = old('hero.left_slides', $settings['hero']['left_slides'] ?? []);
+    $rightHeroSlides = old('hero.right_slides', $settings['hero']['right_slides'] ?? []);
+    if ($leftHeroSlides === [] && $rightHeroSlides === [] && !empty($settings['hero']['slides'])) {
+        $legacy = array_values($settings['hero']['slides']);
+        $leftHeroSlides = isset($legacy[0]) ? [$legacy[0]] : [];
+        $rightHeroSlides = array_slice($legacy, 1);
+    }
     $sectionKeys = [
         'pick_a_gift' => 'Pick a Gift',
         'flash_sale' => 'Flash Sale',
@@ -18,11 +24,11 @@
     ];
 @endphp
 
-<div class="{{ $boxClass }}" data-home-form-section="hero">
+<div class="{{ $boxClass }}" data-home-form-section="hero" data-hero-form>
     <div>
         <h2 class="{{ $compact ? 'text-sm font-bold text-gray-900' : 'text-lg font-bold text-gray-900' }}">Hero banners</h2>
         @unless($compact)
-            <p class="text-sm text-gray-500">Mobile: slideshow tự chuyển. URL trống → tự tìm danh mục.</p>
+            <p class="text-sm text-gray-500">Trái = banner lớn, phải = banner nhỏ. Mỗi bên là carousel riêng — thêm bao nhiêu cũng được (tối đa 20).</p>
         @endunless
     </div>
     <div class="max-w-xs">
@@ -31,43 +37,151 @@
                value="{{ old('hero.autoplay_ms', $settings['hero']['autoplay_ms'] ?? 5000) }}"
                class="{{ $fieldClassSm }}" data-home-input="hero.autoplay_ms">
     </div>
-    @for ($i = 0; $i < 6; $i++)
-        @php $slide = $heroSlides[$i] ?? []; @endphp
-        <div class="p-3 rounded-lg border border-gray-100 bg-gray-50 space-y-2" data-home-form-section="hero-slide-{{ $i }}">
-            <h3 class="text-xs font-bold text-gray-800">Slide #{{ $i + 1 }}</h3>
-            <div class="grid grid-cols-1 gap-2">
-                @include('admin.settings.partials.home-image-field', [
-                    'urlName' => "hero[slides][{$i}][image]",
-                    'fileName' => "hero[slides][{$i}][image_file]",
-                    'value' => $slide['image'] ?? '',
-                    'previewKey' => "hero.slides.{$i}.image",
-                    'placeholder' => 'Hero image URL',
-                    'inputClass' => $fieldClassSm,
-                ])
-                <input type="text" name="hero[slides][{{ $i }}][url]" value="{{ $slide['url'] ?? '' }}"
-                       class="{{ $fieldClassSm }}" placeholder="Link URL">
-                <input type="text" name="hero[slides][{{ $i }}][category_keywords]"
-                       value="{{ isset($slide['category_keywords']) ? (is_array($slide['category_keywords']) ? implode(', ', $slide['category_keywords']) : $slide['category_keywords']) : '' }}"
-                       class="{{ $fieldClassSm }}" placeholder="Category keywords">
-                <input type="text" name="hero[slides][{{ $i }}][eyebrow]" value="{{ $slide['eyebrow'] ?? '' }}"
-                       class="{{ $fieldClassSm }}" placeholder="Eyebrow" data-home-input="hero.slides.{{ $i }}.eyebrow">
-                <input type="text" name="hero[slides][{{ $i }}][title_html]" value="{{ $slide['title_html'] ?? '' }}"
-                       class="{{ $fieldClassSm }}" placeholder="Title HTML" data-home-input="hero.slides.{{ $i }}.title_html">
-                <textarea name="hero[slides][{{ $i }}][description]" rows="2" class="{{ $fieldClassSm }}"
-                          placeholder="Description" data-home-input="hero.slides.{{ $i }}.description">{{ $slide['description'] ?? '' }}</textarea>
-                <div class="grid grid-cols-2 gap-2">
-                    <input type="text" name="hero[slides][{{ $i }}][overlay_from]" value="{{ $slide['overlay_from'] ?? '' }}"
-                           class="{{ $fieldClassSm }}" placeholder="Overlay from" data-home-input="hero.slides.{{ $i }}.overlay_from">
-                    <input type="text" name="hero[slides][{{ $i }}][overlay_to]" value="{{ $slide['overlay_to'] ?? '' }}"
-                           class="{{ $fieldClassSm }}" placeholder="Overlay to" data-home-input="hero.slides.{{ $i }}.overlay_to">
-                </div>
-                <input type="hidden" name="hero[slides][{{ $i }}][alt]" value="{{ $slide['alt'] ?? '' }}">
-                <input type="hidden" name="hero[slides][{{ $i }}][button_label]" value="{{ $slide['button_label'] ?? 'Shop Now' }}">
-                <input type="hidden" name="hero[slides][{{ $i }}][title_size]" value="{{ $slide['title_size'] ?? 'text-2xl sm:text-3xl' }}">
-            </div>
+
+    <div class="space-y-3" data-hero-side-group="left">
+        <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-gray-900">Left banners (large)</h3>
+            <button type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-700" data-hero-add-slide="left">+ Add slide</button>
         </div>
-    @endfor
+        <div class="space-y-3" data-hero-slide-list="left">
+            @forelse ($leftHeroSlides as $i => $slide)
+                @include('admin.settings.partials.home-hero-slide-fields', [
+                    'side' => 'left',
+                    'index' => $i,
+                    'slide' => $slide,
+                    'fieldClassSm' => $fieldClassSm,
+                ])
+            @empty
+                @include('admin.settings.partials.home-hero-slide-fields', [
+                    'side' => 'left',
+                    'index' => 0,
+                    'slide' => [],
+                    'fieldClassSm' => $fieldClassSm,
+                ])
+            @endforelse
+        </div>
+    </div>
+
+    <div class="space-y-3" data-hero-side-group="right">
+        <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-gray-900">Right banners (small)</h3>
+            <button type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-700" data-hero-add-slide="right">+ Add slide</button>
+        </div>
+        <div class="space-y-3" data-hero-slide-list="right">
+            @forelse ($rightHeroSlides as $i => $slide)
+                @include('admin.settings.partials.home-hero-slide-fields', [
+                    'side' => 'right',
+                    'index' => $i,
+                    'slide' => $slide,
+                    'fieldClassSm' => $fieldClassSm,
+                ])
+            @empty
+                @include('admin.settings.partials.home-hero-slide-fields', [
+                    'side' => 'right',
+                    'index' => 0,
+                    'slide' => [],
+                    'fieldClassSm' => $fieldClassSm,
+                ])
+            @endforelse
+        </div>
+    </div>
+
+    <template id="hero-slide-template-left">
+        @include('admin.settings.partials.home-hero-slide-fields', [
+            'side' => 'left',
+            'index' => '__INDEX__',
+            'slide' => [],
+            'fieldClassSm' => $fieldClassSm,
+        ])
+    </template>
+    <template id="hero-slide-template-right">
+        @include('admin.settings.partials.home-hero-slide-fields', [
+            'side' => 'right',
+            'index' => '__INDEX__',
+            'slide' => [],
+            'fieldClassSm' => $fieldClassSm,
+        ])
+    </template>
 </div>
+
+<script>
+(function () {
+    var MAX_HERO_SLIDES = 20;
+
+    function reindexHeroSide(list, side) {
+        var rows = list.querySelectorAll('[data-hero-slide-row]');
+        rows.forEach(function (row, index) {
+            var label = row.querySelector('[data-hero-slide-label]');
+            if (label) {
+                label.textContent = side.charAt(0).toUpperCase() + side.slice(1) + ' #' + (index + 1);
+            }
+            row.querySelectorAll('[name]').forEach(function (input) {
+                input.name = input.name.replace(
+                    new RegExp('hero\\[' + side + '_slides\\]\\[(?:__INDEX__|\\d+)\\]'),
+                    'hero[' + side + '_slides][' + index + ']'
+                );
+            });
+            row.querySelectorAll('[data-home-input], [data-home-file]').forEach(function (input) {
+                ['data-home-input', 'data-home-file'].forEach(function (attr) {
+                    var val = input.getAttribute(attr);
+                    if (!val) return;
+                    input.setAttribute(
+                        attr,
+                        val.replace(
+                            new RegExp('hero\\.' + side + '_slides\\.(?:__INDEX__|\\d+)'),
+                            'hero.' + side + '_slides.' + index
+                        )
+                    );
+                });
+            });
+        });
+    }
+
+    function bindHeroForm(root) {
+        if (!root || root.dataset.heroBound === '1') return;
+        root.dataset.heroBound = '1';
+
+        root.addEventListener('click', function (e) {
+            var addBtn = e.target.closest('[data-hero-add-slide]');
+            if (addBtn) {
+                e.preventDefault();
+                var side = addBtn.getAttribute('data-hero-add-slide');
+                var list = root.querySelector('[data-hero-slide-list="' + side + '"]');
+                var tpl = document.getElementById('hero-slide-template-' + side);
+                if (!list || !tpl) return;
+                if (list.querySelectorAll('[data-hero-slide-row]').length >= MAX_HERO_SLIDES) {
+                    alert('Tối đa ' + MAX_HERO_SLIDES + ' banner mỗi bên.');
+                    return;
+                }
+                var html = tpl.innerHTML.replace(/__INDEX__/g, String(list.children.length));
+                list.insertAdjacentHTML('beforeend', html);
+                reindexHeroSide(list, side);
+                return;
+            }
+
+            var removeBtn = e.target.closest('[data-hero-remove-slide]');
+            if (removeBtn) {
+                e.preventDefault();
+                var row = removeBtn.closest('[data-hero-slide-row]');
+                var list = removeBtn.closest('[data-hero-slide-list]');
+                if (!row || !list) return;
+                var side = list.getAttribute('data-hero-slide-list');
+                if (list.querySelectorAll('[data-hero-slide-row]').length <= 1) {
+                    row.querySelectorAll('input[type="text"], textarea').forEach(function (el) { el.value = ''; });
+                    row.querySelectorAll('input[type="file"]').forEach(function (el) { el.value = ''; });
+                    var img = row.querySelector('img');
+                    if (img) img.remove();
+                    return;
+                }
+                row.remove();
+                reindexHeroSide(list, side);
+            }
+        });
+    }
+
+    document.querySelectorAll('[data-hero-form]').forEach(bindHeroForm);
+})();
+</script>
 
 @foreach ($sectionKeys as $key => $label)
     @php $section = old("sections.$key", $settings['sections'][$key] ?? []); @endphp

@@ -26,19 +26,28 @@ class HomeSettingsController extends Controller
 
         $validated = $request->validate([
             'hero.autoplay_ms' => ['nullable', 'integer', 'min:2000', 'max:15000'],
-            'hero.slides' => ['nullable', 'array'],
-            'hero.slides.*.url' => ['nullable', 'string', 'max:500'],
-            'hero.slides.*.category_keywords' => ['nullable', 'string', 'max:255'],
-            'hero.slides.*.image' => ['nullable', 'string', 'max:1000'],
-            'hero.slides.*.image_file' => ['nullable', 'image', 'max:5120'],
-            'hero.slides.*.alt' => ['nullable', 'string', 'max:160'],
-            'hero.slides.*.eyebrow' => ['nullable', 'string', 'max:160'],
-            'hero.slides.*.title_html' => ['nullable', 'string', 'max:500'],
-            'hero.slides.*.title_size' => ['nullable', 'string', 'max:80'],
-            'hero.slides.*.description' => ['nullable', 'string', 'max:500'],
-            'hero.slides.*.button_label' => ['nullable', 'string', 'max:80'],
-            'hero.slides.*.overlay_from' => ['nullable', 'string', 'max:80'],
-            'hero.slides.*.overlay_to' => ['nullable', 'string', 'max:80'],
+            'hero.left_slides' => ['nullable', 'array', 'max:20'],
+            'hero.left_slides.*.url' => ['nullable', 'string', 'max:500'],
+            'hero.left_slides.*.category_keywords' => ['nullable', 'string', 'max:255'],
+            'hero.left_slides.*.image' => ['nullable', 'string', 'max:1000'],
+            'hero.left_slides.*.image_file' => ['nullable', 'image', 'max:5120'],
+            'hero.left_slides.*.alt' => ['nullable', 'string', 'max:160'],
+            'hero.left_slides.*.eyebrow' => ['nullable', 'string', 'max:160'],
+            'hero.left_slides.*.title_html' => ['nullable', 'string', 'max:500'],
+            'hero.left_slides.*.title_size' => ['nullable', 'string', 'max:80'],
+            'hero.left_slides.*.description' => ['nullable', 'string', 'max:500'],
+            'hero.left_slides.*.button_label' => ['nullable', 'string', 'max:80'],
+            'hero.right_slides' => ['nullable', 'array', 'max:20'],
+            'hero.right_slides.*.url' => ['nullable', 'string', 'max:500'],
+            'hero.right_slides.*.category_keywords' => ['nullable', 'string', 'max:255'],
+            'hero.right_slides.*.image' => ['nullable', 'string', 'max:1000'],
+            'hero.right_slides.*.image_file' => ['nullable', 'image', 'max:5120'],
+            'hero.right_slides.*.alt' => ['nullable', 'string', 'max:160'],
+            'hero.right_slides.*.eyebrow' => ['nullable', 'string', 'max:160'],
+            'hero.right_slides.*.title_html' => ['nullable', 'string', 'max:500'],
+            'hero.right_slides.*.title_size' => ['nullable', 'string', 'max:80'],
+            'hero.right_slides.*.description' => ['nullable', 'string', 'max:500'],
+            'hero.right_slides.*.button_label' => ['nullable', 'string', 'max:80'],
             'sections' => ['nullable', 'array'],
             'sections.*.enabled' => ['nullable', 'boolean'],
             'sections.*.background' => ['nullable', 'string', 'max:32'],
@@ -78,47 +87,18 @@ class HomeSettingsController extends Controller
             'sections.pick_a_gift.items.*.label' => ['nullable', 'string', 'max:80'],
         ]);
 
-        $heroSlides = collect($validated['hero']['slides'] ?? [])
-            ->map(function ($slide, $index) use ($defaults, $request) {
-                $defaultSlide = $defaults['hero']['slides'][$index] ?? [];
-                $image = trim((string) ($slide['image'] ?? ''));
-
-                $imageFile = $request->file("hero.slides.$index.image_file");
-                if ($imageFile) {
-                    $uploaded = S3Media::upload($imageFile, 'home/hero');
-                    if ($uploaded) {
-                        $image = $uploaded;
-                    }
-                }
-
-                if ($image === '') {
-                    return null;
-                }
-
-                $keywords = collect(preg_split('/[,;\r\n]+/', (string) ($slide['category_keywords'] ?? '')))
-                    ->map(fn ($k) => trim(strtolower($k)))
-                    ->filter()
-                    ->values()
-                    ->all();
-
-                return [
-                    'url' => trim((string) ($slide['url'] ?? '')),
-                    'category_keywords' => $keywords ?: ($defaultSlide['category_keywords'] ?? []),
-                    'image' => $image,
-                    'alt' => trim((string) ($slide['alt'] ?? ($defaultSlide['alt'] ?? 'Banner'))),
-                    'eyebrow' => trim((string) ($slide['eyebrow'] ?? '')),
-                    'title_html' => trim((string) ($slide['title_html'] ?? ($defaultSlide['title_html'] ?? ''))),
-                    'title_size' => trim((string) ($slide['title_size'] ?? ($defaultSlide['title_size'] ?? 'text-2xl sm:text-3xl'))),
-                    'description' => trim((string) ($slide['description'] ?? '')),
-                    'button_label' => trim((string) ($slide['button_label'] ?? ($defaultSlide['button_label'] ?? 'Shop Now'))),
-                    'overlay_from' => trim((string) ($slide['overlay_from'] ?? ($defaultSlide['overlay_from'] ?? 'rgba(0,0,0,0.45)'))),
-                    'overlay_to' => trim((string) ($slide['overlay_to'] ?? ($defaultSlide['overlay_to'] ?? 'rgba(0,0,0,0.65)'))),
-                    'desktop_col_span' => (int) ($defaultSlide['desktop_col_span'] ?? 1),
-                ];
-            })
-            ->filter()
-            ->values()
-            ->all();
+        $leftSlides = self::normalizeHeroSlidesFromRequest(
+            $validated['hero']['left_slides'] ?? [],
+            $defaults['hero']['left_slides'] ?? [],
+            $request,
+            'hero.left_slides'
+        );
+        $rightSlides = self::normalizeHeroSlidesFromRequest(
+            $validated['hero']['right_slides'] ?? [],
+            $defaults['hero']['right_slides'] ?? [],
+            $request,
+            'hero.right_slides'
+        );
 
         $sectionInput = $validated['sections'] ?? [];
         $sections = [];
@@ -248,7 +228,8 @@ class HomeSettingsController extends Controller
         $payload = [
             'hero' => [
                 'autoplay_ms' => (int) ($validated['hero']['autoplay_ms'] ?? $defaults['hero']['autoplay_ms']),
-                'slides' => $heroSlides ?: $defaults['hero']['slides'],
+                'left_slides' => $leftSlides ?: ($defaults['hero']['left_slides'] ?? []),
+                'right_slides' => $rightSlides ?: ($defaults['hero']['right_slides'] ?? []),
             ],
             'sections' => $sections,
         ];
@@ -299,20 +280,156 @@ class HomeSettingsController extends Controller
             return $defaults;
         }
 
-        return array_replace_recursive($defaults, $decoded);
+        $merged = array_replace_recursive($defaults, $decoded);
+        $heroDecoded = is_array($decoded['hero'] ?? null) ? $decoded['hero'] : [];
+        $merged['hero'] = self::normalizeHeroStructure(
+            $merged['hero'] ?? [],
+            $defaults['hero'] ?? [],
+            $heroDecoded
+        );
+
+        return $merged;
+    }
+
+    /**
+     * @param  array<string, mixed>  $hero
+     * @param  array<string, mixed>  $defaults
+     * @param  array<string, mixed>  $heroDecoded
+     * @return array<string, mixed>
+     */
+    private static function normalizeHeroStructure(array $hero, array $defaults, array $heroDecoded = []): array
+    {
+        $hasNewKeys = array_key_exists('left_slides', $heroDecoded) || array_key_exists('right_slides', $heroDecoded);
+
+        if (! $hasNewKeys && ! empty($heroDecoded['slides']) && is_array($heroDecoded['slides'])) {
+            $legacy = array_values($heroDecoded['slides']);
+            $hero['left_slides'] = isset($legacy[0]) ? [self::stripLegacySlideFields($legacy[0])] : ($defaults['left_slides'] ?? []);
+            $hero['right_slides'] = collect(array_slice($legacy, 1))
+                ->map(fn ($slide) => self::stripLegacySlideFields(is_array($slide) ? $slide : []))
+                ->values()
+                ->all();
+        }
+
+        $hero['left_slides'] = collect($hero['left_slides'] ?? $defaults['left_slides'] ?? [])
+            ->map(fn ($slide) => self::stripLegacySlideFields(is_array($slide) ? $slide : []))
+            ->filter(fn ($slide) => trim((string) ($slide['image'] ?? '')) !== '')
+            ->values()
+            ->all();
+
+        $hero['right_slides'] = collect($hero['right_slides'] ?? $defaults['right_slides'] ?? [])
+            ->map(fn ($slide) => self::stripLegacySlideFields(is_array($slide) ? $slide : []))
+            ->filter(fn ($slide) => trim((string) ($slide['image'] ?? '')) !== '')
+            ->values()
+            ->all();
+
+        unset($hero['slides']);
+
+        $hero['autoplay_ms'] = (int) ($hero['autoplay_ms'] ?? $defaults['autoplay_ms'] ?? 5000);
+
+        return $hero;
+    }
+
+    /**
+     * @param  array<string, mixed>  $slide
+     * @return array<string, mixed>
+     */
+    private static function stripLegacySlideFields(array $slide): array
+    {
+        unset($slide['overlay_from'], $slide['overlay_to'], $slide['desktop_col_span']);
+
+        return $slide;
+    }
+
+    /**
+     * @param  array<int|string, array<string, mixed>>  $inputSlides
+     * @param  array<int, array<string, mixed>>  $defaultSlides
+     * @return array<int, array<string, mixed>>
+     */
+    private static function normalizeHeroSlidesFromRequest(
+        array $inputSlides,
+        array $defaultSlides,
+        Request $request,
+        string $filePrefix
+    ): array {
+        return collect($inputSlides)
+            ->take(20)
+            ->map(function ($slide, $index) use ($defaultSlides, $request, $filePrefix) {
+                if (! is_array($slide)) {
+                    return null;
+                }
+
+                $defaultSlide = $defaultSlides[$index] ?? [];
+                $image = trim((string) ($slide['image'] ?? ''));
+
+                $imageFile = $request->file("{$filePrefix}.{$index}.image_file");
+                if ($imageFile) {
+                    $uploaded = S3Media::upload($imageFile, 'home/hero');
+                    if ($uploaded) {
+                        $image = $uploaded;
+                    }
+                }
+
+                if ($image === '') {
+                    return null;
+                }
+
+                $keywords = collect(preg_split('/[,;\r\n]+/', (string) ($slide['category_keywords'] ?? '')))
+                    ->map(fn ($k) => trim(strtolower($k)))
+                    ->filter()
+                    ->values()
+                    ->all();
+
+                return [
+                    'url' => trim((string) ($slide['url'] ?? '')),
+                    'category_keywords' => $keywords ?: ($defaultSlide['category_keywords'] ?? []),
+                    'image' => $image,
+                    'alt' => trim((string) ($slide['alt'] ?? ($defaultSlide['alt'] ?? 'Banner'))),
+                    'eyebrow' => trim((string) ($slide['eyebrow'] ?? '')),
+                    'title_html' => trim((string) ($slide['title_html'] ?? ($defaultSlide['title_html'] ?? ''))),
+                    'title_size' => trim((string) ($slide['title_size'] ?? ($defaultSlide['title_size'] ?? 'text-2xl sm:text-3xl'))),
+                    'description' => trim((string) ($slide['description'] ?? '')),
+                    'button_label' => trim((string) ($slide['button_label'] ?? ($defaultSlide['button_label'] ?? 'Shop Now'))),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array{left: array<int, array<string, mixed>>, right: array<int, array<string, mixed>>}
+     */
+    public static function resolvedHeroColumns(): array
+    {
+        $hero = self::resolved()['hero'] ?? [];
+
+        return [
+            'left' => self::hydrateHeroSlideUrls($hero['left_slides'] ?? []),
+            'right' => self::hydrateHeroSlideUrls($hero['right_slides'] ?? []),
+        ];
     }
 
     /**
      * @return array<int, array<string, mixed>>
+     * @deprecated Use resolvedHeroColumns()
      */
     public static function resolvedHeroSlides(): array
     {
-        $slides = self::resolved()['hero']['slides'] ?? [];
+        $columns = self::resolvedHeroColumns();
 
+        return array_values(array_merge($columns['left'], $columns['right']));
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $slides
+     * @return array<int, array<string, mixed>>
+     */
+    private static function hydrateHeroSlideUrls(array $slides): array
+    {
         return collect($slides)
             ->map(function (array $slide) {
                 $url = trim((string) ($slide['url'] ?? ''));
-                if ($url === '' && !empty($slide['category_keywords'])) {
+                if ($url === '' && ! empty($slide['category_keywords'])) {
                     $url = self::findCategoryUrl((array) $slide['category_keywords']);
                 }
                 if ($url === '') {

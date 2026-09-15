@@ -3,7 +3,7 @@
 return [
     'hero' => [
         'autoplay_ms' => 5000,
-        'slides' => [
+        'left_slides' => [
             [
                 'url' => '',
                 'category_keywords' => ['shirt', 'tee', 'apparel', 't-shirt', 'tshirt'],
@@ -14,10 +14,9 @@ return [
                 'title_size' => 'text-3xl sm:text-4xl',
                 'description' => 'Design streetwear that actually feels like you.',
                 'button_label' => 'Shop Now',
-                'overlay_from' => 'rgba(226, 21, 12, 0.55)',
-                'overlay_to' => 'rgba(0, 83, 102, 0.75)',
-                'desktop_col_span' => 2,
             ],
+        ],
+        'right_slides' => [
             [
                 'url' => '',
                 'category_keywords' => ['case', 'phone'],
@@ -28,9 +27,6 @@ return [
                 'title_size' => 'text-2xl sm:text-3xl',
                 'description' => '',
                 'button_label' => 'Shop Now',
-                'overlay_from' => 'rgba(0, 83, 102, 0.5)',
-                'overlay_to' => 'rgba(0, 61, 77, 0.8)',
-                'desktop_col_span' => 1,
             ],
             [
                 'url' => '',
@@ -42,9 +38,6 @@ return [
                 'title_size' => 'text-2xl sm:text-3xl',
                 'description' => '',
                 'button_label' => 'Shop Now',
-                'overlay_from' => 'rgba(242, 101, 34, 0.45)',
-                'overlay_to' => 'rgba(0, 83, 102, 0.85)',
-                'desktop_col_span' => 1,
             ],
         ],
     ],

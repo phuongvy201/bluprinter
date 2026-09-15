@@ -8,8 +8,18 @@
     $whyChooseFeatures = $whyChooseSection['features'] ?? [];
     $whyChooseAutoplayMs = (int) ($whyChooseSection['autoplay_ms'] ?? 4500);
     $customizeSection = $homeSections['customize_hero'] ?? [];
-    $mainHeroSlide = $heroSlides[0] ?? null;
-    $sideHeroSlides = array_slice($heroSlides, 1, 2);
+    $leftHeroSlides = $leftHeroSlides ?? [];
+    $rightHeroSlides = $rightHeroSlides ?? [];
+    $mobileHeroSlides = collect($leftHeroSlides)
+        ->values()
+        ->map(fn (array $slide, int $i) => array_merge($slide, ['_side' => 'left', '_side_index' => $i]))
+        ->concat(
+            collect($rightHeroSlides)
+                ->values()
+                ->map(fn (array $slide, int $i) => array_merge($slide, ['_side' => 'right', '_side_index' => $i]))
+        )
+        ->values()
+        ->all();
 @endphp
 
 @include('home.partials.inline-editor')
@@ -1310,17 +1320,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     .hero-overlay {
-        background: linear-gradient(135deg, rgba(226, 21, 12, 0.72) 0%, rgba(0, 83, 102, 0.78) 100%);
+        background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.45) 100%);
     }
 
-    /* Hero banners — mobile fade autoplay slideshow */
+    /* Hero banners — fade autoplay slideshow (left / right columns) */
     .hero-carousel {
         position: relative;
         min-width: 0;
+        height: 100%;
     }
     .hero-carousel__viewport {
         position: relative;
-        min-height: 300px;
+        height: 100%;
+        min-height: inherit;
         border-radius: 16px;
         overflow: hidden;
     }
@@ -1342,7 +1354,7 @@ document.addEventListener('DOMContentLoaded', function() {
         position: relative;
         display: block;
         height: 100%;
-        min-height: 300px;
+        min-height: inherit;
         border-radius: 16px;
         overflow: hidden;
         text-decoration: none;
@@ -1359,10 +1371,12 @@ document.addEventListener('DOMContentLoaded', function() {
     .hero-carousel__slide.is-active .hero-carousel__card img {
         transform: scale(1.03);
     }
-    .hero-carousel__overlay {
+    .hero-carousel__vignette {
         position: absolute;
         inset: 0;
         z-index: 1;
+        background: linear-gradient(180deg, transparent 42%, rgba(0, 0, 0, 0.5) 100%);
+        pointer-events: none;
     }
     .hero-carousel__content {
         position: relative;
@@ -1370,7 +1384,8 @@ document.addEventListener('DOMContentLoaded', function() {
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
-        min-height: 300px;
+        height: 100%;
+        min-height: inherit;
         padding: 24px;
     }
     .hero-carousel__progress {
@@ -1396,6 +1411,21 @@ document.addEventListener('DOMContentLoaded', function() {
         gap: 6px;
         margin-top: 12px;
     }
+    .hero-carousel--desktop .hero-carousel__dots {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 14px;
+        margin-top: 0;
+        z-index: 14;
+    }
+    .hero-carousel--desktop .hero-carousel__progress {
+        z-index: 13;
+    }
+    .hero-carousel.is-single .hero-carousel__dots,
+    .hero-carousel.is-single .hero-carousel__progress {
+        display: none;
+    }
     .hero-carousel__dot {
         width: 8px;
         height: 8px;
@@ -1409,6 +1439,25 @@ document.addEventListener('DOMContentLoaded', function() {
     .hero-carousel__dot.is-active {
         width: 24px;
         background: #005366;
+    }
+    .hero-carousel--desktop .hero-carousel__dot {
+        background: rgba(255,255,255,0.5);
+    }
+    .hero-carousel--desktop .hero-carousel__dot.is-active {
+        background: #ffffff;
+    }
+    .hero-carousel--mobile-left .hero-carousel__viewport,
+    .hero-carousel--mobile-left .hero-carousel__card,
+    .hero-carousel--mobile-left .hero-carousel__content,
+    .hero-carousel--mobile-merged .hero-carousel__viewport,
+    .hero-carousel--mobile-merged .hero-carousel__card,
+    .hero-carousel--mobile-merged .hero-carousel__content {
+        min-height: 300px;
+    }
+    .hero-carousel--mobile-right .hero-carousel__viewport,
+    .hero-carousel--mobile-right .hero-carousel__card,
+    .hero-carousel--mobile-right .hero-carousel__content {
+        min-height: 220px;
     }
 
     /* Customer reviews */
@@ -1707,93 +1756,37 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 
-<!-- Hero banners: large apparel + stacked accessories -->
-@if(count($heroSlides) > 0)
+<!-- Hero banners: left (large) + right (small) carousels -->
+@if(count($leftHeroSlides) > 0 || count($rightHeroSlides) > 0)
 <section class="bg-white pt-4 sm:pt-5 pb-0" data-home-edit-section="hero" data-home-edit-label="Hero">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-        {{-- Mobile: fade autoplay slideshow --}}
-        <div class="hero-carousel lg:hidden" id="hero-carousel" data-autoplay-ms="{{ $heroAutoplayMs }}">
-            <div class="hero-carousel__viewport" id="heroCarouselViewport">
-                @foreach ($heroSlides as $index => $slide)
-                    <div class="hero-carousel__slide {{ $index === 0 ? 'is-active' : '' }}" data-hero-index="{{ $index }}">
-                        <a href="{{ $slide['url'] }}" class="hero-carousel__card group">
-                            <img src="{{ $slide['image'] }}" alt="{{ $slide['alt'] }}" loading="{{ $index === 0 ? 'eager' : 'lazy' }}"
-                                 @if($index < 3) data-home-preview="hero.slides.{{ $index }}.image" @endif>
-                            <div class="hero-carousel__overlay" style="background: linear-gradient(135deg, {{ $slide['overlay_from'] ?? 'rgba(0,0,0,0.45)' }}, {{ $slide['overlay_to'] ?? 'rgba(0,0,0,0.65)' }});"
-                                 data-home-preview="hero.slides.{{ $index }}.overlay"></div>
-                            <div class="hero-carousel__content">
-                                @if (!empty($slide['eyebrow']))
-                                    <p class="text-white/80 text-sm font-semibold tracking-widest uppercase mb-2 inline-flex items-center gap-2" data-home-preview="hero.slides.{{ $index }}.eyebrow">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path d="M9.5 3.2l1.15 3.1 3.15 1.15-3.15 1.15-1.15 3.1-1.15-3.1L5.2 7.45l3.15-1.15L9.5 3.2zM17.4 9.2l.85 2.2 2.25.85-2.25.85-.85 2.2-.85-2.2-2.25-.85 2.25-.85.85-2.2zM13.8 14.6l.7 1.85 1.9.7-1.9.7-.7 1.85-.7-1.85-1.9-.7 1.9-.7.7-1.85z"/>
-                                        </svg>
-                                        {{ $slide['eyebrow'] }}
-                                    </p>
-                                @endif
-                                <h2 class="hero-banner-title {{ $slide['title_size'] ?? 'text-2xl sm:text-3xl' }} text-white leading-tight" data-home-preview="hero.slides.{{ $index }}.title_html">{!! $slide['title_html'] !!}</h2>
-                                @if (!empty($slide['description']))
-                                    <p class="mt-3 text-white/90 max-w-md text-sm sm:text-base" data-home-preview="hero.slides.{{ $index }}.description">{{ $slide['description'] }}</p>
-                                @endif
-                                <span class="btn-cta mt-5 w-fit {{ empty($slide['description']) ? 'text-sm px-5 py-2' : '' }}">{{ $slide['button_label'] ?? 'Shop Now' }}</span>
-                            </div>
-                        </a>
-                    </div>
-                @endforeach
-                <div class="hero-carousel__progress" aria-hidden="true">
-                    <span class="hero-carousel__progress-bar" id="heroCarouselProgress"></span>
-                </div>
-            </div>
-            <div class="hero-carousel__dots" id="heroCarouselDots" role="tablist" aria-label="Hero banners">
-                @foreach ($heroSlides as $index => $slide)
-                    <button type="button"
-                            class="hero-carousel__dot {{ $index === 0 ? 'is-active' : '' }}"
-                            data-hero-dot="{{ $index }}"
-                            onclick="goToHeroSlide({{ $index }}, true)"
-                            aria-label="Go to {{ $slide['alt'] }}"
-                            aria-selected="{{ $index === 0 ? 'true' : 'false' }}"></button>
-                @endforeach
-            </div>
+        {{-- Mobile: one carousel (left slides then right) --}}
+        <div class="lg:hidden">
+            @include('home.partials.hero-carousel', [
+                'slides' => $mobileHeroSlides,
+                'side' => 'merged',
+                'variant' => 'mobile',
+                'autoplayMs' => $heroAutoplayMs,
+            ])
         </div>
 
-        {{-- Desktop: asymmetric grid --}}
+        {{-- Desktop: asymmetric dual carousels --}}
         <div class="hidden lg:grid grid-cols-3 gap-3 sm:gap-4 lg:h-[440px]">
-            @if($mainHeroSlide)
-                <a href="{{ $mainHeroSlide['url'] }}" class="relative overflow-hidden rounded-2xl lg:col-span-2 min-h-[240px] lg:min-h-0 group">
-                    <img src="{{ $mainHeroSlide['image'] }}"
-                         alt="{{ $mainHeroSlide['alt'] }}"
-                         class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                    <div class="absolute inset-0" style="background: linear-gradient(135deg, {{ $mainHeroSlide['overlay_from'] ?? 'rgba(0,0,0,0.45)' }}, {{ $mainHeroSlide['overlay_to'] ?? 'rgba(0,0,0,0.65)' }});"></div>
-                    <div class="relative z-10 h-full flex flex-col justify-end p-6 sm:p-8 lg:p-10">
-                        @if(!empty($mainHeroSlide['eyebrow']))
-                            <p class="text-white/80 text-sm font-semibold tracking-widest uppercase mb-2 inline-flex items-center gap-2">
-                                <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path d="M9.5 3.2l1.15 3.1 3.15 1.15-3.15 1.15-1.15 3.1-1.15-3.1L5.2 7.45l3.15-1.15L9.5 3.2z"/>
-                                </svg>
-                                {{ $mainHeroSlide['eyebrow'] }}
-                            </p>
-                        @endif
-                        <h1 class="hero-banner-title text-3xl sm:text-5xl lg:text-6xl text-white leading-tight">{!! $mainHeroSlide['title_html'] !!}</h1>
-                        @if(!empty($mainHeroSlide['description']))
-                            <p class="mt-3 text-white/90 max-w-md text-sm sm:text-base">{{ $mainHeroSlide['description'] }}</p>
-                        @endif
-                        <span class="btn-cta mt-5 w-fit">{{ $mainHeroSlide['button_label'] ?? 'Shop Now' }}</span>
-                    </div>
-                </a>
-            @endif
-
-            <div class="grid grid-rows-2 gap-3 sm:gap-4 min-h-[320px] lg:min-h-0">
-                @foreach($sideHeroSlides as $slide)
-                    <a href="{{ $slide['url'] }}" class="relative overflow-hidden rounded-2xl group">
-                        <img src="{{ $slide['image'] }}"
-                             alt="{{ $slide['alt'] }}"
-                             class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                        <div class="absolute inset-0" style="background: linear-gradient(135deg, {{ $slide['overlay_from'] ?? 'rgba(0,0,0,0.45)' }}, {{ $slide['overlay_to'] ?? 'rgba(0,0,0,0.65)' }});"></div>
-                        <div class="relative z-10 h-full flex flex-col justify-end p-5">
-                            <h2 class="hero-banner-title text-2xl sm:text-3xl text-white">{!! $slide['title_html'] !!}</h2>
-                            <span class="btn-cta mt-3 w-fit text-sm px-5 py-2">{{ $slide['button_label'] ?? 'Shop Now' }}</span>
-                        </div>
-                    </a>
-                @endforeach
+            <div class="lg:col-span-2 min-h-0 h-full">
+                @include('home.partials.hero-carousel', [
+                    'slides' => $leftHeroSlides,
+                    'side' => 'left',
+                    'variant' => 'desktop',
+                    'autoplayMs' => $heroAutoplayMs,
+                ])
+            </div>
+            <div class="min-h-0 h-full">
+                @include('home.partials.hero-carousel', [
+                    'slides' => $rightHeroSlides,
+                    'side' => 'right',
+                    'variant' => 'desktop',
+                    'autoplayMs' => $heroAutoplayMs,
+                ])
             </div>
         </div>
     </div>
@@ -2668,99 +2661,134 @@ document.addEventListener('DOMContentLoaded', function() {
         refreshPickAGiftCarousel();
     }
 
-    // Hero banners mobile fade slideshow
-    let heroActiveIndex = 0;
-    let heroAutoplayTimer = null;
-    let heroProgressTimer = null;
+    // Hero banners — independent left/right fade carousels
+    const heroCarouselControllers = [];
 
-    function getHeroAutoplayMs() {
-        const root = document.getElementById('hero-carousel');
-        return root ? parseInt(root.getAttribute('data-autoplay-ms') || '5000', 10) : 5000;
-    }
+    function createHeroCarouselController(root) {
+        if (!root || root.dataset.heroInit === '1') return null;
+        root.dataset.heroInit = '1';
 
-    function updateHeroCarouselState() {
-        const slides = document.querySelectorAll('.hero-carousel__slide');
-        const dots = document.querySelectorAll('.hero-carousel__dot');
-        if (!slides.length) return;
+        let activeIndex = 0;
+        let autoplayTimer = null;
+        const viewport = root.querySelector('[data-hero-viewport]');
+        const progressBar = root.querySelector('[data-hero-progress]');
+        const slides = () => root.querySelectorAll('.hero-carousel__slide');
+        const dots = () => root.querySelectorAll('[data-hero-dot]');
 
-        slides.forEach(function (slide, index) {
-            slide.classList.toggle('is-active', index === heroActiveIndex);
+        function getAutoplayMs() {
+            return parseInt(root.getAttribute('data-autoplay-ms') || '5000', 10);
+        }
+
+        function updateState() {
+            const slideNodes = slides();
+            const dotNodes = dots();
+            if (!slideNodes.length) return;
+
+            slideNodes.forEach(function (slide, index) {
+                slide.classList.toggle('is-active', index === activeIndex);
+            });
+
+            dotNodes.forEach(function (dot, index) {
+                const active = index === activeIndex;
+                dot.classList.toggle('is-active', active);
+                dot.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+        }
+
+        function resetProgressBar() {
+            if (!progressBar) return;
+            progressBar.style.transition = 'none';
+            progressBar.style.width = '0%';
+            void progressBar.offsetWidth;
+            progressBar.style.transition = 'width ' + getAutoplayMs() + 'ms linear';
+            progressBar.style.width = '100%';
+        }
+
+        function goTo(index, manual) {
+            const slideNodes = slides();
+            if (!slideNodes.length) return;
+
+            activeIndex = ((index % slideNodes.length) + slideNodes.length) % slideNodes.length;
+            updateState();
+            resetProgressBar();
+
+            if (manual) {
+                start();
+            }
+        }
+
+        function stop() {
+            if (autoplayTimer) {
+                clearInterval(autoplayTimer);
+                autoplayTimer = null;
+            }
+        }
+
+        function start() {
+            stop();
+            const slideNodes = slides();
+            if (slideNodes.length <= 1) return;
+
+            resetProgressBar();
+            autoplayTimer = setInterval(function () {
+                goTo(activeIndex + 1, false);
+            }, getAutoplayMs());
+        }
+
+        root.querySelectorAll('[data-hero-dot]').forEach(function (dot) {
+            dot.addEventListener('click', function () {
+                const index = parseInt(dot.getAttribute('data-hero-dot') || '0', 10);
+                goTo(index, true);
+            });
         });
 
-        dots.forEach(function (dot, index) {
-            const active = index === heroActiveIndex;
-            dot.classList.toggle('is-active', active);
-            dot.setAttribute('aria-selected', active ? 'true' : 'false');
-        });
-    }
-
-    function resetHeroProgressBar() {
-        const bar = document.getElementById('heroCarouselProgress');
-        if (!bar) return;
-
-        bar.style.transition = 'none';
-        bar.style.width = '0%';
-        void bar.offsetWidth;
-        bar.style.transition = 'width ' + getHeroAutoplayMs() + 'ms linear';
-        bar.style.width = '100%';
-    }
-
-    function goToHeroSlide(index, manual) {
-        const slides = document.querySelectorAll('.hero-carousel__slide');
-        if (!slides.length) return;
-
-        heroActiveIndex = ((index % slides.length) + slides.length) % slides.length;
-        updateHeroCarouselState();
-        resetHeroProgressBar();
-
-        if (manual) {
-            startHeroAutoplay();
+        if (viewport) {
+            viewport.addEventListener('mouseenter', stop);
+            viewport.addEventListener('mouseleave', start);
+            viewport.addEventListener('touchstart', stop, { passive: true });
+            viewport.addEventListener('touchend', function () {
+                setTimeout(start, 1200);
+            }, { passive: true });
         }
-    }
 
-    function startHeroAutoplay() {
-        stopHeroAutoplay();
-        const slides = document.querySelectorAll('.hero-carousel__slide');
-        if (slides.length <= 1) return;
+        updateState();
+        start();
 
-        resetHeroProgressBar();
-        heroAutoplayTimer = setInterval(function () {
-            goToHeroSlide(heroActiveIndex + 1, false);
-        }, getHeroAutoplayMs());
-    }
-
-    function stopHeroAutoplay() {
-        if (heroAutoplayTimer) {
-            clearInterval(heroAutoplayTimer);
-            heroAutoplayTimer = null;
-        }
+        return { root, goTo, start, stop, updateState };
     }
 
     function initHeroCarousel() {
-        const viewport = document.getElementById('heroCarouselViewport');
-        if (!viewport) return;
-
-        viewport.addEventListener('mouseenter', stopHeroAutoplay);
-        viewport.addEventListener('mouseleave', startHeroAutoplay);
-        viewport.addEventListener('touchstart', stopHeroAutoplay, { passive: true });
-        viewport.addEventListener('touchend', function () {
-            setTimeout(startHeroAutoplay, 1200);
-        }, { passive: true });
-
-        document.addEventListener('visibilitychange', function () {
-            if (document.hidden) {
-                stopHeroAutoplay();
-            } else {
-                startHeroAutoplay();
+        document.querySelectorAll('[data-hero-carousel]').forEach(function (root) {
+            // Avoid double-init when both mobile + desktop markup exist: only init visible ones initially,
+            // but keep all running — CSS hides with display none so both can autoplay fine.
+            const controller = createHeroCarouselController(root);
+            if (controller) {
+                heroCarouselControllers.push(controller);
             }
         });
 
-        updateHeroCarouselState();
-        startHeroAutoplay();
+        document.addEventListener('visibilitychange', function () {
+            heroCarouselControllers.forEach(function (controller) {
+                if (document.hidden) {
+                    controller.stop();
+                } else {
+                    controller.start();
+                }
+            });
+        });
     }
 
     function refreshHeroCarousel() {
-        updateHeroCarouselState();
+        heroCarouselControllers.forEach(function (controller) {
+            controller.updateState();
+        });
+    }
+
+    // Back-compat for any leftover callers
+    function goToHeroSlide(index, manual) {
+        if (heroCarouselControllers[0]) {
+            heroCarouselControllers[0].goTo(index, manual);
+        }
     }
 
     // Latest Collections mobile carousel
