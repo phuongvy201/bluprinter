@@ -1758,7 +1758,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Hero banners: left (large) + right (small) carousels -->
 @if(count($leftHeroSlides) > 0 || count($rightHeroSlides) > 0)
-<section class="bg-white pt-4 sm:pt-5 pb-0" data-home-edit-section="hero" data-home-edit-label="Hero">
+<section class="bg-white pt-4 sm:pt-5 pb-6 sm:pb-8" data-home-edit-section="hero" data-home-edit-label="Hero">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
         {{-- Mobile: one carousel (left slides then right) --}}
         <div class="lg:hidden">
@@ -1802,7 +1802,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 @if (($homeSections['pick_a_gift']['enabled'] ?? true) && ($pickGiftVisibleCount > 0 || ($homeEditMode ?? false)))
 <!-- Pick a Gift — circular gift slider -->
-<section class="pt-12 sm:pt-16 pb-8 sm:pb-10 border-t border-gray-200 overflow-x-hidden" style="background: {{ $homeSections['pick_a_gift']['background'] ?? '#ffffff' }};" aria-labelledby="pick-a-gift-heading" data-home-edit-section="pick_a_gift" data-home-edit-label="Pick a Gift">
+<section class="pt-12 pb-8 sm:pt-16 sm:pb-10 border-t border-gray-200 overflow-x-hidden" style="background: {{ $homeSections['pick_a_gift']['background'] ?? '#ffffff' }};" aria-labelledby="pick-a-gift-heading" data-home-edit-section="pick_a_gift" data-home-edit-label="Pick a Gift">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-w-0">
         <div class="section-heading scroll-reveal">
             <p class="section-heading__eyebrow" data-home-preview="sections.pick_a_gift.eyebrow">{{ $homeSections['pick_a_gift']['eyebrow'] ?? 'Gift ideas' }}</p>
