@@ -1802,7 +1802,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 @if (($homeSections['pick_a_gift']['enabled'] ?? true) && ($pickGiftVisibleCount > 0 || ($homeEditMode ?? false)))
 <!-- Pick a Gift — circular gift slider -->
-<section class="py-8 sm:py-10 border-t border-gray-200 overflow-x-hidden" style="background: {{ $homeSections['pick_a_gift']['background'] ?? '#ffffff' }};" aria-labelledby="pick-a-gift-heading" data-home-edit-section="pick_a_gift" data-home-edit-label="Pick a Gift">
+<section class="pt-12 sm:pt-16 pb-8 sm:pb-10 border-t border-gray-200 overflow-x-hidden" style="background: {{ $homeSections['pick_a_gift']['background'] ?? '#ffffff' }};" aria-labelledby="pick-a-gift-heading" data-home-edit-section="pick_a_gift" data-home-edit-label="Pick a Gift">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-w-0">
         <div class="section-heading scroll-reveal">
             <p class="section-heading__eyebrow" data-home-preview="sections.pick_a_gift.eyebrow">{{ $homeSections['pick_a_gift']['eyebrow'] ?? 'Gift ideas' }}</p>
