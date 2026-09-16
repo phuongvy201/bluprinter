@@ -1158,6 +1158,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     </script>
                 @endif
 
+                @include('products.partials.show-ai-redesign', [
+                    'product' => $product,
+                    'tryOnMedia' => $tryOnMedia,
+                    'firstMediaUrl' => $firstMediaUrl ?? ($tryOnMedia['image'] ?? ''),
+                ])
+
                 <div class="product-show-purchase__promo-divider" aria-hidden="true"></div>
                 @include('products.partials.show-volume-discounts', ['volumeDiscountTiers' => $volumeDiscountTiers])
                 @include('products.partials.show-customization', ['product' => $product])
@@ -2478,13 +2484,16 @@ window.buyNow = function buyNow() {
     
     const totalPriceValue = getCartUnitPriceWithCustomizations();
     const customizations = getSelectedCustomizations();
+    const aiRedesignImage = (customizations['AI Redesign'] && customizations['AI Redesign'].image)
+        ? customizations['AI Redesign'].image
+        : null;
 
     const productData = {
         id: {{ $product->id }},
         name: '{{ addslashes($product->name) }}',
         slug: '{{ $product->slug }}',
         price: totalPriceValue,
-        image: '@php
+        image: aiRedesignImage || '@php
             if ($media && count($media) > 0) {
                 if (is_string($media[0])) {
                     echo $media[0];
@@ -3798,6 +3807,9 @@ function addToCart() {
     
     const totalPriceValue = getCartUnitPriceWithCustomizations();
     const customizations = getSelectedCustomizations();
+    const aiRedesignImage = (customizations['AI Redesign'] && customizations['AI Redesign'].image)
+        ? customizations['AI Redesign'].image
+        : null;
     
     // Get current product data
     const productData = {
@@ -3805,7 +3817,7 @@ function addToCart() {
         name: '{{ addslashes($product->name) }}',
         slug: '{{ $product->slug }}',
         price: totalPriceValue,
-        image: '@php
+        image: aiRedesignImage || '@php
             if ($media && count($media) > 0) {
                 if (is_string($media[0])) {
                     echo $media[0];
@@ -4149,6 +4161,19 @@ function getSelectedCustomizations() {
             }
         }
     });
+
+    if (typeof window.getAiRedesignCustomization === 'function') {
+        const aiCustom = window.getAiRedesignCustomization();
+        if (aiCustom && aiCustom.image) {
+            customizations['AI Redesign'] = aiCustom;
+            customizations._ai = {
+                prompt: aiCustom.prompt || '',
+                design_url: aiCustom.image,
+                photo_url: aiCustom.photo_url || null,
+                source: 'ai_redesign',
+            };
+        }
+    }
     
     return customizations;
 }
@@ -6837,5 +6862,15 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 @endif
 
+@include('studio.partials.ai-progress')
+<script>
+    window.PDP_AI_ROUTES = {
+        upload: @json(route('studio.upload')),
+        redesign: @json(route('studio.product.redesign')),
+        timeout: {{ (int) (\App\Support\StudioAiSettings::resolved()['timeout'] ?? 90) }},
+    };
+</script>
+<script src="{{ asset('js/studio-ai-progress.js') }}?v={{ @filemtime(public_path('js/studio-ai-progress.js')) }}"></script>
+<script src="{{ asset('js/product-ai-redesign.js') }}?v={{ @filemtime(public_path('js/product-ai-redesign.js')) }}"></script>
 
 @endsection

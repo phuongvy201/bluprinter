@@ -835,6 +835,112 @@ class ProductController extends Controller
         }
     }
 
+    public function bulkAddToCollection(Request $request)
+    {
+        $request->validate([
+            'collection_id' => 'required|exists:collections,id',
+            'product_ids' => 'required|array|min:1',
+            'product_ids.*' => 'exists:products,id',
+        ]);
+
+        $user = auth()->user();
+        $collection = Collection::findOrFail($request->collection_id);
+
+        if (! $user->hasRole('admin') && (int) $collection->user_id !== (int) $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to modify this collection.',
+            ], 403);
+        }
+
+        $products = Product::whereIn('id', $request->product_ids)->get();
+        $payload = [];
+        $added = 0;
+        $skipped = 0;
+
+        foreach ($products as $product) {
+            if ($user->hasRole('admin') || (int) $product->user_id === (int) $user->id) {
+                $payload[(int) $product->id] = ['source' => 'manual'];
+                $added++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        if ($payload !== []) {
+            $collection->products()->syncWithoutDetaching($payload);
+        }
+
+        $message = $added > 0
+            ? "Added {$added} product(s) to \"{$collection->name}\"."
+            : 'No products were added. You may not have permission for the selected items.';
+
+        if ($skipped > 0) {
+            $message .= " {$skipped} skipped (no permission).";
+        }
+
+        return response()->json([
+            'success' => $added > 0,
+            'message' => $message,
+            'added' => $added,
+            'skipped' => $skipped,
+            'collection_name' => $collection->name,
+        ], $added > 0 ? 200 : 422);
+    }
+
+    public function bulkCreateFlashDeal(Request $request, \App\Services\FlashDealService $flashDealService)
+    {
+        if (! auth()->user()->hasRole('admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only admins can create flash deals from this page.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'product_ids' => ['required', 'array', 'min:1'],
+            'product_ids.*' => ['integer', 'exists:products,id'],
+            'discount_percent' => ['required', 'integer', 'min:1', 'max:90'],
+            'duration' => ['nullable', 'string', 'in:2h,6h,12h,1d,7d,custom'],
+            'starts_at' => ['nullable', 'date'],
+            'ends_at' => ['nullable', 'date'],
+        ]);
+
+        $flashController = app(\App\Http\Controllers\Admin\FlashDealController::class);
+        $startsAt = ! empty($validated['starts_at'])
+            ? \Carbon\Carbon::parse($validated['starts_at'])
+            : now();
+        $duration = $validated['duration'] ?? '1d';
+        $endsAt = $flashController->resolveEndsAt($startsAt, $duration, $validated['ends_at'] ?? null);
+
+        if ($endsAt->lte($startsAt)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Thời gian kết thúc phải sau thời gian bắt đầu.',
+            ], 422);
+        }
+
+        $result = $flashController->createManualDeals(
+            $flashDealService,
+            $validated['product_ids'],
+            (int) $validated['discount_percent'],
+            $startsAt,
+            $endsAt
+        );
+
+        $message = "Đã tạo {$result['created']} flash sale.";
+        if ($result['skipped'] > 0) {
+            $message .= " Bỏ qua {$result['skipped']} SP.";
+        }
+
+        return response()->json([
+            'success' => $result['created'] > 0,
+            'message' => $message,
+            'created' => $result['created'],
+            'skipped' => $result['skipped'],
+        ], $result['created'] > 0 ? 200 : 422);
+    }
+
     /**
      * Generate a unique slug for the product
      * 

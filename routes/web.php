@@ -80,6 +80,7 @@ Route::get('/create-your-own/media', [StudioController::class, 'media'])->middle
 Route::post('/create-your-own/upload', [StudioController::class, 'upload'])->name('studio.upload');
 Route::post('/create-your-own/ai/improve', [StudioController::class, 'improvePrompt'])->middleware('throttle:studio-ai-improve')->name('studio.ai.improve');
 Route::post('/create-your-own/ai/generate', [StudioController::class, 'generate'])->middleware('throttle:studio-ai-generate')->name('studio.ai.generate');
+Route::post('/products/ai/redesign', [StudioController::class, 'redesignProduct'])->middleware('throttle:studio-ai-generate')->name('studio.product.redesign');
 Route::post('/virtual-try-on/generate', [StudioController::class, 'tryOnGenerate'])->middleware('throttle:studio-ai-try-on')->name('studio.try-on.generate');
 Route::post('/products/calculate-shipping', [ProductController::class, 'calculateShippingCost'])->name('products.calculate-shipping');
 Route::get('/shops/{shop}', [App\Http\Controllers\ShopController::class, 'show'])->name('shops.show');
@@ -709,6 +710,8 @@ Route::middleware('auth')->group(function () {
         Route::get('products/preview-gmc-data', [AdminProductController::class, 'previewGMCData'])->name('products.preview-gmc-data');
         Route::post('products/feed-to-gmc', [AdminProductController::class, 'feedToGMC'])->name('products.feed-to-gmc');
         Route::post('products/bulk-delete', [AdminProductController::class, 'bulkDelete'])->name('products.bulk-delete');
+        Route::post('products/bulk-add-to-collection', [AdminProductController::class, 'bulkAddToCollection'])->name('products.bulk-add-to-collection');
+        Route::post('products/bulk-create-flash-deal', [AdminProductController::class, 'bulkCreateFlashDeal'])->name('products.bulk-create-flash-deal');
         Route::post('products/{product}/duplicate', [AdminProductController::class, 'duplicate'])->name('products.duplicate');
         Route::match(['get', 'post'], 'products/export/meta', [AdminProductController::class, 'exportToMeta'])->name('products.export.meta');
         Route::match(['get', 'post'], 'products/export/tiktok', [AdminProductController::class, 'exportToTikTok'])->name('products.export.tiktok');

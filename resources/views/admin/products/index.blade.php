@@ -20,6 +20,28 @@
                 </svg>
                 Delete Selected (<span id="selectedCount">0</span>)
             </button>
+
+            @if($collections->isNotEmpty())
+            <button id="bulkAddToCollectionBtn" onclick="openBulkCollectionModal()"
+                    style="display: none;"
+                    class="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors shadow-md">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                </svg>
+                Add to Collection (<span id="collectionSelectedCount">0</span>)
+            </button>
+            @endif
+
+            @if(auth()->user()->hasRole('admin'))
+            <button id="bulkFlashDealBtn" onclick="openBulkFlashDealModal()"
+                    style="display: none;"
+                    class="inline-flex items-center px-4 py-2 bg-[#e2150c] text-white text-sm font-medium rounded-lg hover:bg-[#c0120a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors shadow-md">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                Flash Deal (<span id="flashDealSelectedCount">0</span>)
+            </button>
+            @endif
             
             <!-- Feed to GMC Button (Hidden by default) -->
             <button id="feedToGMCBtn" onclick="feedToGMC()" 
@@ -716,6 +738,97 @@
     @endif
 </div>
 
+<!-- Bulk Add to Collection Modal -->
+@if($collections->isNotEmpty())
+<div id="bulkCollectionModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-50 transition-opacity">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full transform transition-all">
+            <div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-t-2xl p-6">
+                <h3 class="text-xl font-bold text-white">Add to Collection</h3>
+                <p class="text-purple-100 text-sm mt-1">Attach selected products to a collection</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-600">
+                    <span id="bulkCollectionProductCount" class="font-semibold text-gray-900">0</span> product(s) selected
+                </p>
+                <div>
+                    <label for="bulkCollectionSelect" class="block text-sm font-semibold text-gray-700 mb-2">Collection</label>
+                    <select id="bulkCollectionSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <option value="">Choose a collection…</option>
+                        @foreach($collections as $collection)
+                            <option value="{{ $collection->id }}">{{ $collection->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <p id="bulkCollectionError" class="text-sm text-red-600 hidden"></p>
+            </div>
+            <div class="px-6 pb-6 flex justify-end gap-3">
+                <button type="button" onclick="closeBulkCollectionModal()" class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition">
+                    Cancel
+                </button>
+                <button type="button" onclick="submitBulkAddToCollection()" id="bulkCollectionSubmitBtn" class="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition">
+                    Add to Collection
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
+@if(auth()->user()->hasRole('admin'))
+<div id="bulkFlashDealModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-50 transition-opacity">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full transform transition-all">
+            <div class="bg-gradient-to-r from-[#e2150c] to-[#c0120a] rounded-t-2xl p-6">
+                <h3 class="text-xl font-bold text-white">Tạo Flash Deal</h3>
+                <p class="text-red-100 text-sm mt-1">Áp flash sale cho sản phẩm đã chọn</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-600">
+                    <span id="bulkFlashDealProductCount" class="font-semibold text-gray-900">0</span> product(s) selected
+                </p>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">% giảm</label>
+                    <input type="number" id="bulkFlashDealDiscount" min="1" max="90" value="{{ (int) config('flash_deal.default_discount_percent', 20) }}"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Thời lượng</label>
+                    <div class="flex flex-wrap gap-2" id="bulkFlashDealDurations">
+                        @foreach (['2h' => '2 giờ', '6h' => '6 giờ', '12h' => '12 giờ', '1d' => '1 ngày', '7d' => '1 tuần', 'custom' => 'Tùy chọn'] as $val => $lab)
+                            <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 bg-gray-50 text-sm cursor-pointer has-[:checked]:border-[#e2150c] has-[:checked]:bg-red-50 has-[:checked]:text-[#e2150c] has-[:checked]:font-semibold">
+                                <input type="radio" name="bulk_fd_duration" value="{{ $val }}" class="sr-only" {{ $val === '1d' ? 'checked' : '' }} onchange="syncBulkFlashDealEnds()">
+                                {{ $lab }}
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Bắt đầu</label>
+                        <input type="datetime-local" id="bulkFlashDealStarts" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        <p class="text-xs text-gray-400 mt-1">Trống = ngay bây giờ</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Kết thúc</label>
+                        <input type="datetime-local" id="bulkFlashDealEnds" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    </div>
+                </div>
+                <p id="bulkFlashDealError" class="text-sm text-red-600 hidden"></p>
+            </div>
+            <div class="px-6 pb-6 flex justify-end gap-3">
+                <button type="button" onclick="closeBulkFlashDealModal()" class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition">
+                    Cancel
+                </button>
+                <button type="button" onclick="submitBulkFlashDeal()" id="bulkFlashDealSubmitBtn" class="px-4 py-2 bg-[#e2150c] text-white font-semibold rounded-lg hover:bg-[#c0120a] transition">
+                    Tạo Flash Deal
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 <!-- Bulk Delete Confirmation Modal -->
 <div id="bulkDeleteModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-50 transition-opacity">
     <div class="flex items-center justify-center min-h-screen p-4">
@@ -891,11 +1004,15 @@ function toggleSelectAll(checkbox) {
 function updateBulkDeleteButton() {
     const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const bulkAddToCollectionBtn = document.getElementById('bulkAddToCollectionBtn');
+    const bulkFlashDealBtn = document.getElementById('bulkFlashDealBtn');
     const feedToGMCBtn = document.getElementById('feedToGMCBtn');
     const exportToMetaBtn = document.getElementById('exportToMetaBtn');
     const exportToTikTokBtn = document.getElementById('exportToTikTokBtn');
     const exportToPinterestBtn = document.getElementById('exportToPinterestBtn');
     const selectedCount = document.getElementById('selectedCount');
+    const collectionSelectedCount = document.getElementById('collectionSelectedCount');
+    const flashDealSelectedCount = document.getElementById('flashDealSelectedCount');
     const gmcSelectedCount = document.getElementById('gmcSelectedCount');
     const metaSelectedCount = document.getElementById('metaSelectedCount');
     const tiktokSelectedCount = document.getElementById('tiktokSelectedCount');
@@ -904,17 +1021,23 @@ function updateBulkDeleteButton() {
     
     if (checkedBoxes.length > 0) {
         bulkDeleteBtn.style.display = 'inline-flex';
+        if (bulkAddToCollectionBtn) bulkAddToCollectionBtn.style.display = 'inline-flex';
+        if (bulkFlashDealBtn) bulkFlashDealBtn.style.display = 'inline-flex';
         feedToGMCBtn.style.display = 'inline-flex';
         exportToMetaBtn.style.display = 'inline-flex';
         exportToTikTokBtn.style.display = 'inline-flex';
         exportToPinterestBtn.style.display = 'inline-flex';
         selectedCount.textContent = checkedBoxes.length;
+        if (collectionSelectedCount) collectionSelectedCount.textContent = checkedBoxes.length;
+        if (flashDealSelectedCount) flashDealSelectedCount.textContent = checkedBoxes.length;
         gmcSelectedCount.textContent = checkedBoxes.length;
         metaSelectedCount.textContent = checkedBoxes.length;
         tiktokSelectedCount.textContent = checkedBoxes.length;
         pinterestSelectedCount.textContent = checkedBoxes.length;
     } else {
         bulkDeleteBtn.style.display = 'none';
+        if (bulkAddToCollectionBtn) bulkAddToCollectionBtn.style.display = 'none';
+        if (bulkFlashDealBtn) bulkFlashDealBtn.style.display = 'none';
         feedToGMCBtn.style.display = 'none';
         exportToMetaBtn.style.display = 'none';
         exportToTikTokBtn.style.display = 'none';
@@ -924,6 +1047,161 @@ function updateBulkDeleteButton() {
     // Update "Select All" checkbox state
     const allCheckboxes = document.querySelectorAll('.product-checkbox');
     selectAllCheckbox.checked = allCheckboxes.length > 0 && checkedBoxes.length === allCheckboxes.length;
+}
+
+function openBulkCollectionModal() {
+    const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+    if (!checkedBoxes.length) return;
+
+    document.getElementById('bulkCollectionProductCount').textContent = checkedBoxes.length;
+    document.getElementById('bulkCollectionError').classList.add('hidden');
+    document.getElementById('bulkCollectionError').textContent = '';
+    document.getElementById('bulkCollectionModal').classList.remove('hidden');
+}
+
+function closeBulkCollectionModal() {
+    const modal = document.getElementById('bulkCollectionModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function submitBulkAddToCollection() {
+    const collectionId = document.getElementById('bulkCollectionSelect').value;
+    const errorEl = document.getElementById('bulkCollectionError');
+    const submitBtn = document.getElementById('bulkCollectionSubmitBtn');
+    const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+    const productIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value, 10));
+
+    errorEl.classList.add('hidden');
+    errorEl.textContent = '';
+
+    if (!collectionId) {
+        errorEl.textContent = 'Please choose a collection.';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Adding…';
+
+    try {
+        const response = await fetch('{{ route("admin.products.bulk-add-to-collection") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                collection_id: parseInt(collectionId, 10),
+                product_ids: productIds,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            errorEl.textContent = data.message || 'Could not add products to collection.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        closeBulkCollectionModal();
+        alert(data.message);
+    } catch (e) {
+        errorEl.textContent = 'Network error. Please try again.';
+        errorEl.classList.remove('hidden');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add to Collection';
+    }
+}
+
+function syncBulkFlashDealEnds() {
+    const selected = document.querySelector('input[name="bulk_fd_duration"]:checked');
+    const ends = document.getElementById('bulkFlashDealEnds');
+    if (!ends) return;
+    const isCustom = !selected || selected.value === 'custom';
+    ends.disabled = !isCustom;
+    ends.classList.toggle('opacity-50', !isCustom);
+    if (!isCustom) ends.required = false;
+}
+
+function openBulkFlashDealModal() {
+    const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+    if (!checkedBoxes.length) return;
+    document.getElementById('bulkFlashDealProductCount').textContent = checkedBoxes.length;
+    document.getElementById('bulkFlashDealError').classList.add('hidden');
+    document.getElementById('bulkFlashDealError').textContent = '';
+    syncBulkFlashDealEnds();
+    document.getElementById('bulkFlashDealModal').classList.remove('hidden');
+}
+
+function closeBulkFlashDealModal() {
+    const modal = document.getElementById('bulkFlashDealModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function submitBulkFlashDeal() {
+    const errorEl = document.getElementById('bulkFlashDealError');
+    const submitBtn = document.getElementById('bulkFlashDealSubmitBtn');
+    const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+    const productIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value, 10));
+    const durationEl = document.querySelector('input[name="bulk_fd_duration"]:checked');
+    const duration = durationEl ? durationEl.value : '1d';
+    const discount = parseInt(document.getElementById('bulkFlashDealDiscount').value, 10);
+    const startsAt = document.getElementById('bulkFlashDealStarts').value || null;
+    const endsAt = document.getElementById('bulkFlashDealEnds').value || null;
+
+    errorEl.classList.add('hidden');
+    errorEl.textContent = '';
+
+    if (!discount || discount < 1 || discount > 90) {
+        errorEl.textContent = 'Nhập % giảm từ 1–90.';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+    if (duration === 'custom' && !endsAt) {
+        errorEl.textContent = 'Chọn thời gian kết thúc khi dùng “Tùy chọn”.';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Đang tạo…';
+
+    try {
+        const response = await fetch('{{ route("admin.products.bulk-create-flash-deal") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                product_ids: productIds,
+                discount_percent: discount,
+                duration: duration,
+                starts_at: startsAt,
+                ends_at: endsAt,
+            }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            errorEl.textContent = data.message || 'Không tạo được flash deal.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        closeBulkFlashDealModal();
+        alert(data.message);
+    } catch (e) {
+        errorEl.textContent = 'Network error. Please try again.';
+        errorEl.classList.remove('hidden');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Tạo Flash Deal';
+    }
 }
 
 function confirmBulkDelete() {

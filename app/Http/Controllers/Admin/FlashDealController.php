@@ -36,10 +36,15 @@ class FlashDealController extends Controller
 
         $products = Product::query()
             ->availableForDisplay()
-            ->with('shop:id,shop_name')
+            ->with(['shop:id,shop_name', 'template:id,category_id,media', 'template.category:id,name'])
             ->orderByDesc('id')
             ->limit(400)
-            ->get(['id', 'name', 'sku', 'price', 'shop_id']);
+            ->get(['id', 'name', 'sku', 'price', 'shop_id', 'template_id', 'media']);
+
+        $shops = \App\Models\Shop::query()
+            ->where('shop_status', 'active')
+            ->orderBy('shop_name')
+            ->get(['id', 'shop_name']);
 
         return view('admin.flash-deals.index', compact(
             'defaults',
@@ -49,6 +54,7 @@ class FlashDealController extends Controller
             'templates',
             'categories',
             'products',
+            'shops',
         ));
     }
 
@@ -58,14 +64,17 @@ class FlashDealController extends Controller
             'product_ids' => ['required', 'array', 'min:1'],
             'product_ids.*' => ['integer', 'exists:products,id'],
             'discount_percent' => ['required', 'integer', 'min:1', 'max:90'],
+            'duration' => ['nullable', 'string', 'in:2h,6h,12h,1d,7d,custom'],
             'starts_at' => ['nullable', 'date'],
-            'ends_at' => ['required', 'date'],
+            'ends_at' => ['nullable', 'date'],
         ]);
 
-        $startsAt = !empty($validated['starts_at'])
+        $startsAt = ! empty($validated['starts_at'])
             ? Carbon::parse($validated['starts_at'])
             : now();
-        $endsAt = Carbon::parse($validated['ends_at']);
+
+        $duration = $validated['duration'] ?? 'custom';
+        $endsAt = $this->resolveEndsAt($startsAt, $duration, $validated['ends_at'] ?? null);
 
         if ($endsAt->lte($startsAt)) {
             return back()->withInput()->withErrors([
@@ -73,12 +82,39 @@ class FlashDealController extends Controller
             ]);
         }
 
+        $result = $this->createManualDeals(
+            $flashDealService,
+            $validated['product_ids'],
+            (int) $validated['discount_percent'],
+            $startsAt,
+            $endsAt
+        );
+
+        $message = "Đã tạo {$result['created']} flash sale thủ công.";
+        if ($result['skipped'] > 0) {
+            $message .= " Bỏ qua {$result['skipped']} SP (giá không hợp lệ / % giảm thấp hơn tối thiểu / bị chặn bởi shop).";
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * @param  array<int, int|string>  $productIds
+     * @return array{created: int, skipped: int}
+     */
+    public function createManualDeals(
+        FlashDealService $flashDealService,
+        array $productIds,
+        int $discountPercent,
+        Carbon $startsAt,
+        Carbon $endsAt
+    ): array {
         $created = 0;
         $skipped = 0;
 
-        foreach ($validated['product_ids'] as $productId) {
+        foreach ($productIds as $productId) {
             $product = Product::with(['shop', 'template'])->find($productId);
-            if (!$product) {
+            if (! $product) {
                 $skipped++;
                 continue;
             }
@@ -88,7 +124,7 @@ class FlashDealController extends Controller
                 $original = (float) ($product->template->base_price ?? 0);
             }
 
-            $salePrice = $flashDealService->salePriceFromDiscount($original, (int) $validated['discount_percent']);
+            $salePrice = $flashDealService->salePriceFromDiscount($original, $discountPercent);
             $deal = $flashDealService->activateDeal(
                 $product,
                 $salePrice,
@@ -104,12 +140,21 @@ class FlashDealController extends Controller
             }
         }
 
-        $message = "Đã tạo {$created} flash sale thủ công.";
-        if ($skipped > 0) {
-            $message .= " Bỏ qua {$skipped} SP (giá không hợp lệ / % giảm thấp hơn tối thiểu / bị chặn bởi shop).";
-        }
+        return compact('created', 'skipped');
+    }
 
-        return back()->with('success', $message);
+    public function resolveEndsAt(Carbon $startsAt, string $duration, mixed $endsAtInput): Carbon
+    {
+        return match ($duration) {
+            '2h' => $startsAt->copy()->addHours(2),
+            '6h' => $startsAt->copy()->addHours(6),
+            '12h' => $startsAt->copy()->addHours(12),
+            '1d' => $startsAt->copy()->addDay(),
+            '7d' => $startsAt->copy()->addDays(7),
+            default => ! empty($endsAtInput)
+                ? Carbon::parse($endsAtInput)
+                : $startsAt->copy()->addDay(),
+        };
     }
 
     public function updateSettings(Request $request): RedirectResponse
@@ -167,8 +212,8 @@ class FlashDealController extends Controller
         };
 
         $goldenHours = collect(explode(',', (string) ($validated['golden_hours'] ?? '')))
-            ->map(fn ($h) => (int) trim($h))
-            ->filter(fn ($h) => $h >= 0 && $h <= 23)
+            ->map(fn($h) => (int) trim($h))
+            ->filter(fn($h) => $h >= 0 && $h <= 23)
             ->values()
             ->all();
 
@@ -201,7 +246,7 @@ class FlashDealController extends Controller
             'discount_percent' => ['required', 'integer', 'min:1', 'max:90'],
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i'],
-            'recurrence' => ['required', 'in:daily,weekly'],
+            'recurrence' => ['required', 'in:hourly,daily,weekly'],
             'days_of_week' => ['nullable', 'array'],
             'days_of_week.*' => ['integer', 'min:0', 'max:6'],
             'max_products' => ['required', 'integer', 'min:1', 'max:50'],

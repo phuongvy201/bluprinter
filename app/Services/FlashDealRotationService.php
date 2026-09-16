@@ -109,7 +109,7 @@ class FlashDealRotationService
         return FlashDealTemplate::query()
             ->where('is_active', true)
             ->get()
-            ->filter(fn (FlashDealTemplate $t) => $t->appliesToday());
+            ->filter(fn(FlashDealTemplate $t) => $t->appliesToday());
     }
 
     protected function activeRules(): Collection
@@ -125,8 +125,9 @@ class FlashDealRotationService
         $startsAt = $this->timeToday($template->start_time);
         $endsAt = $this->timeToday($template->end_time);
 
+        // Overnight window (e.g. 22:00 → 02:00) or same-time fallback
         if ($endsAt->lessThanOrEqualTo($startsAt)) {
-            $endsAt = $startsAt->copy()->addHours(4);
+            $endsAt = $endsAt->copy()->addDay();
         }
 
         if ($endsAt->lessThanOrEqualTo(now())) {
@@ -135,9 +136,9 @@ class FlashDealRotationService
 
         $query = Product::query()
             ->availableForDisplay()
-            ->when($template->shop_id, fn ($q) => $q->where('shop_id', $template->shop_id))
+            ->when($template->shop_id, fn($q) => $q->where('shop_id', $template->shop_id))
             ->when($template->category_id, function ($q) use ($template) {
-                $q->whereHas('template', fn ($tq) => $tq->where('category_id', $template->category_id));
+                $q->whereHas('template', fn($tq) => $tq->where('category_id', $template->category_id));
             })
             ->whereNotIn('id', $usedProductIds)
             ->with(['template', 'shop'])
@@ -329,7 +330,7 @@ class FlashDealRotationService
             ->whereNotIn('id', $usedProductIds)
             ->where(function ($q) {
                 $q->where('flash_deal_auto_enroll', true)
-                    ->orWhereHas('shop', fn ($sq) => $sq->where('flash_deal_auto_enroll', true));
+                    ->orWhereHas('shop', fn($sq) => $sq->where('flash_deal_auto_enroll', true));
             })
             ->where('products.updated_at', '<=', now()->subDays(14))
             ->with(['template', 'shop'])

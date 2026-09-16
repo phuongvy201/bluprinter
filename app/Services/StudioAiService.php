@@ -119,6 +119,84 @@ class StudioAiService
     }
 
     /**
+     * Redesign the printed artwork on an existing product mockup (PDP AI Custom).
+     *
+     * @return array{url: string, prompt: string}
+     */
+    public function redesignProduct(
+        string $productImageUrl,
+        string $prompt,
+        ?string $referencePhotoUrl = null,
+        string $productName = '',
+    ): array {
+        $this->assertAvailable();
+
+        $productImageUrl = $this->normalizeUrls([$productImageUrl])[0] ?? '';
+        if ($productImageUrl === '') {
+            throw new RuntimeException('Product mockup image is missing.');
+        }
+
+        $userPrompt = trim($prompt);
+        $photoUrl = $referencePhotoUrl
+            ? ($this->normalizeUrls([$referencePhotoUrl])[0] ?? '')
+            : '';
+
+        if ($userPrompt === '' && $photoUrl === '') {
+            throw new RuntimeException('Describe the redesign you want, or add a reference photo.');
+        }
+
+        $label = trim($productName);
+        $productBit = $label !== '' ? ' "'.$label.'"' : '';
+        $finalPrompt = 'Redesign the printed graphic on this product mockup'.$productBit
+            .' while keeping the same garment, cut, folds, lighting, camera angle, and overall product photo composition. '
+            .'Replace only the artwork/print area with a new design. '
+            .'Output a realistic product photo of the same item with the new print applied.';
+
+        if ($userPrompt !== '') {
+            $finalPrompt .= ' Customer request: '.$userPrompt.'.';
+        }
+
+        $references = [$productImageUrl];
+        if ($photoUrl !== '') {
+            $references[] = $photoUrl;
+            $finalPrompt .= ' Use the attached customer photo as a subject/reference for the new graphic (face, likeness, style, or motif as appropriate). Integrate it artistically into the print — do not leave it as a raw photo dump unless the prompt asks for that.';
+        }
+
+        $suffix = trim((string) (StudioAiSettings::resolved()['design_suffix'] ?? ''));
+        if ($suffix !== '') {
+            $finalPrompt .= ' '.$suffix;
+        }
+
+        if ($this->supportsImageEdits()) {
+            $response = $this->requestImageEdits($this->imagePayload($finalPrompt, 1), $references);
+            if ($response->successful()) {
+                $items = $this->storeGeneratedImages($response->json(), $finalPrompt);
+                if ($items !== []) {
+                    return $items[0];
+                }
+            }
+
+            Log::warning('Studio AI product redesign edits failed; falling back to generate', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+        }
+
+        // Fallback: generate flat art with product + photo as references
+        $designs = $this->generateDesigns(
+            $userPrompt !== '' ? $userPrompt : 'Create a chest graphic for this product based on the references.',
+            $references,
+            1
+        );
+
+        if ($designs === []) {
+            throw new RuntimeException('Could not redesign this product. Please try another prompt or photo.');
+        }
+
+        return $designs[0];
+    }
+
+    /**
      * Photorealistic virtual try-on from a customer photo and a product image.
      *
      * @return array{url: string, prompt: string}

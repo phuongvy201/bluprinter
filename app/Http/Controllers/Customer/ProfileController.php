@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Support\S3Media;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 
 class ProfileController extends Controller
@@ -56,45 +56,34 @@ class ProfileController extends Controller
             'country' => 'nullable|string|max:100',
         ]);
 
-        // Handle avatar upload to AWS S3 (optimized)
         if ($request->hasFile('avatar')) {
             $avatar = $request->file('avatar');
 
+            if (! $avatar->isValid()) {
+                return back()
+                    ->withInput()
+                    ->withErrors(['avatar' => 'Invalid image file. Please try another photo (JPG/PNG/WEBP, max 5MB).']);
+            }
+
             try {
-                // Validate file
-                if ($avatar->isValid()) {
-                    // Delete old avatar from S3 asynchronously (don't wait for it)
-                    if ($user->avatar) {
-                        try {
-                            $oldFileName = basename(parse_url($user->avatar, PHP_URL_PATH));
-                            Storage::disk('s3')->delete('avatars/' . $oldFileName);
-                        } catch (\Exception $e) {
-                            // Ignore deletion errors
-                        }
-                    }
-
-                    // Generate unique filename
-                    $fileName = time() . '_' . Str::random(10) . '.' . $avatar->getClientOriginalExtension();
-
-                    // Upload to AWS S3 with optimized settings
-                    $filePath = Storage::disk('s3')->putFileAs(
-                        'avatars',
-                        $avatar,
-                        $fileName,
-                        [
-                            'visibility' => 'public',
-                            'CacheControl' => 'max-age=31536000',
-                        ]
-                    );
-
-                    if ($filePath) {
-                        // Create the correct S3 URL format (giống ProductController)
-                        $validated['avatar'] = 'https://s3.us-east-1.amazonaws.com/image.bluprinter/' . $filePath;
-                    }
+                $uploadedUrl = S3Media::store($avatar, 'avatars');
+                if (! $uploadedUrl) {
+                    return back()
+                        ->withInput()
+                        ->withErrors(['avatar' => 'Could not upload avatar. Please try again.']);
                 }
-            } catch (\Exception $e) {
-                // If S3 upload fails, return error
-                return back()->withErrors(['avatar' => 'Failed to upload avatar: ' . $e->getMessage()]);
+
+                if ($user->avatar) {
+                    $this->deleteAvatarFile($user->avatar);
+                }
+
+                $validated['avatar'] = $uploadedUrl;
+            } catch (\Throwable $e) {
+                report($e);
+
+                return back()
+                    ->withInput()
+                    ->withErrors(['avatar' => 'Failed to upload avatar: ' . $e->getMessage()]);
             }
         }
 
@@ -150,15 +139,8 @@ class ProfileController extends Controller
             ]);
         }
 
-        // Delete avatar from S3 if exists
         if ($user->avatar) {
-            try {
-                // Extract filename from URL
-                $oldFileName = basename(parse_url($user->avatar, PHP_URL_PATH));
-                Storage::disk('s3')->delete('avatars/' . $oldFileName);
-            } catch (\Exception $e) {
-                // Continue even if deletion fails
-            }
+            $this->deleteAvatarFile($user->avatar);
         }
 
         // Logout and delete account
@@ -167,5 +149,33 @@ class ProfileController extends Controller
 
         return redirect()->route('home')
             ->with('success', 'Your account has been deleted.');
+    }
+
+    protected function deleteAvatarFile(string $avatarUrl): void
+    {
+        try {
+            if (S3Media::isPublicUrl($avatarUrl)) {
+                $path = ltrim((string) parse_url($avatarUrl, PHP_URL_PATH), '/');
+                // path like image.bluprinter/avatars/xxx.jpg → avatars/xxx.jpg
+                if (str_starts_with($path, 'image.bluprinter/')) {
+                    $path = substr($path, strlen('image.bluprinter/'));
+                }
+                if ($path !== '') {
+                    Storage::disk('s3')->delete($path);
+                }
+
+                return;
+            }
+
+            if (str_contains($avatarUrl, '/storage/')) {
+                $relative = ltrim((string) parse_url($avatarUrl, PHP_URL_PATH), '/');
+                $relative = preg_replace('#^storage/#', '', $relative) ?: '';
+                if ($relative !== '') {
+                    Storage::disk('public')->delete($relative);
+                }
+            }
+        } catch (\Throwable) {
+            // Continue even if deletion fails
+        }
     }
 }

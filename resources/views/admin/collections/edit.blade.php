@@ -292,14 +292,13 @@
                                                    value="{{ $product->id }}" 
                                                    data-name="{{ $product->name }}"
                                                    data-price="{{ number_format($product->getEffectivePrice(), 2) }}"
+                                                   data-image="{{ $product->adminThumbnailUrl() ?? '' }}"
                                                    {{ in_array($product->id, old('products', $collection->products->pluck('id')->toArray())) ? 'checked' : '' }}
                                                    onchange="updateSelectedProducts()">
                                         </td>
                                         <td class="px-4 py-3">
-                                            <div class="flex items-center">
-                                                <div class="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center text-lg mr-3">
-                                                    📦
-                                                </div>
+                                            <div class="flex items-center gap-3">
+                                                @include('admin.partials.product-thumbnail', ['product' => $product, 'size' => 'w-12 h-12'])
                                                 <div>
                                                     <div class="text-sm font-medium text-gray-900">{{ $product->name }}</div>
                                                     <div class="text-xs text-gray-500">ID: {{ $product->id }}</div>
@@ -506,10 +505,12 @@
                     const checkbox = document.querySelector(`.product-checkbox[value="${productId}"]`);
                     if (checkbox) {
                         const badge = document.createElement('div');
-                        badge.className = 'inline-flex items-center px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm';
+                        const thumb = checkbox.getAttribute('data-image');
+                        badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 bg-purple-100 text-purple-800 rounded-full text-sm';
                         badge.innerHTML = `
+                            ${thumb ? `<img src="${thumb}" alt="" class="w-7 h-7 rounded object-cover border border-purple-200 shrink-0">` : ''}
                             <span>${checkbox.getAttribute('data-name')} - $${checkbox.getAttribute('data-price')}</span>
-                            <button type="button" onclick="removeProduct(${productId})" class="ml-2 text-purple-600 hover:text-purple-800">
+                            <button type="button" onclick="removeProduct(${productId})" class="ml-1 text-purple-600 hover:text-purple-800">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                 </svg>

@@ -43,12 +43,22 @@ class FlashDealTemplate extends Model
             return false;
         }
 
-        if ($this->recurrence === 'daily') {
+        if (in_array($this->recurrence, ['daily', 'hourly'], true)) {
             return true;
         }
 
         $today = (int) now()->dayOfWeek; // 0=Sunday
 
         return in_array($today, $this->days_of_week ?? [], true);
+    }
+
+    public function recurrenceLabel(): string
+    {
+        return match ($this->recurrence) {
+            'hourly' => 'Theo khung giờ',
+            'daily' => 'Theo ngày',
+            'weekly' => 'Theo tuần',
+            default => (string) $this->recurrence,
+        };
     }
 }

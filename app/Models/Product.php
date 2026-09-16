@@ -647,6 +647,30 @@ class Product extends Model
     }
 
     /**
+     * First non-video image URL for admin lists and pickers.
+     */
+    public function adminThumbnailUrl(): ?string
+    {
+        foreach ($this->getEffectiveMedia() as $item) {
+            $raw = is_array($item) ? ($item['url'] ?? $item['path'] ?? null) : $item;
+            if (! is_string($raw) || $raw === '') {
+                continue;
+            }
+            $lower = strtolower($raw);
+            if (str_contains($lower, '.mp4') || str_contains($lower, '.mov') || str_contains($lower, '.avi') || str_contains($lower, '.webm')) {
+                continue;
+            }
+            if (! preg_match('#^https?://#i', $raw) && ! str_starts_with($raw, '//')) {
+                return url($raw);
+            }
+
+            return $raw;
+        }
+
+        return null;
+    }
+
+    /**
      * Front/back product images for virtual try-on.
      *
      * @return array{image: ?string, back: ?string}

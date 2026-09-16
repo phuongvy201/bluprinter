@@ -52,31 +52,67 @@
     @endif
 
     {{-- Manual create --}}
-    <form method="POST" action="{{ route('admin.flash-deals.manual.store') }}" class="bg-white shadow-md rounded-2xl p-6 mb-8 space-y-4">
+    <form method="POST" action="{{ route('admin.flash-deals.manual.store') }}" class="bg-white shadow-md rounded-2xl p-6 mb-8 space-y-4" id="fd-manual-form">
         @csrf
         <div>
             <h2 class="text-lg font-bold text-gray-900">0. Tạo flash sale thủ công</h2>
             <p class="text-sm text-gray-500 mt-1">
-                Chọn sản phẩm cụ thể → đặt % giảm và thời gian kết thúc.
-                Nguồn deal sẽ là <code class="text-xs bg-gray-100 px-1 rounded">manual</code>.
+                Chọn sản phẩm → chọn loại thời lượng (khung giờ / ngày / tuần) → đặt % giảm.
+                Có thể tạo nhiều campaign khác nhau (vd: 2 tiếng cho nhóm A, 1 ngày cho nhóm B).
             </p>
         </div>
 
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Lọc category</label>
+                <select id="fd-filter-category" class="w-full rounded-xl border-gray-300 text-sm">
+                    <option value="">Tất cả</option>
+                    @foreach ($categories as $cat)
+                        <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Lọc shop</label>
+                <select id="fd-filter-shop" class="w-full rounded-xl border-gray-300 text-sm">
+                    <option value="">Tất cả</option>
+                    @foreach ($shops as $shop)
+                        <option value="{{ $shop->id }}">{{ $shop->shop_name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Tìm sản phẩm</label>
+                <input type="search" id="fd-product-search" placeholder="Tên, SKU hoặc ID…"
+                       class="w-full rounded-xl border-gray-300 text-sm">
+            </div>
+        </div>
+
         <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-1">Tìm sản phẩm</label>
-            <input type="search" id="fd-product-search" placeholder="Gõ tên, SKU hoặc ID…"
-                   class="w-full rounded-xl border-gray-300 text-sm mb-2">
-            <div id="fd-product-list" class="max-h-56 overflow-y-auto border border-gray-200 rounded-xl divide-y divide-gray-100">
+            <div id="fd-product-list" class="max-h-72 overflow-y-auto border border-gray-200 rounded-xl divide-y divide-gray-100">
                 @forelse ($products as $product)
-                    <label class="fd-product-row flex items-start gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
-                           data-search="{{ strtolower($product->id . ' ' . $product->name . ' ' . ($product->sku ?? '') . ' ' . ($product->shop?->shop_name ?? '')) }}">
+                    @php
+                        $thumb = $product->adminThumbnailUrl();
+                        $catId = $product->template->category_id ?? '';
+                        $catName = $product->template->category->name ?? '';
+                    @endphp
+                    <label class="fd-product-row flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 cursor-pointer text-sm"
+                           data-search="{{ strtolower($product->id . ' ' . $product->name . ' ' . ($product->sku ?? '') . ' ' . ($product->shop?->shop_name ?? '') . ' ' . $catName) }}"
+                           data-category-id="{{ $catId }}"
+                           data-shop-id="{{ $product->shop_id ?? '' }}">
                         <input type="checkbox" name="product_ids[]" value="{{ $product->id }}"
-                               class="mt-1 rounded border-gray-300 text-[#005366] focus:ring-[#005366]">
-                        <span class="min-w-0">
-                            <span class="font-medium text-gray-900">#{{ $product->id }} — {{ $product->name }}</span>
+                               class="rounded border-gray-300 text-[#005366] focus:ring-[#005366] shrink-0">
+                        @if ($thumb)
+                            <img src="{{ $thumb }}" alt="" class="w-12 h-12 rounded-lg object-cover border border-gray-200 shrink-0 bg-gray-50">
+                        @else
+                            <div class="w-12 h-12 rounded-lg bg-gray-100 border border-gray-200 shrink-0 flex items-center justify-center text-gray-400 text-xs">N/A</div>
+                        @endif
+                        <span class="min-w-0 flex-1">
+                            <span class="font-medium text-gray-900 block truncate">#{{ $product->id }} — {{ $product->name }}</span>
                             <span class="block text-xs text-gray-500">
                                 {{ $product->sku ? 'SKU: '.$product->sku.' · ' : '' }}
-                                Giá hiện tại: {{ number_format((float) $product->price, 2) }}
+                                Giá: {{ number_format((float) $product->price, 2) }}
+                                @if($catName) · {{ $catName }} @endif
                                 @if($product->shop) · {{ $product->shop->shop_name }} @endif
                             </span>
                         </span>
@@ -85,7 +121,31 @@
                     <p class="px-3 py-4 text-sm text-gray-500">Không có sản phẩm hiển thị được.</p>
                 @endforelse
             </div>
-            <p class="mt-1 text-xs text-gray-400">Hiển thị tối đa 400 SP mới nhất. Đã chọn: <span id="fd-selected-count" class="font-semibold text-gray-700">0</span></p>
+            <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                <span>Hiển thị tối đa 400 SP mới nhất · Đang hiện: <span id="fd-visible-count" class="font-semibold text-gray-700">0</span></span>
+                <span>Đã chọn: <span id="fd-selected-count" class="font-semibold text-gray-700">0</span></span>
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Loại thời lượng</label>
+            <div class="flex flex-wrap gap-2" id="fd-duration-presets">
+                @foreach ([
+                    '2h' => '2 giờ',
+                    '6h' => '6 giờ',
+                    '12h' => '12 giờ',
+                    '1d' => '1 ngày',
+                    '7d' => '1 tuần',
+                    'custom' => 'Tùy chọn',
+                ] as $value => $label)
+                    <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 bg-gray-50 text-sm cursor-pointer hover:border-[#005366] has-[:checked]:border-[#005366] has-[:checked]:bg-[#005366]/10 has-[:checked]:text-[#005366] has-[:checked]:font-semibold">
+                        <input type="radio" name="duration" value="{{ $value }}" class="sr-only"
+                               {{ old('duration', '1d') === $value ? 'checked' : '' }}>
+                        {{ $label }}
+                    </label>
+                @endforeach
+            </div>
+            <p class="text-xs text-gray-400 mt-1">Khung giờ = campaign ngắn; ngày/tuần = campaign dài hơn. Có thể tạo nhiều đợt với thời lượng khác nhau.</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -97,15 +157,16 @@
             </div>
             <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-1">Bắt đầu</label>
-                <input type="datetime-local" name="starts_at" value="{{ old('starts_at') }}"
+                <input type="datetime-local" name="starts_at" id="fd-starts-at" value="{{ old('starts_at') }}"
                        class="w-full rounded-xl border-gray-300">
                 <p class="text-xs text-gray-400 mt-1">Để trống = bắt đầu ngay.</p>
             </div>
-            <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">Kết thúc *</label>
-                <input type="datetime-local" name="ends_at"
+            <div id="fd-ends-wrap">
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Kết thúc <span id="fd-ends-required" class="text-red-500 hidden">*</span></label>
+                <input type="datetime-local" name="ends_at" id="fd-ends-at"
                        value="{{ old('ends_at', now()->addDay()->format('Y-m-d\TH:i')) }}"
-                       required class="w-full rounded-xl border-gray-300">
+                       class="w-full rounded-xl border-gray-300">
+                <p class="text-xs text-gray-400 mt-1" id="fd-ends-hint">Chỉ cần khi chọn “Tùy chọn”.</p>
             </div>
         </div>
 
@@ -191,19 +252,39 @@
                             <th class="py-2 pr-4">Sản phẩm</th>
                             <th class="py-2 pr-4">Giá sale / gốc</th>
                             <th class="py-2 pr-4">%</th>
+                            <th class="py-2 pr-4">Loại</th>
                             <th class="py-2 pr-4">Nguồn</th>
-                            <th class="py-2 pr-4">Kết thúc</th>
+                            <th class="py-2 pr-4">Bắt đầu → Kết thúc</th>
                             <th class="py-2"></th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($activeDeals as $deal)
+                            @php
+                                $hours = max(0.1, $deal->starts_at->diffInMinutes($deal->ends_at) / 60);
+                                $typeLabel = $hours <= 12 ? 'Khung giờ' : ($hours <= 36 ? 'Theo ngày' : 'Theo tuần');
+                                $typeClass = $hours <= 12 ? 'bg-orange-100 text-orange-800' : ($hours <= 36 ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800');
+                                $thumb = $deal->product?->adminThumbnailUrl();
+                            @endphp
                             <tr class="border-b border-gray-100">
-                                <td class="py-2 pr-4 font-medium">{{ $deal->product?->name ?? '—' }}</td>
+                                <td class="py-2 pr-4">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        @if ($thumb)
+                                            <img src="{{ $thumb }}" alt="" class="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0">
+                                        @endif
+                                        <span class="font-medium truncate">{{ $deal->product?->name ?? '—' }}</span>
+                                    </div>
+                                </td>
                                 <td class="py-2 pr-4">{{ number_format($deal->sale_price, 2) }} / {{ number_format($deal->original_price, 2) }}</td>
                                 <td class="py-2 pr-4">-{{ $deal->discount_percent }}%</td>
+                                <td class="py-2 pr-4">
+                                    <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold {{ $typeClass }}">{{ $typeLabel }}</span>
+                                    <span class="block text-[10px] text-gray-400 mt-0.5">{{ number_format($hours, 1) }}h</span>
+                                </td>
                                 <td class="py-2 pr-4">{{ $deal->source }}</td>
-                                <td class="py-2 pr-4">{{ $deal->ends_at->format('d/m H:i') }}</td>
+                                <td class="py-2 pr-4 text-xs text-gray-600">
+                                    {{ $deal->starts_at->format('d/m H:i') }} → {{ $deal->ends_at->format('d/m H:i') }}
+                                </td>
                                 <td class="py-2">
                                     <form method="POST" action="{{ route('admin.flash-deals.destroy', $deal) }}" class="inline"
                                           onsubmit="return confirm('Gỡ deal và trả giá cũ cho sản phẩm này?');">
@@ -301,20 +382,32 @@
 
         {{-- Templates --}}
         <div class="bg-white shadow-md rounded-2xl p-6">
-            <h2 class="text-lg font-bold text-gray-900 mb-1">2. Template lặp lại</h2>
+            <h2 class="text-lg font-bold text-gray-900 mb-1">2. Template lặp lại (nhiều campaign)</h2>
             <p class="text-sm text-gray-500 mb-4">
-                Lịch cố định (daily/weekly) + khung giờ. Mỗi lần rotation đúng ngày → random SP trong category (nếu chọn).
+                Tạo nhiều template với khung giờ khác nhau — ví dụ <strong>10:00–12:00 (2 giờ)</strong> và
+                <strong>00:00–23:59 (cả ngày)</strong>. Rotation sẽ áp từng template đúng lịch.
             </p>
 
             @forelse ($templates as $template)
+                @php
+                    $badgeClass = match ($template->recurrence) {
+                        'hourly' => 'bg-orange-100 text-orange-800',
+                        'weekly' => 'bg-purple-100 text-purple-800',
+                        default => 'bg-blue-100 text-blue-800',
+                    };
+                @endphp
                 <div class="flex items-start justify-between py-2 border-b border-gray-100 text-sm">
                     <div>
                         <span class="font-semibold">{{ $template->name }}</span>
+                        <span class="inline-flex ml-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $badgeClass }}">{{ $template->recurrenceLabel() }}</span>
                         <br>
                         <span class="text-gray-500">
-                            -{{ $template->discount_percent }}% · {{ substr($template->start_time, 0, 5) }}-{{ substr($template->end_time, 0, 5) }}
-                            · {{ $template->recurrence }}
+                            -{{ $template->discount_percent }}% · {{ substr((string) $template->start_time, 0, 5) }}–{{ substr((string) $template->end_time, 0, 5) }}
+                            · max {{ $template->max_products }} SP
                             @if ($template->category) · {{ $template->category->name }} @endif
+                            @if ($template->recurrence === 'weekly' && $template->days_of_week)
+                                · thứ: {{ implode(',', $template->days_of_week) }}
+                            @endif
                         </span>
                     </div>
                     <form method="POST" action="{{ route('admin.flash-deals.templates.destroy', $template) }}">
@@ -329,8 +422,8 @@
 
             <form method="POST" action="{{ route('admin.flash-deals.templates.store') }}" class="mt-4 space-y-3 border-t pt-4">
                 @csrf
-                <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Thêm template</p>
-                <input type="text" name="name" placeholder="Tên template (vd: Flash trưa T-Shirt)" required class="w-full rounded-lg border-gray-300 text-sm">
+                <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Thêm template / campaign</p>
+                <input type="text" name="name" placeholder="Tên (vd: Flash 2h trưa / Deal cả ngày)" required class="w-full rounded-lg border-gray-300 text-sm">
                 <select name="category_id" class="w-full rounded-lg border-gray-300 text-sm">
                     <option value="">Tất cả category</option>
                     @foreach ($categories as $cat)
@@ -348,14 +441,16 @@
                     </div>
                     <div>
                         <label class="text-[10px] text-gray-400">Giờ kết thúc</label>
-                        <input type="time" name="end_time" value="14:00" class="w-full rounded-lg border-gray-300 text-sm">
+                        <input type="time" name="end_time" value="12:00" class="w-full rounded-lg border-gray-300 text-sm">
                     </div>
                 </div>
-                <select name="recurrence" class="w-full rounded-lg border-gray-300 text-sm">
-                    <option value="daily">Hàng ngày</option>
-                    <option value="weekly">Hàng tuần (chọn thứ bên dưới)</option>
+                <select name="recurrence" id="fd-template-recurrence" class="w-full rounded-lg border-gray-300 text-sm">
+                    <option value="hourly">Theo khung giờ — mỗi ngày trong khoảng giờ trên (vd 2 tiếng)</option>
+                    <option value="daily">Theo ngày — mỗi ngày trong khoảng giờ</option>
+                    <option value="weekly">Theo tuần — chỉ các thứ đã chọn</option>
                 </select>
-                <div class="flex flex-wrap gap-2 text-xs">
+                <p class="text-xs text-gray-400 -mt-1">Muốn vừa flash 2h vừa deal 1 ngày: tạo <em>hai</em> template với khung giờ khác nhau.</p>
+                <div class="flex flex-wrap gap-2 text-xs" id="fd-template-days">
                     @foreach (['0'=>'CN','1'=>'T2','2'=>'T3','3'=>'T4','4'=>'T5','5'=>'T6','6'=>'T7'] as $d => $label)
                         <label class="inline-flex items-center gap-1">
                             <input type="checkbox" name="days_of_week[]" value="{{ $d }}"> {{ $label }}
@@ -383,23 +478,85 @@
     const search = document.getElementById('fd-product-search');
     const list = document.getElementById('fd-product-list');
     const countEl = document.getElementById('fd-selected-count');
-    if (!search || !list) return;
+    const visibleEl = document.getElementById('fd-visible-count');
+    const catFilter = document.getElementById('fd-filter-category');
+    const shopFilter = document.getElementById('fd-filter-shop');
+    const endsAt = document.getElementById('fd-ends-at');
+    const endsRequired = document.getElementById('fd-ends-required');
+    const endsHint = document.getElementById('fd-ends-hint');
+    const recurrence = document.getElementById('fd-template-recurrence');
+    const daysWrap = document.getElementById('fd-template-days');
 
     function refreshCount() {
-        if (!countEl) return;
-        countEl.textContent = String(list.querySelectorAll('input[name="product_ids[]"]:checked').length);
+        if (!list) return;
+        if (countEl) {
+            countEl.textContent = String(list.querySelectorAll('input[name="product_ids[]"]:checked').length);
+        }
+        if (visibleEl) {
+            visibleEl.textContent = String(
+                Array.from(list.querySelectorAll('.fd-product-row')).filter(function (row) {
+                    return row.style.display !== 'none';
+                }).length
+            );
+        }
     }
 
-    search.addEventListener('input', function () {
-        const q = search.value.trim().toLowerCase();
+    function filterProducts() {
+        if (!list) return;
+        const q = (search && search.value ? search.value : '').trim().toLowerCase();
+        const cat = catFilter ? catFilter.value : '';
+        const shop = shopFilter ? shopFilter.value : '';
+
         list.querySelectorAll('.fd-product-row').forEach(function (row) {
             const hay = row.getAttribute('data-search') || '';
-            row.style.display = !q || hay.indexOf(q) !== -1 ? '' : 'none';
+            const rowCat = row.getAttribute('data-category-id') || '';
+            const rowShop = row.getAttribute('data-shop-id') || '';
+            let ok = true;
+            if (q && hay.indexOf(q) === -1) ok = false;
+            if (cat && rowCat !== cat) ok = false;
+            if (shop && rowShop !== shop) ok = false;
+            row.style.display = ok ? '' : 'none';
         });
+        refreshCount();
+    }
+
+    function syncDurationUi() {
+        const selected = document.querySelector('input[name="duration"]:checked');
+        const isCustom = !selected || selected.value === 'custom';
+        if (endsAt) {
+            endsAt.required = isCustom;
+            endsAt.disabled = !isCustom;
+            endsAt.classList.toggle('opacity-50', !isCustom);
+        }
+        if (endsRequired) endsRequired.classList.toggle('hidden', !isCustom);
+        if (endsHint) {
+            endsHint.textContent = isCustom
+                ? 'Bắt buộc khi chọn “Tùy chọn”.'
+                : 'Tự tính từ thời lượng đã chọn (bắt đầu + ' + (selected ? selected.value : '') + ').';
+        }
+    }
+
+    if (search) search.addEventListener('input', filterProducts);
+    if (catFilter) catFilter.addEventListener('change', filterProducts);
+    if (shopFilter) shopFilter.addEventListener('change', filterProducts);
+    if (list) list.addEventListener('change', refreshCount);
+    document.querySelectorAll('input[name="duration"]').forEach(function (el) {
+        el.addEventListener('change', syncDurationUi);
     });
 
-    list.addEventListener('change', refreshCount);
-    refreshCount();
+    if (recurrence && daysWrap) {
+        const syncDays = function () {
+            daysWrap.style.opacity = recurrence.value === 'weekly' ? '1' : '0.45';
+            daysWrap.querySelectorAll('input').forEach(function (cb) {
+                cb.disabled = recurrence.value !== 'weekly';
+            });
+        };
+        recurrence.addEventListener('change', syncDays);
+        syncDays();
+    }
+
+    filterProducts();
+    syncDurationUi();
 })();
 </script>
 @endpush

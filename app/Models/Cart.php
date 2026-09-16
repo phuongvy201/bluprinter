@@ -88,6 +88,11 @@ class Cart extends Model
             return $design;
         }
 
+        $aiRedesign = $this->customizations['AI Redesign']['image'] ?? '';
+        if (is_string($aiRedesign) && $aiRedesign !== '') {
+            return $aiRedesign;
+        }
+
         $garment = $this->customizations['Garment']['image'] ?? '';
         if (is_string($garment) && $garment !== '') {
             return $garment;

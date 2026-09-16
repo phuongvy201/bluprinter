@@ -301,6 +301,79 @@ class StudioController extends Controller
         ]);
     }
 
+    /**
+     * Redesign an existing product mockup from the PDP (AI Custom).
+     */
+    public function redesignProduct(Request $request): JsonResponse
+    {
+        if (! $this->ai->isEnabled()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'AI redesign is turned off right now.',
+            ], 422);
+        }
+
+        $ai = StudioAiSettings::resolved();
+        $promptMax = (int) $ai['prompt_max'];
+        set_time_limit(max(120, (int) $ai['timeout'] + 30));
+
+        $validated = $request->validate([
+            'product_image' => 'required|string|max:2000',
+            'prompt' => 'nullable|string|max:'.$promptMax,
+            'photo_url' => 'nullable|string|max:2000',
+            'product_name' => 'nullable|string|max:255',
+            'product_id' => 'nullable|integer|exists:products,id',
+            'photo' => 'nullable|file|image|max:5120|mimes:jpg,jpeg,png,webp',
+        ]);
+
+        $photoUrl = trim((string) ($validated['photo_url'] ?? ''));
+        if ($request->hasFile('photo')) {
+            $uploaded = S3Media::store($request->file('photo'), 'studio/uploads');
+            if (! $uploaded) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Could not upload your photo. Please try another image.',
+                ], 422);
+            }
+            $photoUrl = $uploaded;
+        }
+
+        try {
+            $result = $this->ai->redesignProduct(
+                (string) $validated['product_image'],
+                (string) ($validated['prompt'] ?? ''),
+                $photoUrl !== '' ? $photoUrl : null,
+                (string) ($validated['product_name'] ?? ''),
+            );
+
+            $this->history->record(
+                $request,
+                (string) (($validated['prompt'] ?? '') !== '' ? $validated['prompt'] : 'Product redesign'),
+                [$result],
+                array_values(array_filter([
+                    $validated['product_image'],
+                    $photoUrl,
+                ])),
+            );
+        } catch (RuntimeException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            Log::warning('Studio AI product redesign unreachable', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not reach the AI API. Check STUDIO_AI_BASE_URL and STUDIO_AI_API_KEY.',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'image' => $result['url'] ?? null,
+            'prompt' => $result['prompt'] ?? ($validated['prompt'] ?? ''),
+            'photo_url' => $photoUrl !== '' ? $photoUrl : null,
+        ]);
+    }
+
     public function media(Request $request): Response
     {
         $url = (string) $request->query('u', '');

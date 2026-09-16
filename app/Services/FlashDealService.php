@@ -47,7 +47,7 @@ class FlashDealService
 
                 return $product && $product->isAvailableForDisplay();
             })
-            ->filter(fn (FlashDeal $deal) => $deal->discount_percent >= $minDiscount)
+            ->filter(fn(FlashDeal $deal) => $deal->discount_percent >= $minDiscount)
             ->take($limit);
 
         if ($deals->isNotEmpty()) {
@@ -106,12 +106,12 @@ class FlashDealService
 
     public function maxDiscountFromDeals(Collection $deals): int
     {
-        return $deals->reduce(fn (int $max, FlashDeal $deal) => max($max, $deal->discount_percent), 0);
+        return $deals->reduce(fn(int $max, FlashDeal $deal) => max($max, $deal->discount_percent), 0);
     }
 
     public function earliestEndsAt(Collection $deals): \Carbon\Carbon
     {
-        $ends = $deals->min(fn (FlashDeal $deal) => $deal->ends_at);
+        $ends = $deals->min(fn(FlashDeal $deal) => $deal->ends_at);
 
         return $ends ?? now()->endOfDay();
     }
@@ -169,7 +169,7 @@ class FlashDealService
         FlashDeal::query()
             ->where('product_id', $product->id)
             ->where('is_active', true)
-            ->each(fn (FlashDeal $existing) => $this->expireDeal($existing));
+            ->each(fn(FlashDeal $existing) => $this->expireDeal($existing));
 
         $deal = FlashDeal::create([
             'product_id' => $product->id,
