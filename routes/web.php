@@ -527,6 +527,64 @@ Route::prefix('api/products')->middleware(['web'])->group(function () {
         ->name('api.products.index');
 });
 
+// Seller API (X-API-Token + default_shop_id — scoped to seller shop)
+Route::prefix('api/seller')->middleware(['api.token'])->group(function () {
+    Route::options('{any}', function () {
+        return response('', 200)
+            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+            ->header('Access-Control-Allow-Headers', 'X-API-Token, Content-Type, Accept, Authorization');
+    })->where('any', '.*');
+
+    Route::get('products', [App\Http\Controllers\Api\Seller\ProductController::class, 'index'])
+        ->middleware('api.token:seller,product:read,product:*')
+        ->name('api.seller.products.index');
+    Route::post('products', [App\Http\Controllers\Api\Seller\ProductController::class, 'store'])
+        ->middleware('api.token:seller,product:create,product:*')
+        ->name('api.seller.products.store');
+    Route::get('products/{id}', [App\Http\Controllers\Api\Seller\ProductController::class, 'show'])
+        ->middleware('api.token:seller,product:read,product:*')
+        ->whereNumber('id')
+        ->name('api.seller.products.show');
+    Route::put('products/{id}', [App\Http\Controllers\Api\Seller\ProductController::class, 'update'])
+        ->middleware('api.token:seller,product:update,product:*')
+        ->whereNumber('id')
+        ->name('api.seller.products.update');
+    Route::patch('products/{id}', [App\Http\Controllers\Api\Seller\ProductController::class, 'update'])
+        ->middleware('api.token:seller,product:update,product:*')
+        ->whereNumber('id');
+    Route::delete('products/{id}', [App\Http\Controllers\Api\Seller\ProductController::class, 'destroy'])
+        ->middleware('api.token:seller,product:delete,product:*')
+        ->whereNumber('id')
+        ->name('api.seller.products.destroy');
+
+    Route::get('blog', [App\Http\Controllers\Api\Seller\BlogController::class, 'index'])
+        ->middleware('api.token:seller,blog:read,blog:*')
+        ->name('api.seller.blog.index');
+    Route::post('blog', [App\Http\Controllers\Api\Seller\BlogController::class, 'store'])
+        ->middleware('api.token:seller,blog:create,blog:*')
+        ->name('api.seller.blog.store');
+    Route::get('blog/{id}', [App\Http\Controllers\Api\Seller\BlogController::class, 'show'])
+        ->middleware('api.token:seller,blog:read,blog:*')
+        ->whereNumber('id')
+        ->name('api.seller.blog.show');
+    Route::put('blog/{id}', [App\Http\Controllers\Api\Seller\BlogController::class, 'update'])
+        ->middleware('api.token:seller,blog:update,blog:*')
+        ->whereNumber('id')
+        ->name('api.seller.blog.update');
+    Route::patch('blog/{id}', [App\Http\Controllers\Api\Seller\BlogController::class, 'update'])
+        ->middleware('api.token:seller,blog:update,blog:*')
+        ->whereNumber('id');
+    Route::delete('blog/{id}', [App\Http\Controllers\Api\Seller\BlogController::class, 'destroy'])
+        ->middleware('api.token:seller,blog:delete,blog:*')
+        ->whereNumber('id')
+        ->name('api.seller.blog.destroy');
+    Route::post('blog/{id}/publish', [App\Http\Controllers\Api\Seller\BlogController::class, 'publish'])
+        ->middleware('api.token:seller,blog:update,blog:*')
+        ->whereNumber('id')
+        ->name('api.seller.blog.publish');
+});
+
 // Demo routes
 Route::get('/demo/color-libraries', function () {
     return view('demo.color-libraries');

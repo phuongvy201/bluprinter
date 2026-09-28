@@ -20,13 +20,24 @@ class ApiTokenSeeder extends Seeder
             ['product:create', 'product:read']
         );
 
+        $sellerToken = ApiToken::generateToken(
+            'Seller API Full Access',
+            'Seller role token for Product + Blog API (Swagger /api-docs.html). Set default_shop_id to your shop.',
+            ['seller']
+        );
+
         $this->command->info('API Token created:');
         $this->command->info('Name: ' . $aiToken->name);
         $this->command->info('Token: ' . $aiToken->token);
         $this->command->info('Permissions: ' . implode(', ', $aiToken->permissions));
         $this->command->info('');
-        $this->command->info('Use this token in your API requests:');
-        $this->command->info('Header: X-API-Token: ' . $aiToken->token);
-        $this->command->info('Or parameter: api_token=' . $aiToken->token);
+        $this->command->info('Seller API Token created:');
+        $this->command->info('Name: ' . $sellerToken->name);
+        $this->command->info('Token: ' . $sellerToken->token);
+        $this->command->info('Permissions: seller (Product + Blog, scoped to default_shop_id)');
+        $this->command->info('Remember: set default_shop_id on this token to the seller shop id.');
+        $this->command->info('');
+        $this->command->info('Use header: X-API-Token: ' . $sellerToken->token);
+        $this->command->info('Docs: /api-docs.html');
     }
 }

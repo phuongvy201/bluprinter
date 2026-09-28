@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'has.shop' => \App\Http\Middleware\HasShop::class,
+            'api.token' => \App\Http\Middleware\AuthenticateApiToken::class,
         ]);
 
         // Exclude API routes from CSRF protection

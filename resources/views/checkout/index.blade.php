@@ -565,10 +565,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /* Ensure submit button is always visible */
-    button[type="submit"] {
+    #checkout-form button[type="submit"] {
         position: relative !important;
         z-index: 10 !important;
-        display: block !important;
+        display: flex !important;
+        width: 100%;
+        min-height: 3.5rem;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        box-sizing: border-box;
+        padding: 0.875rem 1.25rem;
         visibility: visible !important;
         opacity: 1 !important;
     }
@@ -1249,8 +1256,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
 
                         <!-- Submit Button -->
-                        <div class="mt-8 pt-6 border-t border-gray-200 relative z-10">
-                            <button type="submit" class="btn-cta btn-cta--block text-lg">
+        <div class="mt-8 pt-6 border-t border-gray-200 relative z-10">
+                            <button type="submit" class="btn-cta btn-cta--block text-lg checkout-submit-button">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                                 </svg>
