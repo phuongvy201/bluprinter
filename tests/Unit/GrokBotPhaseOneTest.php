@@ -90,13 +90,17 @@ function fakeGrokReply(): void
 }
 
 test('trang nội bộ hiện mặc định 4500 x 5400 và 300 dpi', function () {
+    expect(parse_url(route('grok-bot.create'), PHP_URL_PATH))->toBe('/bot');
+
     $this->actingAs(grokAdmin())
-        ->get(route('admin.grok-bot.create'))
+        ->get('/bot')
         ->assertOk()
         ->assertSee('Bot file in POD')
         ->assertSee('value="4500"', false)
         ->assertSee('value="5400"', false)
-        ->assertSee('value="300"', false);
+        ->assertSee('value="300"', false)
+        ->assertDontSee('Admin Panel')
+        ->assertDontSee('Creator Studio');
 });
 
 test('thiếu pixel hoặc dpi thì không gọi grok và không gọi agent file in', function (array $spec) {
@@ -106,7 +110,7 @@ test('thiếu pixel hoặc dpi thì không gọi grok và không gọi agent fil
     Http::fake();
 
     $this->actingAs(grokAdmin())
-        ->post(route('admin.grok-bot.store'), array_merge([
+        ->post(route('grok-bot.store'), array_merge([
             'source' => grokSourceUpload(),
             'request_type' => 'clone',
             'instruction' => 'clone ngực áo',
@@ -129,7 +133,7 @@ test('design và redesign không xuất file in', function (string $type) {
     $this->app->instance(PrintFileAgent::class, $print);
 
     $response = $this->actingAs(grokAdmin())
-        ->post(route('admin.grok-bot.store'), [
+        ->post(route('grok-bot.store'), [
             'source' => grokSourceUpload(),
             'request_type' => $type,
             'width' => 4500,
@@ -143,8 +147,8 @@ test('design và redesign không xuất file in', function (string $type) {
         ->and($job->print_path)->toBeNull()
         ->and($job->coordinator_model)->toBe('grok-4.7');
 
-    $response->assertRedirect(route('admin.grok-bot.show', $job));
-    $this->get(route('admin.grok-bot.show', $job))
+    $response->assertRedirect(route('grok-bot.show', $job));
+    $this->get(route('grok-bot.show', $job))
         ->assertOk()
         ->assertSee('giai đoạn 2')
         ->assertDontSee('Tải PNG');
@@ -161,7 +165,7 @@ test('clone xuất png đúng size và dpi, checklist không chấm font đạt'
     fakeGrokReply();
 
     $response = $this->actingAs(grokAdmin())
-        ->post(route('admin.grok-bot.store'), [
+        ->post(route('grok-bot.store'), [
             'source' => grokSourceUpload(),
             'request_type' => 'clone',
             'width' => 24,
@@ -170,7 +174,7 @@ test('clone xuất png đúng size và dpi, checklist không chấm font đạt'
         ]);
 
     $job = GrokBotJob::first();
-    $response->assertRedirect(route('admin.grok-bot.show', $job));
+    $response->assertRedirect(route('grok-bot.show', $job));
 
     $checklist = collect($job->checklist)->keyBy('key');
     expect($job->outcome)->toBe('clone')
@@ -183,7 +187,7 @@ test('clone xuất png đúng size và dpi, checklist không chấm font đạt'
         ->and($checklist['position']['passed'])->toBeFalse()
         ->and($checklist['art']['passed'])->toBeFalse();
 
-    $download = $this->get(route('admin.grok-bot.file', $job));
+    $download = $this->get(route('grok-bot.file', $job));
     $download->assertOk();
     $download->assertHeader('content-type', 'image/png');
     $info = PngDpi::inspect($download->getContent());
@@ -191,7 +195,7 @@ test('clone xuất png đúng size và dpi, checklist không chấm font đạt'
         ->and($info['height'])->toBe(36)
         ->and($info['dpi'])->toBe(300);
 
-    $this->get(route('admin.grok-bot.show', $job))
+    $this->get(route('grok-bot.show', $job))
         ->assertOk()
         ->assertSee('Chưa kiểm được')
         ->assertDontSee('99%');
@@ -237,8 +241,35 @@ test('model bị từ chối thì dùng model grok mà api đang trả, không g
     });
 });
 
+test('lỗi xai hiện status và message thật, không xuất file và không lộ khóa', function () {
+    Http::fake([
+        'https://api.x.ai/v1/chat/completions' => Http::response([
+            'code' => 'permission-denied',
+            'error' => 'Your newly created team does not have credits. See https://console.x.ai/team/secret and key xai-THISISFAKE',
+        ], 403),
+    ]);
+
+    $this->actingAs(grokAdmin())
+        ->post(route('grok-bot.store'), [
+            'source' => grokSourceUpload(),
+            'request_type' => 'clone',
+            'width' => 20,
+            'height' => 20,
+            'dpi' => 300,
+        ])
+        ->assertRedirect(route('grok-bot.create'));
+
+    $this->get(route('grok-bot.create'))
+        ->assertSee('HTTP 403')
+        ->assertSee('does not have credits')
+        ->assertDontSee('xai-THISISFAKE')
+        ->assertDontSee('console.x.ai');
+
+    expect(GrokBotJob::count())->toBe(0);
+});
+
 test('khách và seller không vào trang bot', function () {
-    $this->get(route('admin.grok-bot.create'))
+    $this->get(route('grok-bot.create'))
         ->assertRedirect(route('login'));
 
     $seller = User::factory()->create();
@@ -246,7 +277,7 @@ test('khách và seller không vào trang bot', function () {
     $seller->assignRole('seller');
 
     $this->actingAs($seller)
-        ->get(route('admin.grok-bot.create'))
+        ->get(route('grok-bot.create'))
         ->assertForbidden();
 });
 
@@ -254,7 +285,7 @@ test('gửi làm lại vẫn không đánh font là đạt', function () {
     fakeGrokReply();
     $admin = grokAdmin();
 
-    $this->actingAs($admin)->post(route('admin.grok-bot.store'), [
+    $this->actingAs($admin)->post(route('grok-bot.store'), [
         'source' => grokSourceUpload(),
         'request_type' => 'clone',
         'width' => 16,
@@ -264,10 +295,10 @@ test('gửi làm lại vẫn không đánh font là đạt', function () {
 
     $job = GrokBotJob::first();
 
-    $this->actingAs($admin)->post(route('admin.grok-bot.redo', $job), [
+    $this->actingAs($admin)->post(route('grok-bot.redo', $job), [
         'items' => ['font', 'art'],
         'note' => 'chữ bị lệch',
-    ])->assertRedirect(route('admin.grok-bot.show', $job));
+    ])->assertRedirect(route('grok-bot.show', $job));
 
     $job->refresh();
     $checklist = collect($job->checklist)->keyBy('key');

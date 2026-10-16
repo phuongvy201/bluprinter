@@ -1,4 +1,4 @@
-@extends('layouts.admin')
+@extends('layouts.grok-bot')
 
 @php
     $typeLabels = ['design' => 'Design', 'clone' => 'Clone', 'redesign' => 'Redesign'];
@@ -15,7 +15,7 @@
 <div class="max-w-5xl mx-auto space-y-6">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-            <a href="{{ route('admin.grok-bot.create') }}" class="text-sm text-blue-600 hover:underline">← Yêu cầu mới</a>
+            <a href="{{ route('grok-bot.create') }}" class="text-sm text-blue-600 hover:underline">← Yêu cầu mới</a>
             <h1 class="mt-2 text-2xl font-bold text-gray-900">Kết quả bot file in</h1>
             <p class="mt-1 text-sm text-gray-600">
                 {{ $typeLabels[$job->request_type] ?? $job->request_type }}
@@ -48,9 +48,9 @@
             <div class="rounded-xl border border-gray-200 bg-white p-6">
                 <h2 class="text-lg font-semibold text-gray-900">File PNG</h2>
                 @if ($job->print_path)
-                    <img src="{{ route('admin.grok-bot.file', ['grokBot' => $job, 'inline' => 1]) }}" alt="Xem trước file in" class="mt-4 max-h-80 w-full rounded-lg border border-gray-200 bg-gray-50 object-contain">
+                    <img src="{{ route('grok-bot.file', ['grokBot' => $job, 'inline' => 1]) }}" alt="Xem trước file in" class="mt-4 max-h-80 w-full rounded-lg border border-gray-200 bg-gray-50 object-contain">
                     <div class="mt-4 flex flex-wrap items-center gap-3">
-                        <a href="{{ route('admin.grok-bot.file', $job) }}" class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Tải PNG</a>
+                        <a href="{{ route('grok-bot.file', $job) }}" class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Tải PNG</a>
                         @if ($job->checklistReady())
                             <span class="text-sm text-green-700">Mọi mục checklist đã kiểm đều đạt.</span>
                         @else
@@ -97,7 +97,7 @@
         </div>
 
         @if ($openItems->isNotEmpty())
-            <form method="POST" action="{{ route('admin.grok-bot.redo', $job) }}" class="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
+            <form method="POST" action="{{ route('grok-bot.redo', $job) }}" class="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
                 @csrf
                 <h2 class="text-lg font-semibold text-gray-900">Gửi làm lại</h2>
                 <p class="text-sm text-gray-600">Chọn mục chưa đạt. Agent file in dựng lại PNG rồi checklist chạy lại. Mục chưa tách được lớp vẫn không được đánh Đạt.</p>

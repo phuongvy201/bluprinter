@@ -1,4 +1,4 @@
-@extends('layouts.admin')
+@extends('layouts.grok-bot')
 
 @section('content')
 <div class="max-w-3xl mx-auto">
@@ -17,7 +17,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('admin.grok-bot.store') }}" enctype="multipart/form-data" class="space-y-6">
+    <form method="POST" action="{{ route('grok-bot.store') }}" enctype="multipart/form-data" class="space-y-6">
         @csrf
 
         <div class="rounded-xl border border-gray-200 bg-white p-6 space-y-5">

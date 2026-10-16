@@ -1,8 +1,7 @@
 <?php
 
-namespace App\Http\Controllers\Admin;
+namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\GrokBotJob;
 use App\Services\Grok\CoordinatorAgent;
 use App\Services\Grok\PrintSpec;
@@ -17,7 +16,7 @@ class GrokBotController extends Controller
 {
     public function create(): View
     {
-        return view('admin.grok-bot.create');
+        return view('grok-bot.create');
     }
 
     public function store(Request $request, CoordinatorAgent $coordinator): RedirectResponse
@@ -41,7 +40,7 @@ class GrokBotController extends Controller
 
     public function show(GrokBotJob $grokBot): View
     {
-        return view('admin.grok-bot.show', ['job' => $grokBot]);
+        return view('grok-bot.show', ['job' => $grokBot]);
     }
 
     public function file(Request $request, GrokBotJob $grokBot): Response
@@ -117,11 +116,11 @@ class GrokBotController extends Controller
         try {
             $result = $coordinator->handle($spec);
         } catch (Throwable $exception) {
-            return back()->withInput()->with('error', $this->safeMessage($exception->getMessage()));
+            return $this->backToBot($existing)->with('error', $this->safeMessage($exception->getMessage()));
         }
 
         if ($result->outcome === 'need_spec') {
-            return back()->withInput()->withErrors(['spec' => $result->message]);
+            return $this->backToBot($existing)->withErrors(['spec' => $result->message]);
         }
 
         $job = $existing ?? new GrokBotJob(['user_id' => $request->user()->id]);
@@ -158,7 +157,16 @@ class GrokBotController extends Controller
 
         $job->save();
 
-        return redirect()->route('admin.grok-bot.show', $job);
+        return redirect()->route('grok-bot.show', $job);
+    }
+
+    private function backToBot(?GrokBotJob $existing = null): RedirectResponse
+    {
+        $redirect = $existing
+            ? redirect()->route('grok-bot.show', $existing)
+            : redirect()->route('grok-bot.create');
+
+        return $redirect->withInput();
     }
 
     /**

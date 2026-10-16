@@ -142,26 +142,21 @@ class XaiClient
 
     private function publicError(Response $response): string
     {
-        if ($response->status() === 401) {
-            return 'Grok từ chối khóa API.';
-        }
-
-        if ($response->status() === 403) {
-            return 'Grok từ chối quyền gọi API. Kiểm tra credit hoặc giấy phép của tài khoản xAI.';
-        }
-
         $error = $response->json('error');
         if (is_array($error)) {
             $error = $error['message'] ?? $error['code'] ?? '';
         }
-        if (! is_string($error)) {
-            $error = '';
+        if (! is_string($error) || $error === '') {
+            $code = $response->json('code');
+            $error = is_string($code) ? $code : '';
         }
 
         $error = preg_replace('/xai-[A-Za-z0-9_\-]+/', '[ẩn]', $error) ?? '';
+        $error = preg_replace('/Bearer\s+\S+/i', '[ẩn]', $error) ?? '';
         $error = preg_replace('#https?://\S+#', '', $error) ?? '';
-        $error = trim(mb_substr($error, 0, 180));
+        $error = trim(preg_replace('/\s+/', ' ', $error) ?? '');
+        $error = trim(mb_substr($error, 0, 300));
 
-        return 'Không gọi được Grok (HTTP '.$response->status().').'.($error !== '' ? ' '.$error : '');
+        return 'Grok HTTP '.$response->status().($error !== '' ? ': '.$error : '.');
     }
 }

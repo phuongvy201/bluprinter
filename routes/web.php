@@ -13,7 +13,6 @@ use App\Http\Controllers\Admin\StudioProductController;
 use App\Http\Controllers\Admin\StudioDesignController;
 use App\Http\Controllers\Admin\StudioAiGenerationController;
 use App\Http\Controllers\Admin\StudioAiSettingsController;
-use App\Http\Controllers\Admin\GrokBotController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\Admin\ProductImportController;
 use App\Http\Controllers\Admin\ReviewController;
@@ -691,12 +690,6 @@ Route::middleware('auth')->group(function () {
         Route::post('studio-ai/{studioAiGeneration}/promote', [StudioAiGenerationController::class, 'promote'])->name('studio-ai.promote');
         Route::delete('studio-ai/{studioAiGeneration}', [StudioAiGenerationController::class, 'destroy'])->name('studio-ai.destroy');
 
-        Route::get('grok-bot', [GrokBotController::class, 'create'])->name('grok-bot.create');
-        Route::post('grok-bot', [GrokBotController::class, 'store'])->name('grok-bot.store');
-        Route::get('grok-bot/{grokBot}/file', [GrokBotController::class, 'file'])->name('grok-bot.file');
-        Route::post('grok-bot/{grokBot}/redo', [GrokBotController::class, 'redo'])->name('grok-bot.redo');
-        Route::get('grok-bot/{grokBot}', [GrokBotController::class, 'show'])->name('grok-bot.show');
-
         // Domain Configs (Currency + Analytics)
         Route::get('settings/domain-config', [DomainConfigController::class, 'index'])->name('settings.domain-config.index');
         Route::get('settings/domain-config/create', [DomainConfigController::class, 'create'])->name('settings.domain-config.create');
@@ -903,6 +896,7 @@ Route::get('/test-variant-removal-page', function () {
 
 // Load auth routes first to avoid conflicts with catch-all route
 require __DIR__ . '/auth.php';
+require __DIR__ . '/bot.php';
 
 // Page routes - Must be at the end to avoid conflicts
-Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller|newsletter|verify-email|create-your-own|explore-design|ai-design|virtual-try-on).*$');
+Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|bot|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller|newsletter|verify-email|create-your-own|explore-design|ai-design|virtual-try-on).*$');

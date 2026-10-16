@@ -22,8 +22,7 @@
         'studio' => request()->routeIs(
             'admin.studio-products.*',
             'admin.studio-designs.*',
-            'admin.studio-ai.*',
-            'admin.grok-bot.*'
+            'admin.studio-ai.*'
         ),
         'sales' => request()->routeIs(
             'admin.orders.*',
@@ -180,7 +179,6 @@
                 <x-admin.sidebar-link :href="route('admin.studio-products.index')" :active="request()->routeIs('admin.studio-products.*')" keywords="studio garment blank apparel" label="Garments">Garments</x-admin.sidebar-link>
                 <x-admin.sidebar-link :href="route('admin.studio-ai.index')" :active="request()->routeIs('admin.studio-ai.index', 'admin.studio-ai.hide', 'admin.studio-ai.promote', 'admin.studio-ai.destroy')" keywords="studio ai generate image" label="AI designs">AI designs</x-admin.sidebar-link>
                 <x-admin.sidebar-link :href="route('admin.studio-ai.settings')" :active="request()->routeIs('admin.studio-ai.settings*')" keywords="studio ai config prompt" label="AI settings">AI settings</x-admin.sidebar-link>
-                <x-admin.sidebar-link :href="route('admin.grok-bot.create')" :active="request()->routeIs('admin.grok-bot.*')" keywords="grok bot file in pod clone dpi" label="Bot file in">Bot file in</x-admin.sidebar-link>
             @endif
         </x-admin.sidebar-group>
     @endif
