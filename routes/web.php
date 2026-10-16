@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\StudioProductController;
 use App\Http\Controllers\Admin\StudioDesignController;
 use App\Http\Controllers\Admin\StudioAiGenerationController;
 use App\Http\Controllers\Admin\StudioAiSettingsController;
+use App\Http\Controllers\Admin\GrokBotController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\Admin\ProductImportController;
 use App\Http\Controllers\Admin\ReviewController;
@@ -689,6 +690,12 @@ Route::middleware('auth')->group(function () {
         Route::post('studio-ai/{studioAiGeneration}/hide', [StudioAiGenerationController::class, 'hide'])->name('studio-ai.hide');
         Route::post('studio-ai/{studioAiGeneration}/promote', [StudioAiGenerationController::class, 'promote'])->name('studio-ai.promote');
         Route::delete('studio-ai/{studioAiGeneration}', [StudioAiGenerationController::class, 'destroy'])->name('studio-ai.destroy');
+
+        Route::get('grok-bot', [GrokBotController::class, 'create'])->name('grok-bot.create');
+        Route::post('grok-bot', [GrokBotController::class, 'store'])->name('grok-bot.store');
+        Route::get('grok-bot/{grokBot}/file', [GrokBotController::class, 'file'])->name('grok-bot.file');
+        Route::post('grok-bot/{grokBot}/redo', [GrokBotController::class, 'redo'])->name('grok-bot.redo');
+        Route::get('grok-bot/{grokBot}', [GrokBotController::class, 'show'])->name('grok-bot.show');
 
         // Domain Configs (Currency + Analytics)
         Route::get('settings/domain-config', [DomainConfigController::class, 'index'])->name('settings.domain-config.index');
