@@ -896,6 +896,7 @@ Route::get('/test-variant-removal-page', function () {
 
 // Load auth routes first to avoid conflicts with catch-all route
 require __DIR__ . '/auth.php';
+require __DIR__ . '/bot.php';
 
 // Page routes - Must be at the end to avoid conflicts
-Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller|newsletter|verify-email|create-your-own|explore-design|ai-design|virtual-try-on).*$');
+Route::get('/{slug}', [PageController::class, 'show'])->name('pages.show')->where('slug', '^(?!admin|api|bot|dashboard|cart|checkout|wishlist|search|collections|products|category|shops|blog|login|register|password|email|verification|logout|seller|newsletter|verify-email|create-your-own|explore-design|ai-design|virtual-try-on).*$');
